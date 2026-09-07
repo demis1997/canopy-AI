@@ -1,0 +1,15 @@
+{
+  "name": "@canopy/extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node ./build.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.304",
+    "esbuild": "^0.25.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.9"
+  }
+}

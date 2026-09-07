@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Canopy mock OnlyFans inbox (unofficial fixture)</title>
+    <style>
+      body { font-family: sans-serif; background: #111; color: #eee; margin: 0; }
+      .row { display: flex; min-height: 100vh; }
+      aside { width: 280px; border-right: 1px solid #333; }
+      main { flex: 1; display: flex; flex-direction: column; }
+      [data-canopy-role="challenge"], [hidden] { display: none; }
+      body[data-state="LOGIN_REQUIRED"] [data-canopy-role="login"] { display: block; }
+      body[data-state="CHALLENGE_REQUIRED"] [data-canopy-role="challenge"] { display: block; }
+      .composer { margin-top: auto; display: flex; gap: 8px; padding: 12px; border-top: 1px solid #333; }
+    </style>
+  </head>
+  <body data-state="CONNECTED" data-canopy-account-id="of_maya_demo" data-canopy-account-name="Maya Voss">
+    <div data-canopy-role="login" hidden>
+      <h1>Sign in</h1>
+      <p>Complete login and 2FA yourself. Canopy never collects your password.</p>
+    </div>
+    <div data-canopy-role="challenge" role="alertdialog" aria-label="Verification required">
+      Complete this challenge in the browser. Automation is paused.
+    </div>
+    <div class="row" data-canopy-role="app">
+      <aside aria-label="Conversations">
+        <h2>Inbox</h2>
+        <ul data-canopy-role="inbox">
+          <li>
+            <button
+              type="button"
+              data-canopy-role="conversation"
+              data-conversation-id="of_thread_1001"
+              data-fan-id="fan_1001"
+              data-fan-name="Jordan Hale"
+            >
+              Jordan Hale
+            </button>
+          </li>
+        </ul>
+      </aside>
+      <main>
+        <header data-canopy-role="fan-header" data-fan-id="fan_1001">Jordan Hale</header>
+        <section data-canopy-role="thread" aria-label="Messages">
+          <article data-canopy-role="message" data-message-id="of_msg_1" data-direction="INBOUND" data-type="TEXT">
+            hey, you around?
+          </article>
+        </section>
+        <form class="composer" data-canopy-role="composer">
+          <label>
+            Message
+            <textarea data-canopy-role="composer-input" aria-label="Message"></textarea>
+          </label>
+          <button type="button" data-canopy-role="send">Send</button>
+          <button type="button" data-canopy-role="vault-open">Vault</button>
+        </form>
+        <div data-canopy-role="vault-picker" hidden>
+          <button type="button" data-canopy-role="vault-item" data-media-ref="vault_photo_1">Gym set</button>
+          <label>PPV price <input data-canopy-role="ppv-price" type="number" aria-label="PPV price" /></label>
+        </div>
+      </main>
+    </div>
+    <script>
+      const thread = document.querySelector('[data-canopy-role="thread"]');
+      const input = document.querySelector('[data-canopy-role="composer-input"]');
+      document.querySelector('[data-canopy-role="send"]').addEventListener("click", () => {
+        const text = input.value.trim();
+        if (!text) return;
+        const id = "of_out_" + Date.now();
+        const el = document.createElement("article");
+        el.dataset.canopyRole = "message";
+        el.dataset.messageId = id;
+        el.dataset.direction = "OUTBOUND";
+        el.dataset.type = "TEXT";
+        el.textContent = text;
+        thread.appendChild(el);
+        input.value = "";
+      });
+      document.querySelector('[data-canopy-role="vault-open"]').addEventListener("click", () => {
+        document.querySelector('[data-canopy-role="vault-picker"]').hidden = false;
+      });
+    </script>
+  </body>
+</html>

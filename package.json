@@ -1,0 +1,23 @@
+{
+  "name": "canopy",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Canopy — multi-tenant AI chatting and sales copilot for adult-content creators and agencies.",
+  "packageManager": "pnpm@9.4.0",
+  "scripts": {
+    "dev": "pnpm --filter @canopy/web dev",
+    "build": "pnpm --filter @canopy/shared build && pnpm --filter @canopy/database build && pnpm --filter @canopy/ai build && pnpm --filter @canopy/web build",
+    "test": "pnpm --filter @canopy/shared test && pnpm --filter @canopy/ai test && pnpm --filter @canopy/database test && pnpm --filter @canopy/web test && pnpm --filter @canopy/extension test",
+    "db:migrate": "pnpm --filter @canopy/database migrate",
+    "db:seed": "pnpm --filter @canopy/database seed",
+    "db:generate": "pnpm --filter @canopy/database generate",
+    "db:reset": "pnpm --filter @canopy/database reset",
+    "worker": "pnpm --filter @canopy/web worker",
+    "platform:worker": "pnpm --filter @canopy/web platform:worker",
+    "platform:connect": "pnpm --filter @canopy/web platform:connect",
+    "platform:mock-demo": "pnpm --filter @canopy/web platform:mock-demo",
+    "platform:validate-selectors": "pnpm --filter @canopy/web platform:validate-selectors",
+    "eval": "pnpm --filter @canopy/ai eval",
+    "lint": "pnpm -r --if-present lint"
+  }
+}

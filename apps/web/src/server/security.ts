@@ -1,0 +1,38 @@
+import { prisma } from "@canopy/database";
+import { createHash, randomBytes } from "node:crypto";
+
+const WINDOW_MS = 60_000;
+const LIMIT = 40;
+const hits = new Map<string, { count: number; reset: number }>();
+
+export function rateLimit(key: string, limit = LIMIT): boolean {
+  const now = Date.now();
+  const current = hits.get(key);
+  if (!current || current.reset < now) {
+    hits.set(key, { count: 1, reset: now + WINDOW_MS });
+    return true;
+  }
+  if (current.count >= limit) return false;
+  current.count += 1;
+  return true;
+}
+
+export async function issueExtensionToken(userId: string) {
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
+  await prisma.extensionToken.create({
+    data: { userId, tokenHash, expiresAt },
+  });
+  return { token, expiresAt };
+}
+
+export async function verifyExtensionToken(token: string) {
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const row = await prisma.extensionToken.findUnique({
+    where: { tokenHash },
+    include: { user: { include: { memberships: true } } },
+  });
+  if (!row || row.revokedAt || row.expiresAt < new Date()) return null;
+  return row.user;
+}

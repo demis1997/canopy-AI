@@ -1,0 +1,1181 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum Role {
+  PLATFORM_ADMIN
+  AGENCY_OWNER
+  MANAGER
+  CHATTER
+  CREATOR
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum OrganizationType {
+  AGENCY
+  INDEPENDENT_CREATOR
+}
+
+enum AdultStatus {
+  VERIFIED_ADULT
+  PLATFORM_ASSUMED_ADULT
+  UNCERTAIN
+  SUSPECTED_MINOR
+  CONFIRMED_MINOR
+}
+
+enum ExplicitnessLevel {
+  FLIRTY
+  SUGGESTIVE
+  EXPLICIT
+  VERY_EXPLICIT
+}
+
+enum PersonaStyle {
+  DOMINANT
+  SUBMISSIVE
+  ROMANTIC
+  PLAYFUL
+  DIRECT
+}
+
+enum MessageLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum FunnelStage {
+  NEW_FAN
+  RAPPORT
+  INTEREST
+  OFFER
+  OBJECTION
+  PURCHASE
+  FOLLOW_UP
+}
+
+enum MessageAuthorType {
+  SUBSCRIBER
+  CREATOR
+  CHATTER
+  AI_SUGGESTION
+  SYSTEM
+}
+
+enum Intent {
+  CASUAL_CHAT
+  FLIRT
+  SEXTING
+  PURCHASE_INTEREST
+  PRICE_OBJECTION
+  CONTENT_REQUEST
+  COMPLAINT
+  REFUND
+  UNSAFE
+  UNCERTAIN
+}
+
+enum RecommendedAction {
+  REPLY
+  BUILD_RAPPORT
+  ESCALATE_EXPLICITNESS
+  PRESENT_OFFER
+  ANSWER_OBJECTION
+  REQUEST_HUMAN_REVIEW
+  BLOCK
+}
+
+enum Tone {
+  PLAYFUL
+  ROMANTIC
+  TEASING
+  DOMINANT
+  SUBMISSIVE
+  DIRECT
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO
+  AUDIO
+  TEXT
+  BUNDLE
+  CUSTOM
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EscalationStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum EscalationReason {
+  MINOR_OR_UNCERTAIN_AGE
+  SEXUAL_CONTENT_INVOLVING_MINOR
+  NON_CONSENSUAL
+  EXPLOITATION_TRAFFICKING
+  BESTIALITY
+  SEXTORTION
+  THREAT
+  SEXUAL_VIOLENCE_INSTRUCTIONS
+  IDENTIFIABLE_THIRD_PARTY
+  SELF_HARM_EMERGENCY
+  CREDENTIAL_REQUEST
+  SENSITIVE_PII_REQUEST
+  COMPLAINT_REFUND_CHARGEBACK
+  CONFLICTING_AGE
+  SAFETY_POST_CHECK
+  INVALID_PRODUCT_OR_PRICE
+  PROVIDER_FAILURE
+  MANUAL
+  AUTOMATION_POLICY
+  BROWSER_CHALLENGE
+  LOW_CONFIDENCE
+  HUMAN_TAKEOVER
+  UNMAPPED_VAULT
+  LANGUAGE_MISMATCH
+  SELECTOR_FAILURE
+}
+
+enum SensitivityLevel {
+  PUBLIC
+  INTERNAL
+  SENSITIVE
+  HIGHLY_SENSITIVE
+}
+
+enum MemoryCategory {
+  PREFERRED_NAME
+  INTERESTS
+  CONVERSATION_STYLE
+  EXPLICIT_PREFERENCES
+  BOUNDARIES
+  PREVIOUS_PURCHASES
+  PRODUCTS_OFFERED
+  PRICE_OBJECTIONS
+  PROMISES
+  PERSONAL_DETAILS
+  LAST_INTERACTION
+  FOLLOW_UP
+  FUNNEL_STAGE
+}
+
+enum GenerationStatus {
+  PENDING
+  COMPLETED
+  BLOCKED
+  INVALID
+  FAILED
+  MANUAL_REVIEW
+}
+
+enum ReplyOutcome {
+  PENDING
+  SELECTED
+  EDITED
+  DISCARDED
+  INSERTED
+}
+
+enum DocumentType {
+  HISTORICAL_CONVERSATION
+  APPROVED_EXAMPLE
+  SALES_SCRIPT
+  PROMPT
+  CHATTER_TRAINING
+  PRODUCT_DESCRIPTION
+  CREATOR_INSTRUCTIONS
+}
+
+enum AnalyticsEventType {
+  MESSAGE_RECEIVED
+  GENERATION_REQUESTED
+  SUGGESTIONS_PRODUCED
+  SUGGESTION_ACCEPTED
+  SUGGESTION_EDITED
+  FUNNEL_TRANSITION
+  OFFER_PRESENTED
+  PURCHASE
+  REFUND
+  COMPLAINT
+  ESCALATION
+  SAFETY_BLOCK
+  HUMAN_QUALITY_RATING
+  OVERRIDE
+  AUTOMATION_DECISION
+  AUTOMATION_SENT
+  AUTOMATION_ESCALATED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  SUSPEND
+  APPROVE
+  REJECT
+  EXPORT
+  GENERATE
+  SELECT_REPLY
+  ESCALATE
+  ROTATE_KEY
+  CONFIGURE_PROVIDER
+  CONNECT_PLATFORM
+  DISCONNECT_PLATFORM
+  EMERGENCY_STOP
+  AUTOMATION_SEND
+  AUTOMATION_FAIL
+  CONFIGURE_AUTONOMY
+  APPROVE_AUTOMATION
+}
+
+enum ProductSource {
+  DEMO_SEED
+  MANUAL
+  CSV_IMPORT
+  MEDIA_UPLOAD
+  PLATFORM_VAULT_SYNC
+}
+
+enum PlatformConnectionMode {
+  DEMO
+  MANUAL
+  CSV_IMPORT
+  PLATFORM_VAULT_SYNC
+}
+
+enum VaultSyncStatus {
+  IDLE
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  DISABLED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  isPlatformAdmin Boolean @default(false)
+  isDemo        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  memberships   OrganizationMembership[]
+  chatterAssignments ChatterCreatorAssignment[] @relation("ChatterAssignments")
+  creators      Creator[]
+  auditLogs     AuditLog[]
+  generations   Generation[]
+  selectedReplies ReplyOption[] @relation("SelectedBy")
+  escalationsOpened Escalation[] @relation("EscalationOpenedBy")
+  extensionTokens ExtensionToken[]
+}
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  type        OrganizationType   @default(AGENCY)
+  status      OrganizationStatus @default(ACTIVE)
+  isDemo      Boolean            @default(false)
+  seatLimit   Int                @default(10)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  memberships              OrganizationMembership[]
+  creators                 Creator[]
+  subscribers              Subscriber[]
+  conversations            Conversation[]
+  messages                 Message[]
+  memories                 SubscriberMemory[]
+  products                 Product[]
+  offers                   Offer[]
+  purchases                Purchase[]
+  trainingDocuments        TrainingDocument[]
+  trainingChunks           TrainingChunk[]
+  promptTemplates          PromptTemplate[]
+  generations              Generation[]
+  escalations              Escalation[]
+  analyticsEvents          AnalyticsEvent[]
+  llmConfigs               LLMProviderConfiguration[]
+  auditLogs                AuditLog[]
+  apiCredentials           ApiCredential[]
+  retentionPolicy          DataRetentionPolicy?
+  conversationSummaries    ConversationSummary[]
+  mediaAssets              MediaAsset[]
+  platformConnections      PlatformConnection[]
+  vaultSyncJobs            VaultSyncJob[]
+  welcomeAutomations       WelcomeAutomation[]
+  platformAccounts         PlatformAccount[]
+  automationActions        AutomationAction[]
+}
+
+model OrganizationMembership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           Role
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, role])
+  @@index([userId])
+}
+
+model Creator {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  displayName    String
+  handle         String
+  bio            String   @default("")
+  isDemo         Boolean  @default(false)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+  personas     CreatorPersona[]
+  boundaries   CreatorBoundary[]
+  assignments  ChatterCreatorAssignment[]
+  conversations Conversation[]
+  products     Product[]
+  memories     SubscriberMemory[]
+  trainingDocuments TrainingDocument[]
+  trainingChunks    TrainingChunk[]
+  mediaAssets  MediaAsset[]
+  platformConnections PlatformConnection[]
+  welcomeAutomations WelcomeAutomation[]
+  platformAccounts   PlatformAccount[]
+
+  @@unique([organizationId, handle])
+  @@index([organizationId])
+}
+
+model CreatorPersona {
+  id                        String             @id @default(cuid())
+  organizationId            String
+  creatorId                 String
+  version                   Int
+  isActive                  Boolean            @default(false)
+  displayName               String
+  biography                 String             @default("")
+  authorisedBackstory       String             @default("")
+  personality               String             @default("")
+  tone                      String             @default("")
+  typicalMessageLength      MessageLength      @default(SHORT)
+  preferredEmojis           String[]           @default([])
+  frequentlyUsedPhrases     String[]           @default([])
+  preferredExplicitVocabulary String[]         @default([])
+  prohibitedWords           String[]           @default([])
+  preferredCompliments      String[]           @default([])
+  allowedExplicitness       ExplicitnessLevel  @default(SUGGESTIVE)
+  style                     PersonaStyle       @default(PLAYFUL)
+  interests                 String[]           @default([])
+  contentBoundaries         String[]           @default([])
+  claimsNeverToMake         String[]           @default([])
+  customContentRules        String             @default("")
+  offlineMeetingPolicy      String             @default("Never arrange offline meetings.")
+  discountLimitPercent      Int                @default(10)
+  escalationRules           String             @default("")
+  approvedExampleMessages   String[]           @default([])
+  createdAt                 DateTime           @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, version])
+  @@index([organizationId, creatorId, isActive])
+}
+
+model CreatorBoundary {
+  id               String   @id @default(cuid())
+  organizationId   String
+  creatorId        String
+  topic            String
+  description      String
+  hardBlock        Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, creatorId])
+}
+
+model ChatterCreatorAssignment {
+  id             String   @id @default(cuid())
+  organizationId String
+  chatterId      String
+  creatorId      String
+  createdAt      DateTime @default(now())
+
+  chatter User    @relation("ChatterAssignments", fields: [chatterId], references: [id], onDelete: Cascade)
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([chatterId, creatorId])
+  @@index([organizationId, chatterId])
+  @@index([organizationId, creatorId])
+}
+
+model Subscriber {
+  id             String      @id @default(cuid())
+  organizationId String
+  displayName    String
+  platformHandle String
+  platform       String      @default("demo")
+  adultStatus    AdultStatus @default(UNCERTAIN)
+  notes          String      @default("")
+  tags           String[]    @default([])
+  spendCents     Int         @default(0)
+  subscribedAt   DateTime?
+  lastActiveAt   DateTime?
+  isDemo         Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  memories      SubscriberMemory[]
+  purchases     Purchase[]
+
+  @@unique([organizationId, platform, platformHandle])
+  @@index([organizationId])
+}
+
+model SubscriberMemory {
+  id               String           @id @default(cuid())
+  organizationId   String
+  subscriberId     String
+  creatorId        String
+  category         MemoryCategory
+  key              String
+  value            String
+  sourceMessageId  String?
+  confidence       Float
+  verified         Boolean          @default(false)
+  sensitivity      SensitivityLevel @default(INTERNAL)
+  createdAt        DateTime         @default(now())
+  lastConfirmedAt  DateTime         @default(now())
+  deletedAt        DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriber   Subscriber   @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  sourceMessage Message?    @relation(fields: [sourceMessageId], references: [id])
+
+  @@index([organizationId, subscriberId, creatorId])
+  @@index([organizationId, category])
+}
+
+model Conversation {
+  id                String      @id @default(cuid())
+  organizationId    String
+  creatorId         String
+  subscriberId      String
+  funnelStage       FunnelStage @default(NEW_FAN)
+  adultStatus       AdultStatus @default(UNCERTAIN)
+  rapportPriority   Boolean     @default(true)
+  lastOfferAt       DateTime?
+  offerCountToday   Int         @default(0)
+  lastMessageAt     DateTime    @default(now())
+  platformThreadId  String?
+  blocked           Boolean     @default(false)
+  tags              String[]    @default([])
+  unreadCount       Int         @default(0)
+  mutedAi           Boolean     @default(false)
+  followUpAt        DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  subscriber   Subscriber   @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  summary      ConversationSummary?
+  generations  Generation[]
+  offers       Offer[]
+  purchases    Purchase[]
+  escalations           Escalation[]
+  platformConversations PlatformConversation[]
+
+  @@unique([organizationId, creatorId, subscriberId])
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, creatorId])
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  organizationId String
+  conversationId String
+  authorType     MessageAuthorType
+  authorUserId   String?
+  body           String
+  isDemo         Boolean           @default(false)
+  aiAssisted     Boolean           @default(false)
+  isPaid         Boolean           @default(false)
+  priceCents     Int?
+  purchased      Boolean           @default(false)
+  attachments    Json              @default("[]")
+  createdAt      DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  memories         SubscriberMemory[]
+  replyOptions     ReplyOption[]
+  platformMessages PlatformMessage[]
+
+  @@index([organizationId, conversationId, createdAt])
+}
+
+model ConversationSummary {
+  id             String   @id @default(cuid())
+  organizationId String
+  conversationId String   @unique
+  summary        String
+  messageCount   Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Product {
+  id                    String            @id @default(cuid())
+  organizationId        String
+  creatorId             String
+  name                  String
+  description           String            @default("")
+  mediaType             MediaType
+  standardPriceCents    Int
+  minimumPriceCents     Int
+  bundlePriceCents      Int?
+  tags                  String[]          @default([])
+  explicitnessCategory  ExplicitnessLevel @default(EXPLICIT)
+  available             Boolean           @default(true)
+  customContent         Boolean           @default(false)
+  deliveryRules         String            @default("")
+  source                ProductSource     @default(MANUAL)
+  externalId            String?
+  timesSold             Int               @default(0)
+  conversionRate        Float             @default(0)
+  lastSyncedAt          DateTime?
+  resaleAllowed         Boolean           @default(false)
+  platform              String            @default("demo")
+  platformMediaReference String?
+  approvedForAutomation Boolean           @default(false)
+  maximumPriceCents     Int?
+  alreadySoldDetectionMetadata Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  offers       Offer[]
+  purchases    Purchase[]
+  media        ProductMedia[]
+  previews     ProductPreview[]
+
+  @@index([organizationId, creatorId, available])
+}
+
+model Offer {
+  id             String   @id @default(cuid())
+  organizationId String
+  conversationId String
+  productId      String
+  priceCents     Int
+  accepted       Boolean?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@index([organizationId, conversationId, createdAt])
+}
+
+model Purchase {
+  id             String   @id @default(cuid())
+  organizationId String
+  conversationId String
+  subscriberId   String
+  productId      String
+  amountCents    Int
+  refunded       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  subscriber   Subscriber   @relation(fields: [subscriberId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, subscriberId])
+}
+
+model TrainingDocument {
+  id             String       @id @default(cuid())
+  organizationId String
+  creatorId      String?
+  title          String
+  documentType   DocumentType
+  mimeType       String
+  rawText        String
+  status         ApprovalStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator?        @relation(fields: [creatorId], references: [id])
+  chunks       TrainingChunk[]
+
+  @@index([organizationId, status])
+}
+
+model TrainingChunk {
+  id             String            @id @default(cuid())
+  organizationId String
+  documentId     String
+  creatorId      String?
+  content        String
+  documentType   DocumentType
+  intent         Intent?
+  funnelStage    FunnelStage?
+  explicitness   ExplicitnessLevel?
+  qualityScore   Float             @default(0)
+  status         ApprovalStatus    @default(PENDING)
+  language       String            @default("en")
+  embedding      Unsupported("vector(1536)")?
+  createdAt      DateTime          @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  document     TrainingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  creator      Creator?         @relation(fields: [creatorId], references: [id])
+
+  @@index([organizationId, creatorId, status])
+  @@index([organizationId, documentType])
+}
+
+model PromptTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?
+  name           String
+  description    String   @default("")
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     PromptVersion[]
+
+  @@index([organizationId])
+}
+
+model PromptVersion {
+  id         String   @id @default(cuid())
+  templateId String
+  version    Int
+  sections   Json
+  isActive   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  template    PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  generations Generation[]
+
+  @@unique([templateId, version])
+}
+
+model Generation {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  conversationId       String
+  requestedById        String
+  promptVersionId      String?
+  provider             String
+  model                String
+  status               GenerationStatus  @default(PENDING)
+  intent               Intent?
+  funnelStage          FunnelStage?
+  recommendedAction    RecommendedAction?
+  recommendedProductId String?
+  approvedPriceCents   Int?
+  requiresHumanReview  Boolean           @default(true)
+  riskFlags            String[]          @default([])
+  latencyMs            Int?
+  promptTokens         Int?
+  completionTokens     Int?
+  estimatedCostUsd     Decimal?          @db.Decimal(10, 6)
+  requestId            String?
+  validationErrors     String[]          @default([])
+  createdAt            DateTime          @default(now())
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation  Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requestedBy   User          @relation(fields: [requestedById], references: [id])
+  promptVersion PromptVersion? @relation(fields: [promptVersionId], references: [id])
+  replyOptions  ReplyOption[]
+
+  @@index([organizationId, conversationId, createdAt])
+  @@index([organizationId, model, createdAt])
+}
+
+model ReplyOption {
+  id             String       @id @default(cuid())
+  organizationId String
+  generationId   String
+  text           String
+  originalText   String
+  tone           Tone
+  internalReason String
+  outcome        ReplyOutcome @default(PENDING)
+  editDistance   Int?
+  selectedById   String?
+  messageId      String?
+  createdAt      DateTime     @default(now())
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  selectedBy User?      @relation("SelectedBy", fields: [selectedById], references: [id])
+  message    Message?   @relation(fields: [messageId], references: [id])
+
+  @@index([organizationId, generationId])
+}
+
+model Escalation {
+  id              String            @id @default(cuid())
+  organizationId  String
+  conversationId  String?
+  openedById      String?
+  reason          EscalationReason
+  status          EscalationStatus  @default(OPEN)
+  summary         String
+  riskEvent       Json?
+  createdAt       DateTime          @default(now())
+  resolvedAt      DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  openedBy     User?         @relation("EscalationOpenedBy", fields: [openedById], references: [id])
+
+  @@index([organizationId, status, createdAt])
+}
+
+model AnalyticsEvent {
+  id             String             @id @default(cuid())
+  organizationId String
+  type           AnalyticsEventType
+  creatorId      String?
+  chatterId      String?
+  conversationId String?
+  promptVersionId String?
+  model          String?
+  playbook       String?
+  numericValue   Float?
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, type, createdAt])
+  @@index([organizationId, creatorId, createdAt])
+  @@index([organizationId, chatterId, createdAt])
+}
+
+model LLMProviderConfiguration {
+  id                    String    @id @default(cuid())
+  organizationId        String?
+  provider              String    @default("venice")
+  generationModel       String    @default("")
+  classificationModel   String    @default("")
+  baseUrl               String    @default("https://api.venice.ai/api/v1")
+  isActive              Boolean   @default(true)
+  lastHealthCheckAt     DateTime?
+  lastHealthOk          Boolean?
+  lastLatencyMs         Int?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         AuditAction
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ApiCredential {
+  id             String    @id @default(cuid())
+  organizationId String?
+  provider       String
+  encryptedKey   String
+  keyLastFour    String
+  rotatedAt      DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, provider])
+}
+
+model DataRetentionPolicy {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  messageRetentionDays  Int      @default(90)
+  memoryRetentionDays   Int      @default(180)
+  generationRetentionDays Int    @default(90)
+  auditRetentionDays    Int      @default(365)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model ExtensionToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model MediaAsset {
+  id             String    @id @default(cuid())
+  organizationId String
+  creatorId      String
+  externalId     String?
+  mediaType      MediaType
+  title          String
+  description    String    @default("")
+  tags           String[]  @default([])
+  placeholderKind String   @default("PHOTO_SET")
+  defaultPriceCents Int    @default(0)
+  minimumPriceCents Int    @default(0)
+  source         ProductSource @default(MANUAL)
+  available      Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  productMedia ProductMedia[]
+  productPreviews ProductPreview[]
+
+  @@index([organizationId, creatorId])
+}
+
+model ProductMedia {
+  id        String @id @default(cuid())
+  productId String
+  mediaId   String
+  sortOrder Int    @default(0)
+
+  product Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  media   MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, mediaId])
+}
+
+model ProductPreview {
+  id        String @id @default(cuid())
+  productId String
+  mediaId   String
+  sortOrder Int    @default(0)
+
+  product Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  media   MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, mediaId])
+}
+
+model PlatformConnection {
+  id             String                 @id @default(cuid())
+  organizationId String
+  creatorId      String?
+  mode           PlatformConnectionMode @default(DEMO)
+  enabled        Boolean                @default(false)
+  label          String                 @default("Demo vault")
+  note           String                 @default("No authorised live platform API is connected. DEMO uses seeded vault data. PLATFORM_VAULT_SYNC requires an authorised integration.")
+  lastSyncAt     DateTime?
+  createdAt      DateTime               @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator?     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  jobs         VaultSyncJob[]
+
+  @@index([organizationId])
+}
+
+model VaultSyncJob {
+  id             String         @id @default(cuid())
+  organizationId String
+  connectionId   String
+  status         VaultSyncStatus @default(DISABLED)
+  triggeredBy    String         @default("user")
+  itemCount      Int            @default(0)
+  error          String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime       @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection   PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model WelcomeAutomation {
+  id             String   @id @default(cuid())
+  organizationId String
+  creatorId      String
+  enabled        Boolean  @default(false)
+  body           String   @default("")
+  isPaid         Boolean  @default(false)
+  priceCents     Int?
+  productId      String?
+  previewMediaId String?
+  segment        String   @default("new_subscribers")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, creatorId])
+}
+
+enum PlatformKind {
+  ONLYFANS
+}
+
+enum AutonomyMode {
+  COPILOT
+  HYBRID
+  AUTOPILOT
+  PAUSED
+}
+
+enum PlatformConnectionStatus {
+  DISCONNECTED
+  LOGIN_REQUIRED
+  CONNECTED
+  SYNCING
+  CHALLENGE_REQUIRED
+  DEGRADED
+  PAUSED
+}
+
+enum PlatformDriver {
+  MOCK
+  BROWSER
+}
+
+enum PlatformMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum PlatformMessageKind {
+  TEXT
+  PPV
+  TIP
+  MEDIA
+  SYSTEM
+}
+
+enum DeliveryStatus {
+  RECEIVED
+  PENDING
+  SENT
+  VERIFIED
+  FAILED
+  AMBIGUOUS
+}
+
+enum AutomationActionType {
+  SEND_TEXT
+  SEND_PPV
+  FOLLOW_UP
+  WELCOME
+}
+
+enum AutomationActionStatus {
+  PENDING
+  GENERATING
+  APPROVAL_REQUIRED
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model PlatformAccount {
+  id                       String                    @id @default(cuid())
+  organizationId           String
+  creatorId                String
+  platform                 PlatformKind              @default(ONLYFANS)
+  driver                   PlatformDriver            @default(MOCK)
+  externalAccountId        String?
+  displayName              String
+  autonomyMode             AutonomyMode              @default(COPILOT)
+  connectionStatus         PlatformConnectionStatus  @default(DISCONNECTED)
+  lastHeartbeatAt          DateTime?
+  lastInboxSyncAt          DateTime?
+  manualInterventionReason String?
+  authorizedAt             DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+
+  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator       Creator                @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  conversations PlatformConversation[]
+  actions       AutomationAction[]
+  policy        AutomationPolicy?
+
+  @@unique([organizationId, creatorId, platform])
+  @@index([organizationId, connectionStatus])
+}
+
+model PlatformConversation {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  platformAccountId      String
+  canopyConversationId   String
+  externalConversationId String
+  externalFanId          String
+  externalFanDisplayName String
+  lastSyncedMessageId    String?
+  lastActivityAt         DateTime  @default(now())
+  automationLockedUntil  DateTime?
+  humanTakeover          Boolean   @default(false)
+  processingLockUntil    DateTime?
+  processingLockToken    String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  platformAccount    PlatformAccount     @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  canopyConversation Conversation        @relation(fields: [canopyConversationId], references: [id], onDelete: Cascade)
+  messages           PlatformMessage[]
+  actions            AutomationAction[]
+
+  @@unique([platformAccountId, externalConversationId])
+  @@index([organizationId, platformAccountId])
+  @@index([canopyConversationId])
+}
+
+model PlatformMessage {
+  id                     String                   @id @default(cuid())
+  organizationId         String
+  platformConversationId String
+  canopyMessageId        String?
+  externalMessageId      String
+  direction              PlatformMessageDirection
+  messageType            PlatformMessageKind      @default(TEXT)
+  body                   String
+  sentAt                 DateTime
+  deliveryStatus         DeliveryStatus           @default(RECEIVED)
+  metadata               Json?
+  createdAt              DateTime                 @default(now())
+
+  platformConversation PlatformConversation @relation(fields: [platformConversationId], references: [id], onDelete: Cascade)
+  canopyMessage        Message?             @relation(fields: [canopyMessageId], references: [id])
+
+  @@unique([platformConversationId, externalMessageId])
+  @@index([organizationId, platformConversationId, sentAt])
+}
+
+model AutomationAction {
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  platformAccountId      String
+  platformConversationId String
+  triggerMessageId       String?
+  actionType             AutomationActionType
+  status                 AutomationActionStatus  @default(PENDING)
+  idempotencyKey         String                  @unique
+  generatedPayload       Json?
+  finalPayload           Json?
+  confidence             Float?
+  escalationReason       String?
+  scheduledFor           DateTime?
+  attemptCount           Int                     @default(0)
+  lastError              String?
+  screenshotPath         String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  platformAccount      PlatformAccount      @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  platformConversation PlatformConversation @relation(fields: [platformConversationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([platformAccountId, status])
+}
+
+model AutomationPolicy {
+  id                           String   @id @default(cuid())
+  platformAccountId            String   @unique
+  minimumConfidence            Float    @default(0.72)
+  maximumPpvPriceCents         Int      @default(5000)
+  minimumReplyDelaySeconds     Int      @default(8)
+  maximumReplyDelaySeconds     Int      @default(45)
+  maximumMessagesPerHourPerFan Int      @default(8)
+  welcomeEnabled               Boolean  @default(false)
+  followUpsEnabled             Boolean  @default(false)
+  ppvEnabled                   Boolean  @default(false)
+  quietHours                   Json?
+  allowedProductIds            String[] @default([])
+  escalationRules              String[] @default([])
+  humanTakeoverMinutes         Int      @default(30)
+  allowedLanguages             String[] @default(["en"])
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+}

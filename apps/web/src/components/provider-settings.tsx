@@ -95,8 +95,12 @@ export function ProviderSettings() {
             variant="secondary"
             onClick={async () => {
               const j = await call("test-generation");
+              if (j.error) {
+                setTest(`Test failed: ${j.error}${j.code ? ` (${j.code})` : ""}`);
+                return;
+              }
               setTest(
-                `latency ${j.latencyMs}ms · tokens ${j.promptTokens}+${j.completionTokens} · ${j.sample ?? ""}`,
+                `latency ${j.latencyMs ?? "—"}ms · tokens ${j.promptTokens ?? "—"}+${j.completionTokens ?? "—"} · ${j.sample ?? ""}`,
               );
             }}
           >

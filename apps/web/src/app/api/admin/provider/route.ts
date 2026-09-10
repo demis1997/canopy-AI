@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, encryptSecret, lastFour, decryptSecret } from "@canopy/database";
-import { createLLMProvider, VeniceLLMProvider } from "@canopy/ai";
+import { createLLMProvider, VeniceLLMProvider, ProviderError } from "@canopy/ai";
 import { requireUser, jsonError, requirePerm } from "@/lib/session";
 import { maskSecret } from "@canopy/shared";
 
@@ -193,6 +193,12 @@ export async function POST(request: Request) {
       sample: gen.output.replyOptions[0]?.text,
     });
   } catch (error) {
+    if (error instanceof ProviderError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, requestId: error.requestId },
+        { status: error.status && error.status >= 400 ? error.status : 502 },
+      );
+    }
     return jsonError(error);
   }
 }

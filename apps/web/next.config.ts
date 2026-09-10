@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  env: {
+    AUTH_TRUST_HOST: "true",
+  },
   outputFileTracingRoot: path.join(__dirname, "../.."),
   transpilePackages: ["@canopy/shared", "@canopy/database", "@canopy/ai"],
   serverExternalPackages: ["@prisma/client", "bcryptjs", "ioredis", "bullmq"],

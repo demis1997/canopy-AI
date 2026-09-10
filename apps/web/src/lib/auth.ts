@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@canopy/database";
 import { loginSchema, type Role } from "@canopy/shared";
+import { authConfig } from "./auth.config";
 
 declare module "next-auth" {
   interface Session {
@@ -17,19 +18,8 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    organizationId: string | null;
-    role: Role;
-    isPlatformAdmin: boolean;
-  }
-}
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
-  secret: process.env.AUTH_SECRET,
-  session: { strategy: "jwt", maxAge: 60 * 60 * 12 },
-  pages: { signIn: "/login" },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -75,34 +65,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
         token.organizationId = (user as { organizationId: string | null }).organizationId;
         token.role = (user as { role: Role }).role;
         token.isPlatformAdmin = (user as { isPlatformAdmin: boolean }).isPlatformAdmin;
       }
-      if (token.sub && process.env.NEXT_RUNTIME !== "edge") {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.sub },
-          include: { memberships: true },
-        });
-        if (dbUser) {
-          const membership = dbUser.memberships[0];
-          token.organizationId = membership?.organizationId ?? null;
-          token.isPlatformAdmin = dbUser.isPlatformAdmin;
-          token.role = dbUser.isPlatformAdmin
-            ? "PLATFORM_ADMIN"
-            : (membership?.role ?? "CHATTER");
-        }
-      }
       return token;
     },
     session({ session, token }) {
       session.user.id = token.sub!;
-      session.user.organizationId = token.organizationId;
-      session.user.role = token.role;
-      session.user.isPlatformAdmin = token.isPlatformAdmin;
+      session.user.organizationId = (token.organizationId as string | null) ?? null;
+      session.user.role = (token.role as Role) ?? "CHATTER";
+      session.user.isPlatformAdmin = Boolean(token.isPlatformAdmin);
       return session;
     },
   },

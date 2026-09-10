@@ -1,6 +1,7 @@
 export * from "./provider/types.js";
 export * from "./provider/errors.js";
 export * from "./provider/venice.js";
+export * from "./provider/openai-compatible.js";
 export * from "./provider/mock.js";
 export * from "./provider/factory.js";
 export * from "./safety/index.js";

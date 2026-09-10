@@ -437,7 +437,7 @@ export async function generateAutomationDecision(input: {
 
   if (account.autonomyMode === "PAUSED") {
     decision = { ...decision, action: "DO_NOT_REPLY", reason: "PAUSED" };
-  } else if (safety.allowed && !platformConversation.humanTakeover) {
+  } else if (safety.allowed && !platformConversation.humanTakeover && !conversation.mutedAi) {
     const userId = await actorUserId(tenant.organizationId, input.actorUserId);
     const generation = await generateForConversation({
       organizationId: tenant.organizationId,
@@ -532,7 +532,7 @@ export async function generateAutomationDecision(input: {
     actualFanId: platformConversation.externalFanId,
     autonomyMode: account.autonomyMode,
     flags,
-    humanTakeover: platformConversation.humanTakeover,
+    humanTakeover: platformConversation.humanTakeover || conversation.mutedAi,
     lockedUntil: platformConversation.automationLockedUntil,
     newerMessageAfterTrigger: Boolean(newer),
     alreadySentForTrigger: Boolean(alreadySent),
@@ -558,7 +558,7 @@ export async function generateAutomationDecision(input: {
     flags,
     decision,
     policy,
-    humanTakeover: platformConversation.humanTakeover,
+    humanTakeover: platformConversation.humanTakeover || conversation.mutedAi,
     gate,
   });
 
@@ -877,5 +877,5 @@ export async function approveAction(input: {
 }
 
 export function canSendAutonomously(mode: AutonomyMode, flags: FeatureFlags) {
-  return flags.autonomousText && (mode === "HYBRID" || mode === "AUTOPILOT");
+  return flags.autonomousText && mode !== "PAUSED";
 }

@@ -70,7 +70,16 @@ export function composeGenerationPrompt(
 
   const user = [
     `<creator_persona>${persona}</creator_persona>`,
-    `<conversation_state>funnel=${input.funnelStage} playbook=${input.playbook} toneOverride=${input.toneOverride ?? "none"}</conversation_state>`,
+    `<conversation_state>funnel=${input.funnelStage} playbook=${input.playbook} toneOverride=${input.toneOverride ?? "none"} rewrite=${input.rewriteStyle ?? "none"}</conversation_state>`,
+    input.rewriteStyle === "SHORTER"
+      ? "<rewrite_instruction>Rewrite all replyOptions shorter: 12-18 words, same intent, still in-character.</rewrite_instruction>"
+      : input.rewriteStyle === "WARMER"
+        ? "<rewrite_instruction>Rewrite all replyOptions warmer and more intimate. Stay inside approved explicitness.</rewrite_instruction>"
+        : input.rewriteStyle === "PLAYFUL"
+          ? "<rewrite_instruction>Rewrite all replyOptions more playful and teasing.</rewrite_instruction>"
+          : input.rewriteStyle === "SALES"
+            ? "<rewrite_instruction>Rewrite all replyOptions more sales-focused. Pitch one approved catalog item at list price.</rewrite_instruction>"
+            : "",
     `<pricing_policy>Sell at list/standardPrice. Do not open with a discount. If concessionAllowed, you may offer minimumPrice once to close a stalled sale. Never invent prices.</pricing_policy>`,
     `<pricing_state>${JSON.stringify(input.pricing ?? { concessionAllowed: false, lastOffer: null })}</pricing_state>`,
     `<subscriber_memory>${JSON.stringify(input.memories)}</subscriber_memory>`,

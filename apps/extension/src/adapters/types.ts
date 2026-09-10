@@ -3,6 +3,7 @@ export type VisibleMessage = { author: "subscriber" | "creator" | "unknown"; tex
 export type ThreadContext = {
   messages: VisibleMessage[];
   composeFound: boolean;
+  conversationId?: string;
 };
 
 export interface PlatformAdapter {

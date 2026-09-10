@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         creatorId: creator.id,
         displayName: body.displayName ?? creator.displayName,
         driver: body.driver ?? "MOCK",
-        autonomyMode: "COPILOT",
+        autonomyMode: "AUTOPILOT",
         policy: { create: {} },
       },
       include: { policy: true },

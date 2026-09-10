@@ -15,9 +15,12 @@ export default function DemoMessengerPage() {
   ]);
   const [draft, setDraft] = useState("");
   const [fanDraft, setFanDraft] = useState("got anything from the gym?");
+  const [conversationId, setConversationId] = useState("");
 
   useEffect(() => {
     document.documentElement.dataset.canopyDemo = "true";
+    const id = new URLSearchParams(window.location.search).get("conversationId") ?? "";
+    setConversationId(id);
   }, []);
 
   return (
@@ -30,10 +33,12 @@ export default function DemoMessengerPage() {
       <h1 className="mt-3 text-xl font-semibold">Canopy demo messenger</h1>
       <p className="mt-2 text-sm text-slate-500">
         Safe local adapter surface. The extension reads these labelled nodes only. Sending stays
-        manual — there is no platform automation.
+        manual — there is no platform automation. Optional <code>?conversationId=</code> links
+        generation to a real Canopy thread.
       </p>
       <div
         data-canopy-thread
+        data-conversation-id={conversationId || undefined}
         className="mt-6 min-h-[240px] space-y-3 rounded-xl border border-slate-200 bg-white p-4"
       >
         {messages.map((m, i) => (

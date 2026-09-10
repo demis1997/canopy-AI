@@ -19,7 +19,7 @@ import {
   retrieveTraining,
   pricingContextFrom,
 } from "@canopy/ai";
-import { eligibleProducts, playbookFor, type CatalogProduct } from "@canopy/shared";
+import { eligibleProducts, playbookFor, readFeatureFlags, type CatalogProduct } from "@canopy/shared";
 import { enqueueJob } from "./queue";
 
 const TOKEN_USD_PER_MILLION = 0.5;
@@ -114,6 +114,7 @@ export async function generateForConversation(input: {
   userId: string;
   conversationId: string;
   toneOverride?: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "SUBMISSIVE" | "DIRECT";
+  rewriteStyle?: "SHORTER" | "WARMER" | "PLAYFUL" | "SALES";
 }) {
   const requestId = randomUUID();
   const tenant = requireTenant(input.organizationId);
@@ -167,8 +168,8 @@ export async function generateForConversation(input: {
         organizationId: tenant.organizationId,
         conversationId: conversation.id,
         requestedById: input.userId,
-        provider: process.env.LLM_PROVIDER ?? "venice",
-        model: process.env.LLM_MODEL || "blocked",
+        provider: process.env.AI_PROVIDER ?? process.env.LLM_PROVIDER ?? "venice",
+        model: process.env.AI_MODEL || process.env.LLM_MODEL || "blocked",
         status: "BLOCKED",
         recommendedAction: "BLOCK",
         requiresHumanReview: true,
@@ -288,11 +289,12 @@ export async function generateForConversation(input: {
     orderBy: { organizationId: "desc" },
   });
 
-  let apiKey = process.env.LLM_API_KEY ?? "";
+  const providerName = config?.provider || process.env.AI_PROVIDER || process.env.LLM_PROVIDER || "venice";
+  let apiKey = process.env.AI_API_KEY || process.env.LLM_API_KEY || "";
   if (!apiKey) {
     const cred = await prisma.apiCredential.findFirst({
       where: {
-        provider: "venice",
+        provider: { in: [providerName, "venice", "openrouter", "openai"] },
         OR: [{ organizationId: tenant.organizationId }, { organizationId: null }],
       },
       orderBy: { createdAt: "desc" },
@@ -302,10 +304,12 @@ export async function generateForConversation(input: {
 
   const { provider, mode } = createLLMProvider({
     apiKey,
-    baseURL: config?.baseUrl || process.env.LLM_BASE_URL,
+    baseURL: config?.baseUrl || process.env.AI_BASE_URL || process.env.LLM_BASE_URL,
+    provider: providerName,
+    defaultModel: config?.generationModel || process.env.AI_MODEL || process.env.LLM_MODEL,
   });
 
-  const model = config?.generationModel || process.env.LLM_MODEL || "";
+  const model = config?.generationModel || process.env.AI_MODEL || process.env.LLM_MODEL || "";
   const demoSales = conversation.creator.isDemo;
   const funnelState = {
     stage: conversation.funnelStage,
@@ -418,6 +422,7 @@ export async function generateForConversation(input: {
       playbook: playbookFor(conversation.funnelStage, classified.intent),
       retrievedExamples: examples,
       toneOverride: input.toneOverride,
+      rewriteStyle: input.rewriteStyle,
       pricing,
     });
 
@@ -554,6 +559,8 @@ export async function generateForConversation(input: {
       blocked: false as const,
       mockMode: mode === "mock",
       generationId: generation.id,
+      status,
+      confidence: classified.confidence,
       intent: validated.output.intent,
       funnelStage: nextFunnel.stage,
       recommendedAction: validated.output.recommendedAction,
@@ -626,8 +633,10 @@ export async function selectReply(input: {
   conversationId: string;
   generationId: string;
   replyOptionId: string;
-  editedText: string;
+  editedText?: string;
   inserted: boolean;
+  discard?: boolean;
+  rejectReason?: string;
 }) {
   const tenant = requireTenant(input.organizationId);
   const option = await prisma.replyOption.findFirst({
@@ -642,8 +651,30 @@ export async function selectReply(input: {
     throw new Error("Reply option not found");
   }
 
-  const edited = option.originalText.trim() !== input.editedText.trim();
-  const distance = levenshtein(option.originalText, input.editedText);
+  if (input.discard) {
+    await prisma.replyOption.update({
+      where: { id: option.id },
+      data: {
+        outcome: "DISCARDED",
+        selectedById: input.userId,
+        internalReason: input.rejectReason
+          ? `${option.internalReason} · rejected: ${input.rejectReason}`
+          : option.internalReason,
+      },
+    });
+    await recordAnalytics({
+      organizationId: tenant.organizationId,
+      type: "OVERRIDE",
+      conversationId: input.conversationId,
+      chatterId: input.userId,
+      metadata: { reason: input.rejectReason ?? "discarded" },
+    });
+    return { discarded: true as const };
+  }
+
+  const nextText = input.editedText ?? option.text;
+  const edited = option.originalText.trim() !== nextText.trim();
+  const distance = levenshtein(option.originalText, nextText);
 
   const message = await prisma.message.create({
     data: {
@@ -651,7 +682,8 @@ export async function selectReply(input: {
       conversationId: input.conversationId,
       authorType: "CHATTER",
       authorUserId: input.userId,
-      body: input.editedText,
+      body: nextText,
+      aiAssisted: true,
     },
   });
   await prisma.conversation.update({
@@ -662,7 +694,7 @@ export async function selectReply(input: {
   await prisma.replyOption.update({
     where: { id: option.id },
     data: {
-      text: input.editedText,
+      text: nextText,
       outcome: input.inserted ? "INSERTED" : edited ? "EDITED" : "SELECTED",
       editDistance: distance,
       selectedById: input.userId,
@@ -754,8 +786,14 @@ export async function handleFanTurn(input: {
     text: input.text,
     chatterId: input.userId,
   });
-  if (!input.autoReply) {
-    return { subscriberMessageId: message.id, autoSent: false as const };
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: input.conversationId, organizationId: input.organizationId },
+    select: { mutedAi: true },
+  });
+  const flags = readFeatureFlags();
+  const autoReply = input.autoReply !== false && !conversation?.mutedAi && flags.autonomousText;
+  if (!autoReply) {
+    return { subscriberMessageId: message.id, autoSent: false as const, muted: Boolean(conversation?.mutedAi) };
   }
 
   const generation = await generateForConversation({

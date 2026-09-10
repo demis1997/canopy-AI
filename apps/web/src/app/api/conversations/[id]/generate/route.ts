@@ -35,6 +35,7 @@ export async function POST(
       userId: ctx.userId,
       conversationId: id,
       toneOverride: body.toneOverride,
+      rewriteStyle: body.rewriteStyle,
     });
     return NextResponse.json(result);
   } catch (error) {

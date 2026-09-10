@@ -1,16 +1,23 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { prisma } from "@canopy/database";
-import { requireOrgUser } from "@/lib/session";
 import { Card, Badge } from "@/components/ui/card";
 import { PersonaForm } from "@/components/persona-form";
+import { guardOrgPage } from "@/lib/page-guard";
+import { AccessDenied, PageHeader } from "@/components/page-chrome";
+import Link from "next/link";
 
 export default async function CreatorDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const ctx = await requireOrgUser();
-  if (!ctx.tenant) redirect("/admin");
+  const { allowed, ctx } = await guardOrgPage([
+    "creators.view_assigned",
+    "creators.manage",
+    "creators.edit_own_persona",
+  ]);
+  if (!ctx.tenant) return <AccessDenied title="Select an organization" />;
+  if (!allowed) return <AccessDenied />;
   const { id } = await params;
   const creator = await prisma.creator.findFirst({
     where: { id, organizationId: ctx.tenant.organizationId },
@@ -20,10 +27,16 @@ export default async function CreatorDetailPage({
   const active = creator.personas.find((p) => p.isActive) ?? creator.personas[0];
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">{creator.displayName}</h1>
-        <p className="text-sm text-white/50">@{creator.handle}</p>
-      </div>
+      <PageHeader
+        eyebrow={`@${creator.handle}`}
+        title={creator.displayName}
+        description={creator.bio}
+        actions={
+          <Link href="/conversations" className="text-sm text-canopy-300">
+            Open conversations
+          </Link>
+        }
+      />
       {active ? (
         <PersonaForm
           creatorId={creator.id}
@@ -52,6 +65,18 @@ export default async function CreatorDetailPage({
           }}
         />
       ) : null}
+      <Card>
+        <div className="text-sm font-medium">Approved catalog</div>
+        <ul className="mt-3 space-y-1 text-sm text-white/70">
+          {creator.products.map((p) => (
+            <li key={p.id}>
+              <Link href="/products" className="text-canopy-300">
+                {p.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
       <Card>
         <div className="text-sm font-medium">Persona versions</div>
         <ul className="mt-3 space-y-1 text-sm text-white/60">

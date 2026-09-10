@@ -241,6 +241,11 @@ async function processJob(name: JobName, payload: JobPayload) {
       where: { id: payload.platformConversationId, organizationId: payload.organizationId },
     });
     if (!thread || thread.humanTakeover) return;
+    const canopy = await prisma.conversation.findFirst({
+      where: { id: thread.canopyConversationId },
+      select: { mutedAi: true },
+    });
+    if (canopy?.mutedAi) return;
     const key = idempotencyKey({
       platformAccountId: account.id,
       externalConversationId: thread.externalConversationId,

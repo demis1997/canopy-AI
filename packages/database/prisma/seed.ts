@@ -603,7 +603,7 @@ async function main() {
       platform: "ONLYFANS",
       driver: "MOCK",
       displayName: "Maya Voss (mock OF)",
-      autonomyMode: "COPILOT",
+      autonomyMode: "AUTOPILOT",
       connectionStatus: "CONNECTED",
       authorizedAt: new Date(),
       externalAccountId: "of_maya_demo",
@@ -820,6 +820,165 @@ async function main() {
     },
   });
 
+  const extraFans = [
+    { name: "Noah K. (DEMO)", handle: "noahk_demo", creator: seeded[0]!, stage: "OFFER" as const, spend: 2500, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
+    { name: "Priya L. (DEMO)", handle: "priyal_demo", creator: seeded[0]!, stage: "OBJECTION" as const, spend: 0, intent: "PRICE_OBJECTION" as const, outcome: "EDITED" as const },
+    { name: "Marcus D. (DEMO)", handle: "marcusd_demo", creator: seeded[1]!, stage: "PURCHASE" as const, spend: 3500, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
+    { name: "Owen F. (DEMO)", handle: "owenf_demo", creator: seeded[1]!, stage: "FOLLOW_UP" as const, spend: 3500, intent: "CASUAL_CHAT" as const, outcome: "SELECTED" as const },
+    { name: "Theo R. (DEMO)", handle: "theor_demo", creator: seeded[2]!, stage: "RAPPORT" as const, spend: 0, intent: "FLIRT" as const, outcome: "DISCARDED" as const },
+    { name: "Blake S. (DEMO)", handle: "blakes_demo", creator: seeded[2]!, stage: "OFFER" as const, spend: 1900, intent: "CONTENT_REQUEST" as const, outcome: "INSERTED" as const },
+    { name: "Andre V. (DEMO)", handle: "andrev_demo", creator: seeded[3]!, stage: "INTEREST" as const, spend: 0, intent: "FLIRT" as const, outcome: "EDITED" as const },
+    { name: "Chris P. (DEMO)", handle: "chrisp_demo", creator: seeded[3]!, stage: "PURCHASE" as const, spend: 2000, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
+  ];
+
+  for (const fan of extraFans) {
+    const subscriber = await prisma.subscriber.create({
+      data: {
+        organizationId: agency.id,
+        displayName: fan.name,
+        platformHandle: fan.handle,
+        adultStatus: "VERIFIED_ADULT",
+        isDemo: true,
+      },
+    });
+    const conversation = await prisma.conversation.create({
+      data: {
+        organizationId: agency.id,
+        creatorId: fan.creator.creatorId,
+        subscriberId: subscriber.id,
+        funnelStage: fan.stage,
+        adultStatus: "VERIFIED_ADULT",
+        unreadCount: fan.outcome === "DISCARDED" ? 2 : 0,
+        lastMessageAt: new Date(Date.now() - extraFans.indexOf(fan) * 3_600_000),
+      },
+    });
+    const opener = await prisma.message.create({
+      data: {
+        organizationId: agency.id,
+        conversationId: conversation.id,
+        authorType: "SUBSCRIBER",
+        body: fan.stage === "OBJECTION" ? "that's a lot, anything cheaper?" : "you around? i liked that last set",
+        isDemo: true,
+      },
+    });
+    const generation = await prisma.generation.create({
+      data: {
+        organizationId: agency.id,
+        conversationId: conversation.id,
+        requestedById: chatter1.id,
+        provider: "venice",
+        model: "demo-seed",
+        status: fan.outcome === "DISCARDED" ? "MANUAL_REVIEW" : "COMPLETED",
+        intent: fan.intent,
+        funnelStage: fan.stage,
+        recommendedAction: fan.stage === "OFFER" || fan.stage === "PURCHASE" ? "PRESENT_OFFER" : "REPLY",
+        recommendedProductId: fan.creator.productIds[0],
+        approvedPriceCents: fan.spend || null,
+        requiresHumanReview: true,
+        requestId: `seed-${fan.handle}`,
+      },
+    });
+    await prisma.replyOption.create({
+      data: {
+        organizationId: agency.id,
+        generationId: generation.id,
+        text: "mmm you caught me. the set is still list price if you actually want it",
+        originalText: "mmm you caught me. the set is still list price if you actually want it",
+        tone: "PLAYFUL",
+        internalReason: "DEMO seed suggestion",
+        outcome: fan.outcome,
+        selectedById: chatter1.id,
+        messageId:
+          fan.outcome === "DISCARDED"
+            ? null
+            : (
+                await prisma.message.create({
+                  data: {
+                    organizationId: agency.id,
+                    conversationId: conversation.id,
+                    authorType: "CHATTER",
+                    authorUserId: chatter1.id,
+                    body:
+                      fan.outcome === "EDITED"
+                        ? "ok baby, list is still $25 — tell me if you want the gym one"
+                        : "mmm you caught me. the set is still list price if you actually want it",
+                    isDemo: true,
+                    aiAssisted: true,
+                  },
+                })
+              ).id,
+      },
+    });
+    if (fan.spend) {
+      await prisma.offer.create({
+        data: {
+          organizationId: agency.id,
+          conversationId: conversation.id,
+          productId: fan.creator.productIds[0]!,
+          priceCents: fan.spend,
+          accepted: fan.stage === "PURCHASE" || fan.stage === "FOLLOW_UP",
+        },
+      });
+      if (fan.stage === "PURCHASE" || fan.stage === "FOLLOW_UP") {
+        await prisma.purchase.create({
+          data: {
+            organizationId: agency.id,
+            conversationId: conversation.id,
+            subscriberId: subscriber.id,
+            productId: fan.creator.productIds[0]!,
+            amountCents: fan.spend,
+          },
+        });
+      }
+    }
+    void opener;
+  }
+
+  const analyticsRows = [];
+  for (let day = 0; day < 30; day++) {
+    const createdAt = new Date(Date.now() - day * 24 * 60 * 60 * 1000);
+    const creatorId = seeded[day % seeded.length]!.creatorId;
+    analyticsRows.push(
+      {
+        organizationId: agency.id,
+        type: "MESSAGE_RECEIVED" as const,
+        creatorId,
+        chatterId: day % 2 ? chatter1.id : chatter2.id,
+        numericValue: 4 + (day % 3),
+        createdAt,
+      },
+      {
+        organizationId: agency.id,
+        type: "SUGGESTIONS_PRODUCED" as const,
+        creatorId,
+        chatterId: day % 2 ? chatter1.id : chatter2.id,
+        numericValue: 1,
+        createdAt,
+      },
+      {
+        organizationId: agency.id,
+        type: day % 3 === 0 ? ("SUGGESTION_EDITED" as const) : ("SUGGESTION_ACCEPTED" as const),
+        creatorId,
+        chatterId: day % 2 ? chatter1.id : chatter2.id,
+        numericValue: 1,
+        createdAt,
+      },
+      {
+        organizationId: agency.id,
+        type: "OFFER_PRESENTED" as const,
+        creatorId,
+        numericValue: 25,
+        createdAt,
+      },
+      {
+        organizationId: agency.id,
+        type: "PURCHASE" as const,
+        creatorId,
+        numericValue: 20 + (day % 5) * 5,
+        createdAt,
+      },
+    );
+  }
   await prisma.analyticsEvent.createMany({
     data: [
       {
@@ -845,6 +1004,15 @@ async function main() {
         conversationId: convUncertain.id,
         numericValue: 1,
       },
+      {
+        organizationId: agency.id,
+        type: "ESCALATION",
+        creatorId: maya!.creatorId,
+        conversationId: convUncertain.id,
+        chatterId: chatter1.id,
+        numericValue: 1,
+      },
+      ...analyticsRows,
     ],
   });
 

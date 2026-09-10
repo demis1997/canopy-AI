@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, encryptSecret, lastFour, decryptSecret } from "@canopy/database";
-import { createLLMProvider, VeniceLLMProvider, ProviderError } from "@canopy/ai";
+import { createLLMProvider, readProviderEnv, ProviderError } from "@canopy/ai";
 import { requireUser, jsonError, requirePerm } from "@/lib/session";
 import { maskSecret } from "@canopy/shared";
 
@@ -11,24 +11,60 @@ async function requireAdmin() {
   return ctx;
 }
 
+function inferProvider(baseUrl: string, explicit?: string) {
+  if (explicit && ["venice", "openrouter", "openai"].includes(explicit)) return explicit;
+  if (/openrouter\.ai/i.test(baseUrl)) return "openrouter";
+  if (/api\.openai\.com/i.test(baseUrl)) return "openai";
+  return "venice";
+}
+
+async function resolveApiKey(
+  organizationId: string | null,
+  providerName: string,
+  pasted?: string,
+) {
+  if (pasted) return pasted;
+  const stored = await prisma.apiCredential.findFirst({
+    where: {
+      organizationId: organizationId ?? null,
+      provider: { in: [providerName, "venice", "openrouter", "openai"] },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (stored) return decryptSecret(stored.encryptedKey);
+  return process.env.AI_API_KEY || process.env.LLM_API_KEY || "";
+}
+
 export async function GET() {
   try {
     const ctx = await requireAdmin();
+    const env = readProviderEnv();
     const config = await prisma.lLMProviderConfiguration.findFirst({
       where: ctx.organizationId
         ? { OR: [{ organizationId: ctx.organizationId }, { organizationId: null }] }
         : { organizationId: null },
       orderBy: { organizationId: "desc" },
     });
+    const providerName = config?.provider || env.name;
     const cred = await prisma.apiCredential.findFirst({
-      where: { provider: "venice", organizationId: ctx.organizationId ?? null },
+      where: {
+        provider: { in: [providerName, "venice", "openrouter", "openai"] },
+        organizationId: ctx.organizationId ?? null,
+      },
       orderBy: { createdAt: "desc" },
     });
+    const envKey = process.env.AI_API_KEY || process.env.LLM_API_KEY;
     return NextResponse.json({
       config,
-      keyLastFour: cred?.keyLastFour ?? (process.env.LLM_API_KEY ? lastFour(process.env.LLM_API_KEY) : null),
-      maskedKey: cred ? `••••${cred.keyLastFour}` : process.env.LLM_API_KEY ? maskSecret(process.env.LLM_API_KEY) : null,
-      mockMode: !process.env.LLM_API_KEY && !cred,
+      provider: providerName,
+      generationModel: config?.generationModel || env.model || "",
+      classificationModel: config?.classificationModel || "",
+      baseUrl: config?.baseUrl || env.baseURL,
+      keyLastFour: cred?.keyLastFour ?? (envKey ? lastFour(envKey) : null),
+      maskedKey: cred ? `••••${cred.keyLastFour}` : envKey ? maskSecret(envKey) : null,
+      mockMode: !envKey && !cred,
+      lastHealthOk: config?.lastHealthOk ?? null,
+      lastLatencyMs: config?.lastLatencyMs ?? null,
     });
   } catch (error) {
     return jsonError(error);
@@ -38,31 +74,28 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await requireAdmin();
+    const env = readProviderEnv();
     const body = z
       .object({
         apiKey: z.string().optional(),
         baseUrl: z.string().url().optional(),
         generationModel: z.string().optional(),
         classificationModel: z.string().optional(),
+        provider: z.enum(["venice", "openrouter", "openai"]).optional(),
         action: z.enum(["save", "test-key", "list-models", "health", "test-generation"]),
       })
       .parse(await request.json());
 
-    let apiKey = process.env.LLM_API_KEY ?? "";
-    const stored = await prisma.apiCredential.findFirst({
-      where: { provider: "venice", organizationId: ctx.organizationId ?? null },
-    });
-    if (stored) apiKey = decryptSecret(stored.encryptedKey);
-    if (body.apiKey) apiKey = body.apiKey;
-
-    const baseURL = body.baseUrl ?? process.env.LLM_BASE_URL ?? "https://api.venice.ai/api/v1";
+    const baseURL = body.baseUrl || env.baseURL || "https://api.venice.ai/api/v1";
+    const providerName = inferProvider(baseURL, body.provider ?? env.name);
+    const apiKey = await resolveApiKey(ctx.organizationId, providerName, body.apiKey);
 
     if (body.action === "save") {
       if (body.apiKey) {
         await prisma.apiCredential.create({
           data: {
             organizationId: ctx.organizationId,
-            provider: "venice",
+            provider: providerName,
             encryptedKey: encryptSecret(body.apiKey),
             keyLastFour: lastFour(body.apiKey),
           },
@@ -72,89 +105,76 @@ export async function POST(request: Request) {
         where: { organizationId: ctx.organizationId ?? null },
       });
       const data = {
-        provider: "venice",
+        provider: providerName,
         baseUrl: baseURL,
         generationModel: body.generationModel ?? existing?.generationModel ?? "",
         classificationModel: body.classificationModel ?? existing?.classificationModel ?? "",
         isActive: true,
       };
-      if (existing) {
-        await prisma.lLMProviderConfiguration.update({ where: { id: existing.id }, data });
-      } else {
-        await prisma.lLMProviderConfiguration.create({
-          data: { ...data, organizationId: ctx.organizationId },
-        });
-      }
+      const saved = existing
+        ? await prisma.lLMProviderConfiguration.update({ where: { id: existing.id }, data })
+        : await prisma.lLMProviderConfiguration.create({
+            data: { ...data, organizationId: ctx.organizationId },
+          });
       await prisma.auditLog.create({
         data: {
           organizationId: ctx.organizationId,
           userId: ctx.userId,
           action: "CONFIGURE_PROVIDER",
           entityType: "LLMProviderConfiguration",
+          entityId: saved.id,
+          metadata: { provider: providerName, generationModel: saved.generationModel },
         },
       });
-      return NextResponse.json({ saved: true, keyLastFour: body.apiKey ? lastFour(body.apiKey) : stored?.keyLastFour });
+      return NextResponse.json({
+        saved: true,
+        provider: providerName,
+        generationModel: saved.generationModel,
+        classificationModel: saved.classificationModel,
+        keyLastFour: body.apiKey ? lastFour(body.apiKey) : undefined,
+      });
     }
 
-    if (!apiKey) {
-      const { provider } = createLLMProvider({ forceMock: true });
-      if (body.action === "list-models") return NextResponse.json({ models: await provider.listModels(), mockMode: true });
-      if (body.action === "health") return NextResponse.json({ ...(await provider.healthCheck()), mockMode: true });
-      if (body.action === "test-key" || body.action === "test-generation") {
-        const gen = await provider.generateReplies({
-          requestId: "admin-test",
-          model: "mock",
-          promptVersionId: "admin",
-          persona: {
-            displayName: "Test",
-            biography: "",
-            authorisedBackstory: "",
-            personality: "direct",
-            tone: "short",
-            typicalMessageLength: "SHORT",
-            preferredEmojis: [],
-            frequentlyUsedPhrases: ["hey"],
-            preferredExplicitVocabulary: [],
-            prohibitedWords: [],
-            preferredCompliments: [],
-            allowedExplicitness: "FLIRTY",
-            style: "DIRECT",
-            interests: [],
-            contentBoundaries: [],
-            claimsNeverToMake: [],
-            customContentRules: "",
-            offlineMeetingPolicy: "",
-            discountLimitPercent: 0,
-            approvedExampleMessages: [],
-          },
-          recentMessages: [{ authorType: "SUBSCRIBER", body: "hey, how are you" }],
-          memories: [],
-          products: [],
-          funnelStage: "RAPPORT",
-          playbook: "BUILDING_RAPPORT",
-          retrievedExamples: [],
-        });
-        return NextResponse.json({
-          mockMode: true,
-          latencyMs: gen.latencyMs,
-          promptTokens: gen.promptTokens,
-          completionTokens: gen.completionTokens,
-          sample: gen.output.replyOptions[0]?.text,
-        });
-      }
-    }
+    const { provider, mode } = createLLMProvider({
+      apiKey,
+      baseURL,
+      provider: providerName,
+      defaultModel: body.generationModel || env.model,
+      forceMock: !apiKey,
+    });
 
-    const venice = new VeniceLLMProvider({ apiKey, baseURL, defaultModel: body.generationModel });
-    if (body.action === "test-key" || body.action === "list-models") {
-      const models = await venice.listModels();
-      return NextResponse.json({ models, mockMode: false });
+    if (body.action === "list-models" || body.action === "test-key") {
+      const models = await provider.listModels();
+      return NextResponse.json({ models, mockMode: mode === "mock", provider: mode });
     }
     if (body.action === "health") {
-      return NextResponse.json({ ...(await venice.healthCheck()), mockMode: false });
+      const health = await provider.healthCheck();
+      const existing = await prisma.lLMProviderConfiguration.findFirst({
+        where: { organizationId: ctx.organizationId ?? null },
+      });
+      if (existing) {
+        await prisma.lLMProviderConfiguration.update({
+          where: { id: existing.id },
+          data: {
+            lastHealthCheckAt: new Date(),
+            lastHealthOk: health.ok,
+            lastLatencyMs: health.latencyMs,
+            lastError: health.error ?? null,
+          },
+        });
+      }
+      return NextResponse.json({ ...health, mockMode: mode === "mock", provider: mode });
     }
-    const gen = await venice.generateReplies({
+
+    const models = await provider.listModels().catch(() => []);
+    const gen = await provider.generateReplies({
       requestId: "admin-test",
-      model: body.generationModel || process.env.LLM_MODEL || modelsFallback(await venice.listModels()),
+      model:
+        body.generationModel ||
+        env.model ||
+        models.find((m) => m.recommended)?.id ||
+        models[0]?.id ||
+        "mock",
       promptVersionId: "admin",
       persona: {
         displayName: "Test",
@@ -186,7 +206,9 @@ export async function POST(request: Request) {
       retrievedExamples: [],
     });
     return NextResponse.json({
-      mockMode: false,
+      mockMode: mode === "mock",
+      provider: mode,
+      model: gen.model,
       latencyMs: gen.latencyMs,
       promptTokens: gen.promptTokens,
       completionTokens: gen.completionTokens,
@@ -201,8 +223,4 @@ export async function POST(request: Request) {
     }
     return jsonError(error);
   }
-}
-
-function modelsFallback(models: { id: string; recommended?: boolean }[]) {
-  return models.find((m) => m.recommended)?.id ?? models[0]?.id ?? "";
 }

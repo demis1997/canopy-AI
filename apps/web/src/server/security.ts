@@ -21,10 +21,25 @@ export async function issueExtensionToken(userId: string) {
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
-  await prisma.extensionToken.create({
+  const row = await prisma.extensionToken.create({
     data: { userId, tokenHash, expiresAt },
   });
-  return { token, expiresAt };
+  return { token, expiresAt, id: row.id };
+}
+
+export async function listExtensionTokens(userId: string) {
+  return prisma.extensionToken.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: { id: true, createdAt: true, expiresAt: true, revokedAt: true },
+  });
+}
+
+export async function revokeExtensionToken(userId: string, id: string) {
+  const row = await prisma.extensionToken.findFirst({ where: { id, userId } });
+  if (!row) return null;
+  return prisma.extensionToken.update({ where: { id }, data: { revokedAt: new Date() } });
 }
 
 export async function verifyExtensionToken(token: string) {

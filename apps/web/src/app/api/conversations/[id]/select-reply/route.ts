@@ -25,6 +25,8 @@ export async function POST(
       replyOptionId: body.replyOptionId,
       editedText: body.editedText,
       inserted: body.inserted,
+      discard: body.discard,
+      rejectReason: body.rejectReason,
     });
     return NextResponse.json(result);
   } catch (error) {

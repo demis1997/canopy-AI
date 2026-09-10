@@ -2,9 +2,10 @@
   "manifest_version": 3,
   "name": "Canopy Copilot",
   "version": "0.1.0",
-  "description": "Human-in-the-loop reply copilot. Never sends messages or reads platform cookies.",
+  "description": "Human-in-the-loop reply copilot. Never sends messages or stores AI provider keys.",
   "action": {
-    "default_title": "Canopy"
+    "default_title": "Canopy",
+    "default_popup": "popup.html"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -13,8 +14,8 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "sidePanel", "activeTab", "scripting"],
-  "host_permissions": ["http://localhost:3000/*"],
+  "permissions": ["storage", "sidePanel", "activeTab"],
+  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
   "content_scripts": [
     {
       "matches": ["http://localhost:3000/demo*", "http://127.0.0.1:3000/demo*"],

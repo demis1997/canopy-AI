@@ -9,8 +9,8 @@
 
 html,
 body {
-  background: #0b0f10;
-  color: #e8eef0;
+  background: rgb(8, 12, 18);
+  color: #e6edf3;
   min-height: 100%;
 }
 
@@ -22,14 +22,19 @@ a {
   color: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid rgba(45, 212, 191, 0.7);
+  outline-offset: 2px;
+}
+
 ::selection {
-  background: rgba(45, 212, 191, 0.35);
+  background: rgba(45, 212, 191, 0.28);
 }
 
 .canopy-grid {
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(20, 184, 166, 0.12), transparent),
-    linear-gradient(to bottom, #0b0f10, #0b0f10);
+  background:
+    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(20, 184, 166, 0.08), transparent 50%),
+    rgb(8, 12, 18);
 }
 
 input,

@@ -39,10 +39,10 @@ export function AutonomySelect({ accountId, value }: { accountId: string; value:
         window.location.reload();
       }}
     >
-      <option value="COPILOT">COPILOT — drafts only</option>
-      <option value="HYBRID">HYBRID — send when rules pass</option>
-      <option value="AUTOPILOT">AUTOPILOT — send eligible text</option>
-      <option value="PAUSED">PAUSED</option>
+      <option value="COPILOT">Autonomous text (default) — pause individual chats</option>
+      <option value="HYBRID">Rules-assisted — still auto-sends when gates pass</option>
+      <option value="AUTOPILOT">Autopilot — same as autonomous text</option>
+      <option value="PAUSED">Paused — account kill switch</option>
     </select>
   );
 }
@@ -101,6 +101,32 @@ export function PolicyForm({
       <label className="flex items-center gap-2"><input type="checkbox" name="followUpsEnabled" defaultChecked={policy.followUpsEnabled} /> Follow-ups enabled</label>
       <button type="submit" className="rounded-md bg-white/10 px-3 py-2">Save policy</button>
     </form>
+  );
+}
+
+export function EmergencyStopAll({ accountIds }: { accountIds: string[] }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="rounded-[10px] bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+      disabled={busy || !accountIds.length}
+      onClick={async () => {
+        setBusy(true);
+        await Promise.all(
+          accountIds.map((accountId) =>
+            fetch(`/api/platform/accounts/${accountId}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ emergencyStop: true }),
+            }),
+          ),
+        );
+        window.location.reload();
+      }}
+    >
+      Global emergency stop
+    </button>
   );
 }
 

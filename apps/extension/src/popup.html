@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Canopy</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Canopy copilot</h1>
+    <p class="muted">Human-in-the-loop. This extension never sends messages, never stores the app API key, and never reads platform cookies.</p>
+    <div id="inbox">Checking inbox…</div>
+    <label>Session token from /platform</label>
+    <input id="token" type="password" placeholder="Extension token" />
+    <button id="save-token">Save token</button>
+    <button id="disconnect">Disconnect / clear token</button>
+    <div class="row">
+      <button id="pause">Pause</button>
+      <button id="resume">Resume</button>
+    </div>
+    <p id="status" class="muted"></p>
+    <button id="read">Read selected conversation</button>
+    <pre id="thread"></pre>
+    <p id="persona" class="muted"></p>
+    <div id="suggestions"></div>
+    <textarea id="draft" placeholder="Approved draft"></textarea>
+    <button id="insert">Insert into composer</button>
+    <p class="muted">Send stays a human click on the native button.</p>
+    <a id="audit" href="http://localhost:3000/security" target="_blank" rel="noreferrer">Open audit log</a>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

@@ -152,15 +152,17 @@ A deterministic safety layer outside the LLM blocks minors, uncertain age, explo
 
 This is an unofficial browser integration. It is **not** supported by OnlyFans and can stop working if the site changes. Canopy never stores the creator password. Login, 2FA, CAPTCHA and identity checks must be completed by the creator in a local headed browser.
 
-### Flags (all live flags default off)
+### Flags
 
 ```bash
 ONLYFANS_BROWSER_INTEGRATION=false
-ONLYFANS_AUTONOMOUS_TEXT=false
+ONLYFANS_AUTONOMOUS_TEXT=true
 ONLYFANS_AUTONOMOUS_PPV=false
 ONLYFANS_MOCK_PLATFORM=true
 CANOPY_BROWSER_PROFILE_ROOT=.canopy-profiles
 ```
+
+Autonomous text defaults on. Pause a single conversation from the chat page. Set `ONLYFANS_AUTONOMOUS_TEXT=false` to force suggestions-only globally. PPV send stays off unless `ONLYFANS_AUTONOMOUS_PPV=true`.
 
 ### Commands
 
@@ -181,7 +183,7 @@ pnpm platform:connect -- --account <platformAccountId>
 4. Run `pnpm platform:connect -- --account <id>` in headed mode.
 5. The creator completes OnlyFans login and 2FA themselves. Canopy does not read or export cookies.
 6. If a challenge appears, automation pauses (`CHALLENGE_REQUIRED`) until the creator finishes it.
-7. Leave autonomy on **COPILOT** until drafts look correct. Emergency stop is on `/settings/platform`.
-8. Review actions on `/automation`. Do not enable `ONLYFANS_AUTONOMOUS_TEXT` until selectors are validated on that account.
+7. Emergency stop is on `/platform`. Pause one chat with **Pause this chat** on the conversation page.
+8. Review actions on `/automation`. Set `ONLYFANS_AUTONOMOUS_TEXT=false` only if you want suggestions-only globally.
 
 Profiles stay under `.canopy-profiles` with mode `0700`. Do not upload them. Prefer OS disk encryption (FileVault). Never put cookies or profile paths in the API or frontend.

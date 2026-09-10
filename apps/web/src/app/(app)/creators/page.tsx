@@ -1,14 +1,19 @@
 import { prisma } from "@canopy/database";
-import { requireOrgUser } from "@/lib/session";
 import { assignedCreatorIds } from "@/lib/access";
 import { Badge, Card } from "@/components/ui/card";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { CreateCreatorForm } from "@/components/create-creator-form";
+import { guardOrgPage } from "@/lib/page-guard";
+import { AccessDenied, EmptyState, PageHeader } from "@/components/page-chrome";
 
 export default async function CreatorsPage() {
-  const ctx = await requireOrgUser();
-  if (!ctx.tenant) redirect("/admin");
+  const { allowed, ctx } = await guardOrgPage([
+    "creators.view_assigned",
+    "creators.manage",
+    "creators.edit_own_persona",
+  ]);
+  if (!ctx.tenant) return <AccessDenied title="Select an organization" />;
+  if (!allowed) return <AccessDenied />;
   const ids = await assignedCreatorIds(ctx);
   const creators = await prisma.creator.findMany({
     where: {
@@ -19,7 +24,7 @@ export default async function CreatorsPage() {
   });
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Creators</h1>
+      <PageHeader eyebrow="Operate" title="Creators" description="Personas, boundaries and assigned accounts." />
       {ctx.role === "AGENCY_OWNER" || ctx.role === "MANAGER" ? <CreateCreatorForm /> : null}
       <div className="grid gap-4 md:grid-cols-2">
         {creators.map((c) => (
@@ -40,6 +45,7 @@ export default async function CreatorsPage() {
           </Link>
         ))}
       </div>
+      {!creators.length ? <EmptyState title="No creators" body="Owners and managers can add a persona." /> : null}
     </div>
   );
 }

@@ -97,17 +97,22 @@ export const subscriberMessageSchema = z.object({
   text: z.string().min(1).max(8000),
 });
 
+export const REWRITE_STYLES = ["SHORTER", "WARMER", "PLAYFUL", "SALES"] as const;
+
 export const selectReplySchema = z.object({
   conversationId: z.string(),
   generationId: z.string(),
   replyOptionId: z.string(),
-  editedText: z.string().min(1).max(2000),
+  editedText: z.string().max(2000).optional(),
   inserted: z.boolean().default(false),
+  discard: z.boolean().optional(),
+  rejectReason: z.string().max(500).optional(),
 });
 
 export const generateRequestSchema = z.object({
   conversationId: z.string(),
   toneOverride: z.enum(TONES).optional(),
+  rewriteStyle: z.enum(REWRITE_STYLES).optional(),
   regenerate: z.boolean().optional(),
 });
 

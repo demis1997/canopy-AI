@@ -44,6 +44,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "analytics.view",
     "settings.retention",
     "settings.security",
+    "settings.ai_provider",
     "escalations.review",
     "platform.connect",
     "automation.review",

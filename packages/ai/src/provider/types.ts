@@ -92,6 +92,7 @@ export type GenerationInput = {
   playbook: string;
   retrievedExamples: string[];
   toneOverride?: Tone;
+  rewriteStyle?: "SHORTER" | "WARMER" | "PLAYFUL" | "SALES";
   promptVersionId: string;
   model: string;
   pricing?: PricingContext;

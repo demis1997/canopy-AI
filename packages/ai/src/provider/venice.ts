@@ -54,6 +54,7 @@ export class VeniceLLMProvider implements LLMProvider {
   private readonly timeoutMs: number;
   private readonly retries: number;
   private readonly defaultModel: string;
+  private readonly fallbackModel: string;
 
   constructor(opts?: {
     apiKey?: string;
@@ -61,17 +62,25 @@ export class VeniceLLMProvider implements LLMProvider {
     timeoutMs?: number;
     retries?: number;
     defaultModel?: string;
+    fallbackModel?: string;
+    extraHeaders?: Record<string, string>;
   }) {
-    const apiKey = opts?.apiKey ?? process.env.LLM_API_KEY ?? "";
-    const baseURL = opts?.baseURL ?? process.env.LLM_BASE_URL ?? "https://api.venice.ai/api/v1";
-    this.timeoutMs = opts?.timeoutMs ?? Number(process.env.LLM_TIMEOUT_MS ?? 30_000);
+    const apiKey = opts?.apiKey ?? process.env.AI_API_KEY ?? process.env.LLM_API_KEY ?? "";
+    const baseURL =
+      opts?.baseURL ??
+      process.env.AI_BASE_URL ??
+      process.env.LLM_BASE_URL ??
+      "https://api.venice.ai/api/v1";
+    this.timeoutMs = opts?.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS ?? process.env.LLM_TIMEOUT_MS ?? 30_000);
     this.retries = opts?.retries ?? Number(process.env.LLM_MAX_RETRIES ?? 2);
-    this.defaultModel = opts?.defaultModel ?? process.env.LLM_MODEL ?? "";
+    this.defaultModel = opts?.defaultModel ?? process.env.AI_MODEL ?? process.env.LLM_MODEL ?? "";
+    this.fallbackModel = opts?.fallbackModel ?? process.env.AI_FALLBACK_MODEL ?? "";
     this.client = new OpenAI({
       apiKey,
       baseURL,
       timeout: this.timeoutMs,
       maxRetries: 0,
+      defaultHeaders: opts?.extraHeaders,
     });
   }
 
@@ -150,6 +159,17 @@ export class VeniceLLMProvider implements LLMProvider {
     if (!model) {
       throw new ProviderError("No generation model configured", "UNKNOWN", 400, input.requestId);
     }
+    try {
+      return await this.generateWithModel(input, model);
+    } catch (error) {
+      if (this.fallbackModel && this.fallbackModel !== model) {
+        return this.generateWithModel(input, this.fallbackModel);
+      }
+      throw error;
+    }
+  }
+
+  private async generateWithModel(input: GenerationInput, model: string): Promise<GenerationResult> {
     const prompt = composeGenerationPrompt(input);
     const started = Date.now();
     const first = await this.chat({

@@ -15,17 +15,20 @@ const config: Config = {
           900: "#134e4a",
         },
         ink: {
-          950: "#0b0f10",
-          900: "#111618",
-          800: "#171e21",
-          700: "#222b30",
+          950: "#080c12",
+          900: "#0c1218",
+          800: "#121a24",
+          700: "#1b2532",
         },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui"],
       },
       boxShadow: {
-        panel: "0 0 0 1px rgba(255,255,255,0.04), 0 20px 50px rgba(0,0,0,0.35)",
+        panel: "0 1px 0 rgba(255,255,255,0.04), 0 12px 32px rgba(0,0,0,0.28)",
+      },
+      borderRadius: {
+        xl: "12px",
       },
     },
   },

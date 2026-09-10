@@ -15,6 +15,7 @@ export const demoAdapter: PlatformAdapter = {
     return {
       messages,
       composeFound: Boolean(document.querySelector("[data-canopy-compose]")),
+      conversationId: document.querySelector("[data-canopy-thread]")?.getAttribute("data-conversation-id") || undefined,
     };
   },
   insertReply(text: string) {

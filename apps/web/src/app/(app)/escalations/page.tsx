@@ -1,12 +1,13 @@
 import { prisma } from "@canopy/database";
-import { requireOrgUser } from "@/lib/session";
-import { redirect } from "next/navigation";
 import { Badge, Card } from "@/components/ui/card";
 import Link from "next/link";
+import { guardOrgPage } from "@/lib/page-guard";
+import { AccessDenied, EmptyState, PageHeader } from "@/components/page-chrome";
 
 export default async function EscalationsPage() {
-  const ctx = await requireOrgUser();
-  if (!ctx.tenant) redirect("/admin");
+  const { allowed, ctx } = await guardOrgPage("conversations.escalate");
+  if (!ctx.tenant) return <AccessDenied title="Select an organization" />;
+  if (!allowed) return <AccessDenied />;
   const rows = await prisma.escalation.findMany({
     where: { organizationId: ctx.tenant.organizationId },
     include: { conversation: { include: { creator: true, subscriber: true } } },
@@ -15,7 +16,11 @@ export default async function EscalationsPage() {
   });
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Escalations</h1>
+      <PageHeader
+        eyebrow="Operate"
+        title="Escalations"
+        description="Conversations that require a human. Safety blocks always land here."
+      />
       {rows.map((e) => (
         <Card key={e.id}>
           <div className="flex items-center justify-between">
@@ -30,6 +35,7 @@ export default async function EscalationsPage() {
           ) : null}
         </Card>
       ))}
+      {!rows.length ? <EmptyState title="No escalations" body="Age, consent and pricing blocks appear here." /> : null}
     </div>
   );
 }

@@ -46,10 +46,10 @@ const baseGate = (over: Partial<DeliveryGateInput> = {}): DeliveryGateInput => (
 });
 
 describe("feature flags", () => {
-  it("defaults all OnlyFans live flags to false", () => {
+  it("defaults autonomous text on and live browser/PPV off", () => {
     const flags = readFeatureFlags({});
     expect(flags.browserIntegration).toBe(false);
-    expect(flags.autonomousText).toBe(false);
+    expect(flags.autonomousText).toBe(true);
     expect(flags.autonomousPpv).toBe(false);
     expect(flags.mockPlatform).toBe(true);
   });
@@ -75,9 +75,9 @@ describe("idempotency", () => {
 });
 
 describe("delivery gates", () => {
-  it("blocks emergency-stop / paused and copilot", () => {
+  it("blocks emergency-stop / paused; copilot auto-sends when the flag is on", () => {
     expect(evaluateDeliveryGates(baseGate({ autonomyMode: "PAUSED" })).ok).toBe(false);
-    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT" })).ok).toBe(false);
+    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT" })).ok).toBe(true);
   });
 
   it("allows a human-approved copilot send while still blocking paused accounts", () => {
@@ -175,11 +175,11 @@ describe("autonomy routing", () => {
   const policy = defaultAutomationPolicy();
   const gateOk = { ok: true, reason: "OK", flags: [] };
 
-  it("keeps copilot and paused from sending", () => {
+  it("schedules copilot when autonomous text is on; paused still cancels", () => {
     expect(
       routeAutonomy({ mode: "COPILOT", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
         .status,
-    ).toBe("APPROVAL_REQUIRED");
+    ).toBe("SCHEDULED");
     expect(
       routeAutonomy({ mode: "PAUSED", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
         .status,

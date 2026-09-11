@@ -10,7 +10,15 @@ export default async function EscalationsPage() {
   if (!allowed) return <AccessDenied />;
   const rows = await prisma.escalation.findMany({
     where: { organizationId: ctx.tenant.organizationId },
-    include: { conversation: { include: { creator: true, subscriber: true } } },
+    include: {
+      conversation: {
+        select: {
+          id: true,
+          creator: { select: { displayName: true } },
+          subscriber: { select: { displayName: true } },
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

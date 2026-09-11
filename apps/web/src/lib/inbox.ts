@@ -27,6 +27,11 @@ export async function loadInbox(organizationId: string, creatorIds?: string[] | 
       subscriber: { include: { purchases: { where: { refunded: false } } } },
       generations: { orderBy: { createdAt: "desc" }, take: 1 },
     },
+    omit: {
+      activeSequenceId: true,
+      activeSequenceStep: true,
+      unansweredFollowUps: true,
+    },
     orderBy: { lastMessageAt: "desc" },
     take: 80,
   });

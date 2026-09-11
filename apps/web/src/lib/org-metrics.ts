@@ -89,7 +89,15 @@ export async function loadOrgMetrics(organizationId: string, window: MetricWindo
     }),
     prisma.escalation.findMany({
       where: { organizationId, status: { in: ["OPEN", "IN_REVIEW"] } },
-      include: { conversation: { include: { creator: true, subscriber: true } } },
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            creator: { select: { displayName: true } },
+            subscriber: { select: { displayName: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 6,
     }),

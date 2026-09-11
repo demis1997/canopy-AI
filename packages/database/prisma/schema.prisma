@@ -116,6 +116,31 @@ enum MediaType {
   CUSTOM
 }
 
+enum SequenceKind {
+  STARTER
+  TEASER
+  VOICE
+  PHOTO
+  SEXTING
+  PPV
+  FOLLOW_UP
+  AFTERCARE
+}
+
+enum SequenceStepMedia {
+  TEXT
+  VOICE
+  PHOTO
+  PPV
+}
+
+enum FanDominance {
+  UNKNOWN
+  SUBMISSIVE
+  DOMINANT
+  SWITCH
+}
+
 enum ApprovalStatus {
   PENDING
   APPROVED
@@ -333,6 +358,8 @@ model Organization {
   welcomeAutomations       WelcomeAutomation[]
   platformAccounts         PlatformAccount[]
   automationActions        AutomationAction[]
+  sequences                Sequence[]
+  fanNotes                 FanNote[]
 }
 
 model OrganizationMembership {
@@ -376,6 +403,8 @@ model Creator {
   platformConnections PlatformConnection[]
   welcomeAutomations WelcomeAutomation[]
   platformAccounts   PlatformAccount[]
+  sequences          Sequence[]
+  fanNotes           FanNote[]
 
   @@unique([organizationId, handle])
   @@index([organizationId])
@@ -408,6 +437,8 @@ model CreatorPersona {
   discountLimitPercent      Int                @default(10)
   escalationRules           String             @default("")
   approvedExampleMessages   String[]           @default([])
+  favouriteColor            String             @default("")
+  favouriteFlowers          String             @default("")
   createdAt                 DateTime           @default(now())
 
   creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
@@ -465,6 +496,7 @@ model Subscriber {
   conversations Conversation[]
   memories      SubscriberMemory[]
   purchases     Purchase[]
+  fanNotes      FanNote[]
 
   @@unique([organizationId, platform, platformHandle])
   @@index([organizationId])
@@ -510,14 +542,18 @@ model Conversation {
   blocked           Boolean     @default(false)
   tags              String[]    @default([])
   unreadCount       Int         @default(0)
-  mutedAi           Boolean     @default(false)
-  followUpAt        DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  mutedAi              Boolean     @default(false)
+  followUpAt           DateTime?
+  activeSequenceId     String?
+  activeSequenceStep   Int         @default(0)
+  unansweredFollowUps  Int         @default(0)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  subscriber   Subscriber   @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator        Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  subscriber     Subscriber   @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  activeSequence Sequence?    @relation(fields: [activeSequenceId], references: [id], onDelete: SetNull)
   messages     Message[]
   summary      ConversationSummary?
   generations  Generation[]
@@ -579,6 +615,8 @@ model Product {
   mediaType             MediaType
   standardPriceCents    Int
   minimumPriceCents     Int
+  secondPriceCents      Int?
+  discountLimitPercent  Int               @default(10)
   bundlePriceCents      Int?
   tags                  String[]          @default([])
   explicitnessCategory  ExplicitnessLevel @default(EXPLICIT)
@@ -605,6 +643,7 @@ model Product {
   purchases    Purchase[]
   media        ProductMedia[]
   previews     ProductPreview[]
+  sequenceSteps SequenceStep[]
 
   @@index([organizationId, creatorId, available])
 }
@@ -931,6 +970,65 @@ model ProductPreview {
   media   MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   @@unique([productId, mediaId])
+}
+
+model Sequence {
+  id             String       @id @default(cuid())
+  organizationId String
+  creatorId      String
+  name           String
+  kind           SequenceKind
+  description    String       @default("")
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator       Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  steps         SequenceStep[]
+  conversations Conversation[]
+
+  @@index([organizationId, creatorId, kind])
+}
+
+model SequenceStep {
+  id             String            @id @default(cuid())
+  organizationId String
+  sequenceId     String
+  position       Int
+  body           String
+  mediaHint      SequenceStepMedia @default(TEXT)
+  delayMinutes   Int               @default(0)
+  productId      String?
+  priceTier      Int               @default(1)
+  createdAt      DateTime          @default(now())
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([sequenceId, position])
+}
+
+model FanNote {
+  id             String       @id @default(cuid())
+  organizationId String
+  creatorId      String
+  subscriberId   String
+  realName       String       @default("")
+  location       String       @default("")
+  dominance      FanDominance @default(UNKNOWN)
+  preferredTone  String       @default("")
+  notes          String       @default("")
+  extra          Json         @default("{}")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  subscriber   Subscriber   @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, subscriberId])
+  @@index([organizationId, creatorId])
 }
 
 model PlatformConnection {

@@ -9,7 +9,7 @@ export type AutomationActionKind = (typeof AUTOMATION_ACTIONS)[number];
 
 export const automationDecisionSchema = z.object({
   action: z.enum(AUTOMATION_ACTIONS),
-  messages: z.array(z.string().min(1).max(2000)).max(3),
+  messages: z.array(z.string().min(1).max(2000)).max(4),
   productId: z.string().nullable(),
   price: z.number().nonnegative().nullable(),
   confidence: z.number().min(0).max(1),

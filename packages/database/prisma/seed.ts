@@ -38,6 +38,7 @@ type DemoModel = {
     mediaType: MediaType;
     standardPriceCents: number;
     minimumPriceCents: number;
+    discountLimitPercent?: number;
     tags: string[];
     explicitnessCategory: ExplicitnessLevel;
     customContent?: boolean;
@@ -89,6 +90,7 @@ const MODELS: DemoModel[] = [
         mediaType: "VIDEO",
         standardPriceCents: 2500,
         minimumPriceCents: 2000,
+        discountLimitPercent: 20,
         tags: ["tease", "gym"],
         explicitnessCategory: "SUGGESTIVE",
         deliveryRules: "Send via platform PPV after payment.",
@@ -99,6 +101,7 @@ const MODELS: DemoModel[] = [
         mediaType: "PHOTO",
         standardPriceCents: 4000,
         minimumPriceCents: 3200,
+        discountLimitPercent: 10,
         tags: ["explicit", "set"],
         explicitnessCategory: "EXPLICIT",
         deliveryRules: "Deliver immediately after purchase.",
@@ -109,6 +112,7 @@ const MODELS: DemoModel[] = [
         mediaType: "VIDEO",
         standardPriceCents: 5500,
         minimumPriceCents: 4400,
+        discountLimitPercent: 20,
         tags: ["explicit", "video"],
         explicitnessCategory: "EXPLICIT",
         deliveryRules: "Send as PPV after payment.",
@@ -156,6 +160,7 @@ const MODELS: DemoModel[] = [
         mediaType: "AUDIO",
         standardPriceCents: 3500,
         minimumPriceCents: 3000,
+        discountLimitPercent: 15,
         tags: ["audio", "domme"],
         explicitnessCategory: "EXPLICIT",
         deliveryRules: "Send as PPV voice note.",
@@ -166,6 +171,7 @@ const MODELS: DemoModel[] = [
         mediaType: "VIDEO",
         standardPriceCents: 4500,
         minimumPriceCents: 3800,
+        discountLimitPercent: 10,
         tags: ["video", "domme"],
         explicitnessCategory: "EXPLICIT",
         deliveryRules: "Send as PPV after payment.",
@@ -176,6 +182,7 @@ const MODELS: DemoModel[] = [
         mediaType: "CUSTOM",
         standardPriceCents: 12000,
         minimumPriceCents: 10200,
+        discountLimitPercent: 15,
         tags: ["custom"],
         explicitnessCategory: "VERY_EXPLICIT",
         customContent: true,
@@ -225,6 +232,7 @@ const MODELS: DemoModel[] = [
         mediaType: "PHOTO",
         standardPriceCents: 1900,
         minimumPriceCents: 1500,
+        discountLimitPercent: 20,
         tags: ["tease", "photos"],
         explicitnessCategory: "SUGGESTIVE",
         deliveryRules: "Deliver immediately after purchase.",
@@ -235,6 +243,7 @@ const MODELS: DemoModel[] = [
         mediaType: "VIDEO",
         standardPriceCents: 2800,
         minimumPriceCents: 2200,
+        discountLimitPercent: 10,
         tags: ["explicit", "video"],
         explicitnessCategory: "VERY_EXPLICIT",
         deliveryRules: "Send as PPV after payment.",
@@ -245,6 +254,7 @@ const MODELS: DemoModel[] = [
         mediaType: "BUNDLE",
         standardPriceCents: 4500,
         minimumPriceCents: 3600,
+        discountLimitPercent: 20,
         tags: ["bundle", "ppv"],
         explicitnessCategory: "VERY_EXPLICIT",
         deliveryRules: "Bundle of 2+ to hide duration. Send after payment.",
@@ -293,6 +303,7 @@ const MODELS: DemoModel[] = [
         mediaType: "PHOTO",
         standardPriceCents: 2000,
         minimumPriceCents: 1700,
+        discountLimitPercent: 10,
         tags: ["gfe", "photos"],
         explicitnessCategory: "SUGGESTIVE",
         deliveryRules: "Deliver immediately after purchase.",
@@ -303,6 +314,7 @@ const MODELS: DemoModel[] = [
         mediaType: "VIDEO",
         standardPriceCents: 3000,
         minimumPriceCents: 2500,
+        discountLimitPercent: 15,
         tags: ["gfe", "video"],
         explicitnessCategory: "EXPLICIT",
         deliveryRules: "Send as PPV after payment.",
@@ -313,6 +325,7 @@ const MODELS: DemoModel[] = [
         mediaType: "CUSTOM",
         standardPriceCents: 9000,
         minimumPriceCents: 7600,
+        discountLimitPercent: 20,
         tags: ["custom", "gfe"],
         explicitnessCategory: "EXPLICIT",
         customContent: true,
@@ -570,9 +583,127 @@ async function main() {
       conversationId: conversation.id,
       fanId: fan.id,
     });
+    for (const product of products) {
+      await prisma.product.update({
+        where: { id: product.id },
+        data: {
+          secondPriceCents: Math.round((product.standardPriceCents + product.minimumPriceCents) / 2),
+        },
+      });
+    }
   }
 
   const [maya, elena] = seeded;
+
+  for (const row of seeded) {
+    const productId = row.productIds[0] ?? null;
+    await prisma.sequence.create({
+      data: {
+        organizationId: agency.id,
+        creatorId: row.creatorId,
+        name: "Welcome / openers",
+        kind: "STARTER",
+        description: "First messages after he says hi.",
+        steps: {
+          create: [
+            {
+              organizationId: agency.id,
+              position: 0,
+              body: "mmm hi, you caught me at a good time. what pulled you in?",
+              mediaHint: "TEXT",
+            },
+            {
+              organizationId: agency.id,
+              position: 1,
+              body: "don't be shy. tell me what you liked first.",
+              mediaHint: "TEXT",
+              delayMinutes: 15,
+            },
+          ],
+        },
+      },
+    });
+    await prisma.sequence.create({
+      data: {
+        organizationId: agency.id,
+        creatorId: row.creatorId,
+        name: "No-buy follow-ups",
+        kind: "FOLLOW_UP",
+        description: "If he doesn't pay. Follow up at list. Discount only after he goes silent.",
+        steps: {
+          create: [
+            {
+              organizationId: agency.id,
+              position: 0,
+              body: "still thinking about that set? it's sitting here at the same price.",
+              mediaHint: "TEXT",
+              delayMinutes: 180,
+              productId,
+              priceTier: 1,
+            },
+            {
+              organizationId: agency.id,
+              position: 1,
+              body: "hey you went quiet. unlock it at list before i take it down.",
+              mediaHint: "TEXT",
+              delayMinutes: 360,
+              productId,
+              priceTier: 1,
+            },
+            {
+              organizationId: agency.id,
+              position: 2,
+              body: "ok you vanished. i can meet you in the middle on this one — not the first ppv.",
+              mediaHint: "PPV",
+              delayMinutes: 720,
+              productId,
+              priceTier: 2,
+            },
+          ],
+        },
+      },
+    });
+    await prisma.sequence.create({
+      data: {
+        organizationId: agency.id,
+        creatorId: row.creatorId,
+        name: "Aftercare",
+        kind: "AFTERCARE",
+        description: "After the second PPV he bought. No more pitching.",
+        steps: {
+          create: [
+            {
+              organizationId: agency.id,
+              position: 0,
+              body: "no pressure. i'm around when you want me, not going to spam you.",
+              mediaHint: "TEXT",
+            },
+            {
+              organizationId: agency.id,
+              position: 1,
+              body: "hope you're good. come back when you miss me.",
+              mediaHint: "TEXT",
+              delayMinutes: 1440,
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  await prisma.fanNote.create({
+    data: {
+      organizationId: agency.id,
+      creatorId: maya!.creatorId,
+      subscriberId: maya!.fanId,
+      realName: "Alex",
+      location: "Bali",
+      dominance: "SUBMISSIVE",
+      preferredTone: "teasing girlfriend",
+      notes: "Gym fan. Responds to mirror clips. Do not mention family. Spent on tease content before.",
+      extra: { job: "remote", timezone: "WITA" },
+    },
+  });
 
   await prisma.platformConnection.create({
     data: {

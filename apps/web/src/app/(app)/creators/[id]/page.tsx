@@ -32,9 +32,14 @@ export default async function CreatorDetailPage({
         title={creator.displayName}
         description={creator.bio}
         actions={
-          <Link href="/conversations" className="text-sm text-canopy-300">
-            Open conversations
-          </Link>
+          <div className="flex gap-3">
+            <Link href="/sequences" className="text-sm text-canopy-300">
+              Sequences
+            </Link>
+            <Link href="/conversations" className="text-sm text-canopy-300">
+              Open conversations
+            </Link>
+          </div>
         }
       />
       {active ? (
@@ -62,6 +67,8 @@ export default async function CreatorDetailPage({
             discountLimitPercent: active.discountLimitPercent,
             escalationRules: active.escalationRules,
             approvedExampleMessages: active.approvedExampleMessages,
+            favouriteColor: active.favouriteColor,
+            favouriteFlowers: active.favouriteFlowers,
           }}
         />
       ) : null}

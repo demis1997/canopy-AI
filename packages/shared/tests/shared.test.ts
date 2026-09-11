@@ -4,6 +4,8 @@ import { canTransition, recommendedActionFor } from "../src/funnel.js";
 import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
+import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
+import { splitReplyBubbles } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -43,6 +45,61 @@ describe("generation schema", () => {
   it("rejects malformed provider output", () => {
     const result = generationOutputSchema.safeParse({ intent: "NOPE" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("reply bubbles", () => {
+  it("joins a messages array into newline text", () => {
+    const result = generationOutputSchema.parse({
+      intent: "FLIRT",
+      funnelStage: "RAPPORT",
+      explicitnessLevel: "FLIRTY",
+      recommendedAction: "REPLY",
+      replyOptions: [
+        {
+          messages: ["hmm i see", "well what i think is that your cock is a good size", "I would have a great time on it"],
+          tone: "PLAYFUL",
+          internalReason: "ack then continue",
+        },
+      ],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    });
+    expect(result.replyOptions[0]!.messages).toHaveLength(3);
+    expect(result.replyOptions[0]!.text).toContain("\n");
+  });
+
+  it("fills messages from newline text", () => {
+    const result = generationOutputSchema.parse({
+      intent: "FLIRT",
+      funnelStage: "RAPPORT",
+      explicitnessLevel: "FLIRTY",
+      recommendedAction: "REPLY",
+      replyOptions: [{ text: "hmm i see\nwant the next one?", tone: "PLAYFUL", internalReason: "split" }],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    });
+    expect(result.replyOptions[0]!.messages).toEqual(["hmm i see", "want the next one?"]);
+  });
+
+  it("splits leftover paragraphs into sentence bubbles", () => {
+    expect(
+      splitReplyBubbles("hmm i see. well what i think is that your cock is a good size. I would have a great time on it", {
+        splitSentences: true,
+      }),
+    ).toEqual([
+      "hmm i see.",
+      "well what i think is that your cock is a good size.",
+      "I would have a great time on it",
+    ]);
   });
 });
 
@@ -92,5 +149,105 @@ describe("csv import", () => {
     );
     expect(rows[0]?.errors).toEqual([]);
     expect(rows[1]?.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("price ladder and aftercare", () => {
+  it("uses list, then mid, then the floor", () => {
+    expect(
+      ladderPrice({
+        standardPrice: 25,
+        minimumPrice: 20,
+        discountLimitPercent: 20,
+        sendAttempt: 1,
+      }).kind,
+    ).toBe("LIST");
+    expect(
+      ladderPrice({
+        standardPrice: 25,
+        minimumPrice: 20,
+        discountLimitPercent: 20,
+        sendAttempt: 2,
+      }).price,
+    ).toBe(22.5);
+    expect(
+      ladderPrice({
+        standardPrice: 25,
+        minimumPrice: 20,
+        discountLimitPercent: 20,
+        sendAttempt: 3,
+      }).price,
+    ).toBe(20);
+  });
+
+  it("counts the next unpaid send", () => {
+    expect(nextSendAttempt(0)).toBe(1);
+    expect(nextSendAttempt(1)).toBe(2);
+    expect(nextSendAttempt(2)).toBe(3);
+  });
+
+  it("never discounts the first PPV or anything $10 and under", () => {
+    expect(isFirstPpv(8, 0)).toBe(true);
+    expect(isFirstPpv(25, 0)).toBe(true);
+    expect(isFirstPpv(8, 3)).toBe(true);
+    expect(isFirstPpv(25, 1)).toBe(false);
+    expect(
+      ladderSendAttempt({
+        standardPrice: 8,
+        unansweredFollowUps: 5,
+        purchasedPpvCount: 0,
+        offeredUnpaid: true,
+      }),
+    ).toBe(1);
+  });
+
+  it("holds list until he goes silent on a later PPV", () => {
+    expect(
+      ladderSendAttempt({
+        standardPrice: 25,
+        unansweredFollowUps: 1,
+        purchasedPpvCount: 1,
+        offeredUnpaid: true,
+      }),
+    ).toBe(1);
+    expect(
+      ladderSendAttempt({
+        standardPrice: 25,
+        unansweredFollowUps: 2,
+        purchasedPpvCount: 1,
+        offeredUnpaid: true,
+      }),
+    ).toBe(2);
+    expect(
+      ladderSendAttempt({
+        standardPrice: 25,
+        unansweredFollowUps: 3,
+        purchasedPpvCount: 1,
+        offeredUnpaid: true,
+      }),
+    ).toBe(3);
+  });
+
+  it("applies aftercare after the second unlock, not after unanswered nudges", () => {
+    expect(followUpPhase(4, 0)).toBe("FOLLOW_UP");
+    expect(followUpPhase(0, 1)).toBe("NONE");
+    expect(followUpPhase(0, 2)).toBe("AFTERCARE");
+  });
+
+  it("applies max discount per product, not per creator", () => {
+    const gym = ladderPrice({
+      standardPrice: 25,
+      minimumPrice: 18,
+      discountLimitPercent: 20,
+      sendAttempt: 3,
+    });
+    const shower = ladderPrice({
+      standardPrice: 40,
+      minimumPrice: 30,
+      discountLimitPercent: 10,
+      sendAttempt: 3,
+    });
+    expect(gym.price).toBe(20);
+    expect(shower.price).toBe(36);
   });
 });

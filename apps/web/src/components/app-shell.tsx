@@ -52,6 +52,7 @@ const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
     label: "Optimize",
     items: [
       { href: "/products", label: "Products", icon: Package, perm: "products.manage" },
+      { href: "/sequences", label: "Sequences", icon: Sparkles, perm: "conversations.view" },
       { href: "/training", label: "Training", icon: GraduationCap, perm: "training.approve" },
       { href: "/analytics", label: "Analytics", icon: BarChart3, perm: "analytics.view" },
       { href: "/team", label: "Team", icon: Users, perm: "team.invite" },

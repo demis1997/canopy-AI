@@ -19,7 +19,14 @@ import {
   retrieveTraining,
   pricingContextFrom,
 } from "@canopy/ai";
-import { eligibleProducts, playbookFor, readFeatureFlags, type CatalogProduct } from "@canopy/shared";
+import {
+  eligibleProducts,
+  followUpPhase,
+  playbookFor,
+  readFeatureFlags,
+  splitReplyBubbles,
+  type CatalogProduct,
+} from "@canopy/shared";
 import { enqueueJob } from "./queue";
 
 const TOKEN_USD_PER_MILLION = 0.5;
@@ -125,6 +132,7 @@ export async function generateForConversation(input: {
       subscriber: true,
       summary: true,
       offers: { include: { product: true }, orderBy: { createdAt: "asc" } },
+      activeSequence: { include: { steps: { orderBy: { position: "asc" } } } },
     },
   });
   if (!conversation) throw new Error("Conversation not found");
@@ -228,6 +236,23 @@ export async function generateForConversation(input: {
     orderBy: { lastConfirmedAt: "desc" },
     take: 25,
   });
+  const fanNote = await prisma.fanNote.findUnique({
+    where: {
+      creatorId_subscriberId: {
+        creatorId: conversation.creatorId,
+        subscriberId: conversation.subscriberId,
+      },
+    },
+  });
+  const creatorSpend = await prisma.purchase.aggregate({
+    where: {
+      organizationId: tenant.organizationId,
+      subscriberId: conversation.subscriberId,
+      refunded: false,
+      conversation: { creatorId: conversation.creatorId },
+    },
+    _sum: { amountCents: true },
+  });
 
   const productRows = await prisma.product.findMany({
     where: {
@@ -242,10 +267,12 @@ export async function generateForConversation(input: {
       organizationId: tenant.organizationId,
       subscriberId: conversation.subscriberId,
       refunded: false,
+      conversation: { creatorId: conversation.creatorId },
     },
     select: { productId: true },
   });
   const purchasedProductIds = purchases.map((p) => p.productId);
+  const purchasedPpvCount = purchases.length;
   const catalog: CatalogProduct[] = productRows.map((p) => ({
     id: p.id,
     creatorId: p.creatorId,
@@ -255,6 +282,9 @@ export async function generateForConversation(input: {
     mediaType: p.mediaType,
     standardPrice: p.standardPriceCents / 100,
     minimumPrice: p.minimumPriceCents / 100,
+    secondPrice:
+      p.secondPriceCents != null ? p.secondPriceCents / 100 : null,
+    discountLimitPercent: p.discountLimitPercent,
     bundlePrice: p.bundlePriceCents != null ? p.bundlePriceCents / 100 : null,
     tags: p.tags,
     available: p.available,
@@ -343,6 +373,16 @@ export async function generateForConversation(input: {
         accepted: o.accepted,
       })),
       intent: classified.intent,
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        standardPrice: p.standardPrice,
+        minimumPrice: p.minimumPrice,
+        secondPrice: p.secondPrice,
+        discountLimitPercent: p.discountLimitPercent,
+      })),
+      unansweredFollowUps: conversation.unansweredFollowUps,
+      purchasedPpvCount,
     });
 
     const funnel = resolveFunnel({
@@ -398,6 +438,8 @@ export async function generateForConversation(input: {
         offlineMeetingPolicy: persona.offlineMeetingPolicy,
         discountLimitPercent: persona.discountLimitPercent,
         approvedExampleMessages: persona.approvedExampleMessages,
+        favouriteColor: persona.favouriteColor,
+        favouriteFlowers: persona.favouriteFlowers,
       },
       recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
       summary: conversation.summary?.summary,
@@ -414,16 +456,65 @@ export async function generateForConversation(input: {
         description: p.description,
         standardPrice: p.standardPrice,
         minimumPrice: p.minimumPrice,
+        secondPrice: p.secondPrice,
+        discountLimitPercent: p.discountLimitPercent,
+        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
+        allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
         available: p.available,
         explicitnessCategory:
           productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
       })),
       funnelStage: conversation.funnelStage,
-      playbook: playbookFor(conversation.funnelStage, classified.intent),
+      playbook: playbookFor(
+        conversation.funnelStage,
+        classified.intent,
+        conversation.unansweredFollowUps,
+        purchasedPpvCount,
+      ),
       retrievedExamples: examples,
       toneOverride: input.toneOverride,
       rewriteStyle: input.rewriteStyle,
       pricing,
+      followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
+      fanNotes: fanNote
+        ? {
+            realName: fanNote.realName,
+            location: fanNote.location,
+            dominance: fanNote.dominance,
+            preferredTone: fanNote.preferredTone,
+            notes: fanNote.notes,
+            extra: (fanNote.extra as Record<string, string>) ?? {},
+            spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
+          }
+        : conversation.subscriber.notes
+          ? {
+              realName: "",
+              location: "",
+              dominance: "UNKNOWN",
+              preferredTone: "",
+              notes: conversation.subscriber.notes,
+              extra: {},
+              spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
+            }
+          : null,
+      activeSequence: conversation.activeSequence
+        ? {
+            name: conversation.activeSequence.name,
+            kind: conversation.activeSequence.kind,
+            stepIndex: conversation.activeSequenceStep,
+            current: (() => {
+              const step =
+                conversation.activeSequence.steps[conversation.activeSequenceStep] ??
+                conversation.activeSequence.steps[0];
+              return step
+                ? { body: step.body, mediaHint: step.mediaHint, priceTier: step.priceTier }
+                : { body: "", mediaHint: "TEXT", priceTier: 1 };
+            })(),
+            remaining: conversation.activeSequence.steps
+              .slice(conversation.activeSequenceStep + 1)
+              .map((s) => s.body),
+          }
+        : null,
     });
 
     const post = evaluateSafety({
@@ -481,11 +572,14 @@ export async function generateForConversation(input: {
         id: p.id,
         standardPrice: p.standardPrice,
         minimumPrice: p.minimumPrice,
+        secondPrice: p.secondPrice,
+        discountLimitPercent: p.discountLimitPercent,
+        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
         available: p.available,
         creatorId: p.creatorId,
         resaleAllowed: p.resaleAllowed,
       })),
-      persona.discountLimitPercent,
+      10,
       pricing.concessionAllowed,
       { creatorId: conversation.creatorId, purchasedProductIds },
     );
@@ -577,6 +671,7 @@ export async function generateForConversation(input: {
       replyOptions: replyOptions.map((o) => ({
         id: o.id,
         text: o.text,
+        messages: splitReplyBubbles(o.text),
         tone: o.tone,
         internalReason: o.internalReason,
       })),
@@ -675,17 +770,29 @@ export async function selectReply(input: {
   const nextText = input.editedText ?? option.text;
   const edited = option.originalText.trim() !== nextText.trim();
   const distance = levenshtein(option.originalText, nextText);
+  const bubbles = splitReplyBubbles(nextText, { splitSentences: true });
+  const bodies = bubbles.length ? bubbles : [nextText.trim()].filter(Boolean);
 
-  const message = await prisma.message.create({
-    data: {
-      organizationId: tenant.organizationId,
-      conversationId: input.conversationId,
-      authorType: "CHATTER",
-      authorUserId: input.userId,
-      body: nextText,
-      aiAssisted: true,
-    },
-  });
+  const now = Date.now();
+  const created = [];
+  for (let i = 0; i < bodies.length; i += 1) {
+    created.push(
+      await prisma.message.create({
+        data: {
+          organizationId: tenant.organizationId,
+          conversationId: input.conversationId,
+          authorType: "CHATTER",
+          authorUserId: input.userId,
+          body: bodies[i]!,
+          aiAssisted: true,
+          createdAt: new Date(now + i),
+        },
+      }),
+    );
+  }
+  const message = created[created.length - 1];
+  if (!message) throw new Error("Reply text was empty");
+
   await prisma.conversation.update({
     where: { id: input.conversationId },
     data: { lastMessageAt: new Date() },
@@ -769,7 +876,12 @@ export async function selectReply(input: {
     console.error("background jobs failed after auto-send", error);
   }
 
-  return { messageId: message.id, editDistance: distance, edited };
+  return {
+    messageId: message.id,
+    messageIds: created.map((m) => m.id),
+    editDistance: distance,
+    edited,
+  };
 }
 
 export async function handleFanTurn(input: {
@@ -789,6 +901,10 @@ export async function handleFanTurn(input: {
   const conversation = await prisma.conversation.findFirst({
     where: { id: input.conversationId, organizationId: input.organizationId },
     select: { mutedAi: true },
+  });
+  await prisma.conversation.update({
+    where: { id: input.conversationId },
+    data: { unansweredFollowUps: 0 },
   });
   const flags = readFeatureFlags();
   const autoReply = input.autoReply !== false && !conversation?.mutedAi && flags.autonomousText;

@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     playbook: "PRESENTING_PPV",
     retrievedExamples: ["Tease then name a real catalog item at list price."],
     toneOverride: body.toneOverride,
-    pricing: { concessionAllowed: Boolean(body.concessionAllowed), lastOffer: null },
+    pricing: { concessionAllowed: Boolean(body.concessionAllowed), lastOffer: null, ladder: [] },
   });
   const validated = validateProductsAndPrices(
     result.output,
@@ -142,9 +142,10 @@ export async function POST(request: Request) {
     schemaValid: schemaCheck.success,
     eligibleProductIds: eligible.map((p) => p.id),
     rejected: rejected.map((r) => ({ id: r.product.id, reason: r.reason })),
-    suggestions: validated.output.replyOptions.map((opt, i) => ({
+      suggestions: validated.output.replyOptions.map((opt, i) => ({
       id: `sug_${i}`,
       text: opt.text,
+      messages: opt.messages,
       tone: opt.tone,
       recommendedAction: validated.output.recommendedAction,
       productId: validated.output.recommendedProductId,

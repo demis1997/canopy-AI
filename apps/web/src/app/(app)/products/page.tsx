@@ -24,7 +24,7 @@ export default async function ProductsPage() {
       <PageHeader
         eyebrow="Optimize"
         title="Products & vault"
-        description="The model may only recommend these IDs and prices. Invented offers are stripped. PLATFORM_VAULT_SYNC is not a public OnlyFans API."
+        description="The model may only recommend these IDs and prices. First PPV ($10 or under) never discounts. Later items discount only after the fan goes silent."
         actions={
           <Link className="text-xs text-canopy-300" href="/demo/products">
             Open unauthenticated demo catalogue
@@ -44,7 +44,9 @@ export default async function ProductsPage() {
               <th>Creator</th>
               <th>Type</th>
               <th>Price</th>
+              <th>2nd</th>
               <th>Min</th>
+              <th>Max off</th>
               <th>Source</th>
               <th>Sold</th>
             </tr>
@@ -56,7 +58,13 @@ export default async function ProductsPage() {
                 <td>{p.creator.displayName}</td>
                 <td>{p.mediaType}</td>
                 <td>{dollars(p.standardPriceCents)}</td>
+                <td>
+                  {p.secondPriceCents != null
+                    ? dollars(p.secondPriceCents)
+                    : dollars(Math.round((p.standardPriceCents + p.minimumPriceCents) / 2))}
+                </td>
                 <td>{dollars(p.minimumPriceCents)}</td>
+                <td>{p.discountLimitPercent}%</td>
                 <td>{p.source}</td>
                 <td>{p.timesSold}</td>
               </tr>

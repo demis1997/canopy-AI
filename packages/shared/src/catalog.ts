@@ -9,6 +9,8 @@ export type CatalogProduct = {
   mediaType: MediaType;
   standardPrice: number;
   minimumPrice: number;
+  secondPrice?: number | null;
+  discountLimitPercent?: number;
   bundlePrice?: number | null;
   tags: string[];
   available: boolean;
@@ -103,6 +105,7 @@ export const CSV_PRODUCT_COLUMNS = [
   "content_type",
   "standard_price",
   "minimum_price",
+  "discount_limit_percent",
   "tags",
   "media_reference",
   "preview_reference",
@@ -117,6 +120,7 @@ export type CsvProductRow = {
   content_type: string;
   standard_price: number;
   minimum_price: number;
+  discount_limit_percent: number;
   tags: string[];
   media_reference: string;
   preview_reference: string;
@@ -168,6 +172,11 @@ export function parseProductCsv(text: string): CsvProductRow[] {
     if (Number.isFinite(standard) && Number.isFinite(minimum) && minimum > standard) {
       errors.push("minimum_price exceeds standard_price");
     }
+    const discountIdx = idx("discount_limit_percent");
+    const discount = discountIdx >= 0 ? Number(cols[discountIdx]) : 10;
+    if (discountIdx >= 0 && (!Number.isFinite(discount) || discount < 0 || discount > 100)) {
+      errors.push("Invalid discount_limit_percent");
+    }
     const availabilityRaw = (cols[idx("availability")] ?? "true").toLowerCase();
     return {
       external_id: cols[idx("external_id")] ?? "",
@@ -177,6 +186,7 @@ export function parseProductCsv(text: string): CsvProductRow[] {
       content_type: content,
       standard_price: standard,
       minimum_price: minimum,
+      discount_limit_percent: Number.isFinite(discount) ? discount : 10,
       tags: (cols[idx("tags")] ?? "").split("|").map((t) => t.trim()).filter(Boolean),
       media_reference: cols[idx("media_reference")] ?? "",
       preview_reference: cols[idx("preview_reference")] ?? "",

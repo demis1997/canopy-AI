@@ -5,3 +5,5 @@ export * from "./funnel.js";
 export * from "./redaction.js";
 export * from "./catalog.js";
 export * from "./automation.js";
+export * from "./crm.js";
+export * from "./replies.js";

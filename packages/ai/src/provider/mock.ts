@@ -31,15 +31,35 @@ function classify(text: string, context = ""): Intent {
   return "CASUAL_CHAT";
 }
 
-function clampChat(text: string): string {
+function clampBubble(text: string, max = 14): string {
   const words = text.trim().split(/\s+/);
-  if (words.length <= 32) return text.trim();
-  return `${words.slice(0, 30).join(" ")}?`;
+  if (words.length <= max) return text.trim();
+  return words.slice(0, max).join(" ");
 }
 
 function withQuestion(text: string): string {
-  if (text.includes("?")) return clampChat(text);
-  return clampChat(`${text.replace(/[.!]*$/, "")}?`);
+  const clipped = clampBubble(text);
+  if (clipped.includes("?")) return clipped;
+  return `${clipped.replace(/[.!]*$/, "")}?`;
+}
+
+function asOption(
+  bubbles: string[],
+  tone: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "DIRECT",
+  reason: string,
+) {
+  const messages = bubbles.map((s) => clampBubble(s)).filter(Boolean).slice(0, 4);
+  if (messages.length && !messages[messages.length - 1]!.includes("?")) {
+    messages[messages.length - 1] = withQuestion(messages[messages.length - 1]!);
+  }
+  return { text: messages.join("\n"), tone, internalReason: reason };
+}
+
+function ackFan(last: string): string {
+  const t = last.trim();
+  if (!t) return "mmm yeah?";
+  const snippet = t.replace(/[?!.,]/g, "").split(/\s+/).filter(Boolean).slice(0, 8).join(" ").toLowerCase();
+  return snippet ? `hmm ${snippet}` : "hmm i see";
 }
 
 function catalogName(name: string): string {
@@ -79,112 +99,117 @@ function repliesFor(input: GenerationInput, intent: Intent) {
     ? resolveOfferPrice({
         standardPrice: product.standardPrice,
         minimumPrice: product.minimumPrice,
-        discountLimitPercent: input.persona.discountLimitPercent,
+        discountLimitPercent: product.discountLimitPercent ?? input.persona.discountLimitPercent,
         concessionAllowed: Boolean(input.pricing?.concessionAllowed),
+        sendAttempt: product.sendAttempt,
+        secondPrice: product.secondPrice,
       })
     : null;
   const item = product ? catalogName(product.name) : "this set";
   const price = offer?.price ?? product?.standardPrice ?? 25;
 
   const pitch =
-    offer?.kind === "CONCESSION"
-      ? `${item} at $${price} and that's the floor`
-      : `${item} for $${price}`;
+    offer?.kind === "LIST"
+      ? `${item} for $${price}`
+      : offer?.kind === "SECOND"
+        ? `${item} again at $${price}`
+        : `${item} at $${price} and that's the floor`;
 
   const dominant = {
-    flirt: withQuestion(
-      `you think that impresses me? cute. earn it. ${pitch} if you want more of me`,
-    ),
-    sext: withQuestion(
-      `${compliment ?? "nice cock"}. kneel. ${pitch} — you don't get the rest for free`,
-    ),
-    sell: withQuestion(`don't haggle. ${pitch}. you buying or wasting my time`),
-    chat: withQuestion(`hi. don't be boring. tell me what you want while ${pitch}`),
+    flirt: ["you think that impresses me?", "cute. earn it", `${pitch} if you want more of me`],
+    sext: [compliment ?? "nice cock", "kneel", `${pitch} — you don't get the rest for free`],
+    sell: ["don't haggle", pitch, "you buying or wasting my time"],
+    chat: ["hi. don't be boring", "tell me what you want", pitch],
   };
   const romantic = {
-    flirt: withQuestion(`hi baby that got me${emoji} i'd show you more — ${pitch} if you want it`),
-    sext: withQuestion(`slow down for me… talk like that and ${pitch} just for you`),
-    sell: withQuestion(`i made this for someone patient. ${pitch}. you want it`),
-    chat: withQuestion(`hey… i like you already${emoji} ${pitch} if you want something mine`),
+    flirt: [`hi baby that got me${emoji}`, "i'd show you more", `${pitch} if you want it`],
+    sext: ["slow down for me…", "talk like that", `${pitch} just for you`],
+    sell: ["i made this for someone patient", pitch, "you want it"],
+    chat: [`hey… i like you already${emoji}`, `${pitch} if you want something mine`],
   };
   const playful = {
-    flirt: withQuestion(
-      `mmm you liked that? i'm trouble and you know it${emoji} ${pitch} if you want the rest`,
-    ),
-    sext: withQuestion(
-      `yeah? tell me what you'd do with this ${body}. ${pitch} when you can't wait`,
-    ),
-    sell: withQuestion(`ok you're not subtle. ${pitch} — teasing or the full thing`),
-    chat: withQuestion(`hey trouble. say that again and i'll get mean${emoji} ${pitch}`),
+    flirt: ["mmm you liked that?", `i'm trouble and you know it${emoji}`, `${pitch} if you want the rest`],
+    sext: ["yeah?", `tell me what you'd do with this ${body}`, `${pitch} when you can't wait`],
+    sell: ["ok you're not subtle", pitch, "teasing or the full thing"],
+    chat: ["hey trouble", `say that again and i'll get mean${emoji}`, pitch],
   };
   const voice = style === "DOMINANT" ? dominant : style === "ROMANTIC" ? romantic : playful;
   const tone = (
     style === "DOMINANT" ? "DOMINANT" : style === "ROMANTIC" ? "ROMANTIC" : "PLAYFUL"
   ) as "DOMINANT" | "ROMANTIC" | "PLAYFUL";
 
+  if (input.activeSequence?.current) {
+    const current = input.activeSequence.current;
+    const beat = current.body;
+    const closer =
+      current.mediaHint === "PPV" || input.activeSequence.kind === "PPV"
+        ? pitch
+        : current.mediaHint === "VOICE"
+          ? "sending that voice"
+          : "want me to keep going";
+    return [
+      asOption([ackFan(last), beat, closer], tone, "Ack his last line, then only the current sequence beat"),
+      asOption(
+        [last.trim() ? "wait what" : "mmm", beat],
+        "TEASING",
+        "Shorter ack then the same beat",
+      ),
+    ];
+  }
+
   if (intent === "PRICE_OBJECTION") {
     if (offer?.kind === "CONCESSION" && product) {
       return [
-        {
-          text: withQuestion(`okay. $${price} for ${item} and that's the floor — you getting it`),
-          tone: "DIRECT" as const,
-          internalReason: "List price already refused; one approved concession",
-        },
-        {
-          text: withQuestion(`$${price} is as low as i go. you want ${item} or not`),
-          tone: style === "DOMINANT" ? ("DOMINANT" as const) : ("TEASING" as const),
-          internalReason: "Close at floor",
-        },
+        asOption(
+          ["okay", `$${price} for ${item}`, "that's the floor — you getting it"],
+          "DIRECT",
+          "List price already refused; one approved concession",
+        ),
+        asOption(
+          [`$${price} is as low as i go`, `you want ${item} or not`],
+          style === "DOMINANT" ? "DOMINANT" : "TEASING",
+          "Close at floor",
+        ),
       ];
     }
     return [
-      {
-        text: withQuestion(
-          `i hear you but i don't open with discounts. ${item} is $${product?.standardPrice ?? 25}`,
-        ),
-        tone: "DIRECT" as const,
-        internalReason: "Hold list price",
-      },
-      {
-        text: voice.flirt,
-        tone: "TEASING" as const,
-        internalReason: "Tease while holding list price",
-      },
+      asOption(
+        ["i hear you", "i don't open with discounts", `${item} is $${product?.standardPrice ?? 25}`],
+        "DIRECT",
+        "Hold list price",
+      ),
+      asOption(voice.flirt, "TEASING", "Tease while holding list price"),
     ];
   }
 
   if (intent === "CONTENT_REQUEST" || intent === "PURCHASE_INTEREST") {
     return [
-      { text: voice.sell, tone, internalReason: "Answer the ask with a list-price catalog item" },
-      { text: voice.sext, tone: "TEASING" as const, internalReason: "Keep him hot while selling" },
-      { text: voice.flirt, tone, internalReason: "Flirt then close" },
+      asOption(voice.sell, tone, "Answer the ask with a list-price catalog item"),
+      asOption(voice.sext, "TEASING", "Keep him hot while selling"),
+      asOption(voice.flirt, tone, "Flirt then close"),
     ];
   }
 
   if (intent === "SEXTING" && explicit) {
     return [
-      { text: voice.sext, tone: "TEASING" as const, internalReason: "Sext back, then pitch" },
-      { text: voice.sell, tone, internalReason: "PPV is the payoff" },
-      {
-        text: withQuestion(`fuck keep talking like that. ${pitch} when you're done being shy`),
-        tone: "DIRECT" as const,
-        internalReason: "Match explicit energy and sell",
-      },
+      asOption(voice.sext, "TEASING", "Sext back, then pitch"),
+      asOption(voice.sell, tone, "PPV is the payoff"),
+      asOption(
+        ["fuck keep talking like that", pitch, "when you're done being shy"],
+        "DIRECT",
+        "Match explicit energy and sell",
+      ),
     ];
   }
 
   return [
-    { text: voice.flirt, tone, internalReason: "Flirt back and name a real product" },
-    {
-      text: last.toLowerCase().includes("hi") ? voice.chat : voice.sell,
-      tone: "TEASING" as const,
-      internalReason: "Keep momentum toward a sale",
-    },
-    {
-      text: explicit ? voice.sext : voice.chat,
-      tone: "DIRECT" as const,
-      internalReason: "Escalate or stay flirty",
-    },
+    asOption(voice.flirt, tone, "Flirt back and name a real product"),
+    asOption(
+      last.toLowerCase().includes("hi") ? voice.chat : voice.sell,
+      "TEASING",
+      "Keep momentum toward a sale",
+    ),
+    asOption(explicit ? voice.sext : voice.chat, "DIRECT", "Escalate or stay flirty"),
   ];
 }
 
@@ -237,8 +262,9 @@ export class MockLLMProvider implements LLMProvider {
       ? resolveOfferPrice({
           standardPrice: product.standardPrice,
           minimumPrice: product.minimumPrice,
-          discountLimitPercent: input.persona.discountLimitPercent,
+          discountLimitPercent: product.discountLimitPercent ?? input.persona.discountLimitPercent,
           concessionAllowed: Boolean(input.pricing?.concessionAllowed),
+          sendAttempt: product.sendAttempt,
         })
       : null;
     const output = generationOutputSchema.parse({

@@ -62,12 +62,12 @@ export function PersonaForm({
           </select>
         </div>
         <div>
-          <Label>Discount limit %</Label>
-          <Input
-            type="number"
-            value={form.discountLimitPercent}
-            onChange={(e) => set("discountLimitPercent", Number(e.target.value))}
-          />
+          <Label>Favourite colour</Label>
+          <Input value={form.favouriteColor} onChange={(e) => set("favouriteColor", e.target.value)} />
+        </div>
+        <div>
+          <Label>Favourite flowers</Label>
+          <Input value={form.favouriteFlowers} onChange={(e) => set("favouriteFlowers", e.target.value)} />
         </div>
         <div className="md:col-span-2">
           <Label>Biography</Label>
@@ -95,6 +95,18 @@ export function PersonaForm({
             onChange={(e) =>
               set(
                 "preferredCompliments",
+                e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+              )
+            }
+          />
+        </div>
+        <div className="md:col-span-2">
+          <Label>Phrases she actually says (comma separated)</Label>
+          <Input
+            value={form.frequentlyUsedPhrases.join(", ")}
+            onChange={(e) =>
+              set(
+                "frequentlyUsedPhrases",
                 e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
               )
             }

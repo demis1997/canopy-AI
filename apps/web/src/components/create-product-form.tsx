@@ -15,6 +15,8 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
     mediaType: "PHOTO",
     standardPrice: 25,
     minimumPrice: 20,
+    secondPrice: 22,
+    discountLimitPercent: 20,
     tags: "tease, gfe",
     available: true,
     source: "MANUAL",
@@ -84,6 +86,27 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
             value={form.minimumPrice}
             onChange={(e) => setForm({ ...form, minimumPrice: Number(e.target.value) })}
           />
+        </div>
+        <div>
+          <Label>2nd-send price</Label>
+          <Input
+            type="number"
+            value={form.secondPrice}
+            onChange={(e) => setForm({ ...form, secondPrice: Number(e.target.value) })}
+          />
+        </div>
+        <div>
+          <Label>Max discount %</Label>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={form.discountLimitPercent}
+            onChange={(e) => setForm({ ...form, discountLimitPercent: Number(e.target.value) })}
+          />
+          <p className="mt-1 text-[11px] text-white/35">
+            Ignored on the first PPV and anything $10 or under. Later PPVs discount only after he goes silent.
+          </p>
         </div>
         <div>
           <Label>Tags</Label>

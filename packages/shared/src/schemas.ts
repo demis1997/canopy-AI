@@ -7,22 +7,29 @@ import {
   TONES,
   MEMORY_CATEGORIES,
 } from "./enums.js";
+import { normalizeReplyBubbles } from "./replies.js";
+
+const replyOptionSchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const o = raw as Record<string, unknown>;
+    const next = normalizeReplyBubbles(o);
+    return { ...o, text: next.text, messages: next.messages };
+  },
+  z.object({
+    text: z.string().min(1).max(2000),
+    messages: z.array(z.string().min(1).max(280)).min(1).max(4),
+    tone: z.enum(TONES),
+    internalReason: z.string().max(500),
+  }),
+);
 
 export const generationOutputSchema = z.object({
   intent: z.enum(INTENTS),
   funnelStage: z.enum(FUNNEL_STAGES),
   explicitnessLevel: z.enum(EXPLICITNESS_LEVELS),
   recommendedAction: z.enum(RECOMMENDED_ACTIONS),
-  replyOptions: z
-    .array(
-      z.object({
-        text: z.string().min(1).max(2000),
-        tone: z.enum(TONES),
-        internalReason: z.string().max(500),
-      }),
-    )
-    .min(1)
-    .max(3),
+  replyOptions: z.array(replyOptionSchema).min(1).max(3),
   recommendedProductId: z.string().nullable(),
   approvedPrice: z.number().nonnegative().nullable(),
   requiresHumanReview: z.boolean(),
@@ -70,6 +77,8 @@ export const personaInputSchema = z.object({
   discountLimitPercent: z.number().min(0).max(100).default(10),
   escalationRules: z.string().max(2000).default(""),
   approvedExampleMessages: z.array(z.string()).default([]),
+  favouriteColor: z.string().max(80).default(""),
+  favouriteFlowers: z.string().max(80).default(""),
 });
 
 export type PersonaInput = z.infer<typeof personaInputSchema>;
@@ -81,6 +90,8 @@ export const productInputSchema = z.object({
   creatorId: z.string(),
   standardPrice: z.number().positive(),
   minimumPrice: z.number().positive(),
+  secondPrice: z.number().positive().nullable().optional(),
+  discountLimitPercent: z.number().min(0).max(100).default(10),
   bundlePrice: z.number().positive().nullable().optional(),
   tags: z.array(z.string()).default([]),
   explicitnessCategory: z.enum(EXPLICITNESS_LEVELS).default("EXPLICIT"),
@@ -121,4 +132,41 @@ export const memoryUpdateSchema = z.object({
   value: z.string().max(2000).optional(),
   verified: z.boolean().optional(),
   deleted: z.boolean().optional(),
+});
+
+export const sequenceStepInputSchema = z.object({
+  body: z.string().min(1).max(2000),
+  mediaHint: z.enum(["TEXT", "VOICE", "PHOTO", "PPV"]).default("TEXT"),
+  delayMinutes: z.number().int().min(0).max(7 * 24 * 60).default(0),
+  productId: z.string().nullable().optional(),
+  priceTier: z.number().int().min(1).max(3).default(1),
+});
+
+export const sequenceInputSchema = z.object({
+  creatorId: z.string(),
+  name: z.string().min(1).max(120),
+  kind: z.enum(["STARTER", "TEASER", "VOICE", "PHOTO", "SEXTING", "PPV", "FOLLOW_UP", "AFTERCARE"]),
+  description: z.string().max(2000).default(""),
+  active: z.boolean().default(true),
+  steps: z.array(sequenceStepInputSchema).min(1).max(20),
+});
+
+export const fanNoteInputSchema = z.object({
+  creatorId: z.string(),
+  subscriberId: z.string(),
+  realName: z.string().max(120).default(""),
+  location: z.string().max(120).default(""),
+  dominance: z.enum(["UNKNOWN", "SUBMISSIVE", "DOMINANT", "SWITCH"]).default("UNKNOWN"),
+  preferredTone: z.string().max(80).default(""),
+  notes: z.string().max(8000).default(""),
+  extra: z.record(z.string()).default({}),
+});
+
+export const conversationPatchSchema = z.object({
+  mutedAi: z.boolean().optional(),
+  activeSequenceId: z.string().nullable().optional(),
+  advanceSequence: z.boolean().optional(),
+  insertSequenceStep: z.boolean().optional(),
+  noReplyFollowUp: z.boolean().optional(),
+  markPurchased: z.boolean().optional(),
 });

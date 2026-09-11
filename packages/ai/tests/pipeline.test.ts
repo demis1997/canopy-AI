@@ -153,7 +153,7 @@ describe("product validation", () => {
     funnelStage: "OFFER" as const,
     explicitnessLevel: "EXPLICIT" as const,
     recommendedAction: "PRESENT_OFFER" as const,
-    replyOptions: [{ text: "here", tone: "DIRECT" as const, internalReason: "offer" }],
+    replyOptions: [{ text: "here", messages: ["here"], tone: "DIRECT" as const, internalReason: "offer" }],
     recommendedProductId: "prod_1" as string | null,
     approvedPrice: 40 as number | null,
     requiresHumanReview: true,
@@ -191,9 +191,37 @@ describe("product validation", () => {
   });
 
   it("allows the floor after a concession is earned", () => {
-    const result = validateProductsAndPrices({ ...base, approvedPrice: 36 }, catalog, 10, true);
+    const result = validateProductsAndPrices(
+      { ...base, approvedPrice: 36 },
+      [{ ...catalog[0]!, sendAttempt: 3 }],
+      10,
+      true,
+    );
     expect(result.ok).toBe(true);
     expect(result.output.approvedPrice).toBe(36);
+  });
+
+  it("uses the mid price after he goes silent", () => {
+    const result = validateProductsAndPrices(
+      { ...base, approvedPrice: 36 },
+      [{ ...catalog[0]!, sendAttempt: 2 }],
+      10,
+      true,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.output.approvedPrice).toBe(37.5);
+    expect(result.output.riskFlags).toContain("LADDER_PRICE_CLAMPED");
+  });
+
+  it("never discounts an intro PPV under $10", () => {
+    const result = validateProductsAndPrices(
+      { ...base, recommendedProductId: "intro", approvedPrice: 7.5 },
+      [{ id: "intro", standardPrice: 8, minimumPrice: 6, available: true, sendAttempt: 3 }],
+      10,
+      true,
+    );
+    expect(result.output.approvedPrice).toBe(8);
+    expect(result.output.riskFlags).toContain("EARLY_DISCOUNT_CLAMPED");
   });
 });
 
@@ -221,13 +249,46 @@ describe("mock provider", () => {
     expect(first.output.approvedPrice).toBe(40);
     const concession = await mock.generateReplies({
       ...genInput("that's too much, cheaper please"),
+      products: genInput("that's too much, cheaper please").products.map((p) => ({
+        ...p,
+        sendAttempt: 3,
+      })),
       pricing: {
         concessionAllowed: true,
         lastOffer: { productName: "Shower set", price: 40, listPrice: 40, declined: true },
+        ladder: [],
+        purchasedPpvCount: 1,
+        unansweredFollowUps: 3,
       },
     });
     expect(concession.output.approvedPrice).toBe(36);
     expect(concession.output.replyOptions.some((o) => o.text.includes("$36"))).toBe(true);
+  });
+
+  it("splits replies into short bubbles", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("hey you looked so hot in that story"));
+    const opt = result.output.replyOptions[0]!;
+    expect(opt.messages.length).toBeGreaterThan(1);
+    expect(opt.text).toContain("\n");
+  });
+
+  it("acks an off-script fan line then stays on the current sequence step", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("btw I just got a new car"),
+      activeSequence: {
+        name: "Tease",
+        kind: "TEASER",
+        stepIndex: 1,
+        current: { body: "sending that voice note i just recorded", mediaHint: "VOICE", priceTier: 1 },
+        remaining: ["then the ppv", "aftercare later"],
+      },
+    });
+    const blob = result.output.replyOptions[0]!.messages.join(" ").toLowerCase();
+    expect(blob).toMatch(/car/);
+    expect(blob).toMatch(/voice/);
+    expect(blob).not.toMatch(/aftercare later|then the ppv/);
   });
 });
 
@@ -236,7 +297,27 @@ describe("pricing concession", () => {
     expect(concessionAllowedFrom({ offers: [], intent: "PRICE_OBJECTION" })).toBe(false);
   });
 
-  it("allows the floor after a refused list offer", () => {
+  it("holds list on the first PPV even after silence", () => {
+    expect(
+      concessionAllowedFrom({
+        offers: [
+          {
+            productId: "prod_1",
+            productName: "Tease clip",
+            price: 8,
+            listPrice: 8,
+            accepted: false,
+          },
+        ],
+        intent: "PRICE_OBJECTION",
+        unansweredFollowUps: 3,
+        purchasedPpvCount: 0,
+        standardPrice: 8,
+      }),
+    ).toBe(false);
+  });
+
+  it("allows the floor after a later PPV sits unpaid and he goes silent", () => {
     expect(
       concessionAllowedFrom({
         offers: [
@@ -249,6 +330,9 @@ describe("pricing concession", () => {
           },
         ],
         intent: "PRICE_OBJECTION",
+        unansweredFollowUps: 3,
+        purchasedPpvCount: 1,
+        standardPrice: 40,
       }),
     ).toBe(true);
     expect(
@@ -257,8 +341,18 @@ describe("pricing concession", () => {
         minimumPrice: 35,
         discountLimitPercent: 10,
         concessionAllowed: true,
+        sendAttempt: 3,
       }).price,
     ).toBe(36);
+    expect(
+      resolveOfferPrice({
+        standardPrice: 40,
+        minimumPrice: 35,
+        discountLimitPercent: 10,
+        concessionAllowed: false,
+        sendAttempt: 2,
+      }).price,
+    ).toBe(37.5);
   });
 });
 

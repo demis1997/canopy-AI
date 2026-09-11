@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge, Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { FanNotesCard, type FanNoteValue } from "@/components/fan-notes-card";
+import { splitReplyBubbles } from "@canopy/shared";
 
-type Reply = { id: string; text: string; tone: string; internalReason: string };
+type Reply = { id: string; text: string; tone: string; internalReason: string; messages?: string[] };
 
 type Generation = {
   id?: string;
@@ -70,6 +72,12 @@ export function CopilotWorkspace(props: {
     explicitness: string;
     summary: string | null;
     mutedAi: boolean;
+    creatorId: string;
+    subscriberId: string;
+    activeSequenceId: string | null;
+    activeSequenceStep: number;
+    unansweredFollowUps: number;
+    purchasedPpvCount: number;
   };
   messages: {
     id: string;
@@ -89,7 +97,15 @@ export function CopilotWorkspace(props: {
     confidence: number;
     verified: boolean;
   }[];
-  products: { id: string; name: string; price: number; min: number }[];
+  products: { id: string; name: string; price: number; min: number; second?: number | null }[];
+  sequences: {
+    id: string;
+    name: string;
+    kind: string;
+    steps: { body: string; mediaHint: string; priceTier: number }[];
+  }[];
+  fanNote: FanNoteValue | null;
+  spend: number;
   initialGeneration: Generation | null;
   inbox?: InboxItem[];
 }) {
@@ -102,6 +118,13 @@ export function CopilotWorkspace(props: {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [mutedAi, setMutedAi] = useState(props.conversation.mutedAi);
+  const [sequenceId, setSequenceId] = useState(props.conversation.activeSequenceId ?? "");
+  const [sequenceStep, setSequenceStep] = useState(props.conversation.activeSequenceStep);
+  const [followUps, setFollowUps] = useState(props.conversation.unansweredFollowUps);
+  const [purchasedPpvCount, setPurchasedPpvCount] = useState(props.conversation.purchasedPpvCount);
+
+  const activeSequence = props.sequences.find((s) => s.id === sequenceId);
+  const currentStep = activeSequence?.steps[sequenceStep];
 
   const replies = generation?.replyOptions ?? [];
   const generationId = generation?.generationId || generation?.id;
@@ -132,6 +155,7 @@ export function CopilotWorkspace(props: {
     });
     const json = await res.json();
     setFanText("");
+    setFollowUps(0);
     if (json.error) setNotice(json.error);
     else if (json.autoSent) {
       const gen = (json.generation ?? json) as Generation;
@@ -145,6 +169,32 @@ export function CopilotWorkspace(props: {
     }
     setBusy(false);
     router.refresh();
+  }
+
+  async function patchConversation(payload: Record<string, unknown>) {
+    setBusy(true);
+    setNotice("");
+    const res = await fetch(`/api/conversations/${props.conversation.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (json.error) setNotice(json.error);
+    if (json.activeSequenceId !== undefined) setSequenceId(json.activeSequenceId ?? "");
+    if (json.activeSequenceStep != null) setSequenceStep(json.activeSequenceStep);
+    if (json.unansweredFollowUps != null) setFollowUps(json.unansweredFollowUps);
+    if (json.purchasedPpvCount != null) setPurchasedPpvCount(json.purchasedPpvCount);
+    if (json.inserted) setNotice("Sequence step inserted into the thread.");
+    if (payload.markPurchased && json.purchasedPpvCount === 1) {
+      setNotice("First PPV unlocked. Keep selling — no aftercare yet.");
+    }
+    if (payload.markPurchased && json.purchasedPpvCount >= 2) {
+      setNotice("Second PPV unlocked. Aftercare is on.");
+    }
+    setBusy(false);
+    router.refresh();
+    return json;
   }
 
   async function generate(rewriteStyle?: (typeof REWRITES)[number]["id"]) {
@@ -268,6 +318,16 @@ export function CopilotWorkspace(props: {
             <Badge>{props.conversation.explicitness}</Badge>
             {generation?.mockMode ? <Badge tone="warn">MOCK PROVIDER</Badge> : null}
             <Badge tone={mutedAi ? "warn" : "good"}>{mutedAi ? "This chat paused" : "Autonomous on"}</Badge>
+            {purchasedPpvCount > 0 ? (
+              <Badge tone={purchasedPpvCount >= 2 ? "good" : "accent"}>
+                {purchasedPpvCount >= 2 ? "Aftercare (2nd PPV)" : "1st PPV unlocked"}
+              </Badge>
+            ) : null}
+            {followUps > 0 && purchasedPpvCount < 2 ? (
+              <Badge tone="warn">
+                {followUps === 1 ? "Follow-up · still list" : `Follow-up ${followUps} · discount ok`}
+              </Badge>
+            ) : null}
           </div>
         </div>
 
@@ -339,6 +399,20 @@ export function CopilotWorkspace(props: {
             >
               {mutedAi ? "Resume this chat" : "Pause this chat"}
             </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void patchConversation({ noReplyFollowUp: true })}
+            >
+              No reply — next follow-up
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void patchConversation({ markPurchased: true })}
+            >
+              Fan unlocked PPV
+            </Button>
           </div>
         </Card>
         {notice ? <Card className="border-amber-500/30 bg-amber-500/10 text-sm text-amber-100">{notice}</Card> : null}
@@ -375,11 +449,26 @@ export function CopilotWorkspace(props: {
                     </span>
                     <span>AI-generated</span>
                   </div>
+                  <div className="mb-2 space-y-1">
+                    {splitReplyBubbles(drafts[option.id] ?? option.text, { splitSentences: true }).map(
+                      (bubble, bi) => (
+                        <div
+                          key={`${option.id}-b${bi}`}
+                          className="block w-fit max-w-[95%] rounded-[12px] bg-canopy-500/15 px-3 py-1.5 text-sm text-canopy-100"
+                        >
+                          {bubble}
+                        </div>
+                      ),
+                    )}
+                  </div>
                   <Textarea
                     value={drafts[option.id] ?? option.text}
                     onChange={(e) => setDrafts((d) => ({ ...d, [option.id]: e.target.value }))}
+                    className="min-h-[96px] whitespace-pre-wrap"
                   />
-                  <p className="mt-1 text-[11px] text-white/35">{option.internalReason}</p>
+                  <p className="mt-1 text-[11px] text-white/35">
+                    One bubble per line. Insert sends each line as its own message. {option.internalReason}
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <Button size="sm" disabled={busy} onClick={() => void approve(option, true)}>
                       Approve and insert
@@ -401,6 +490,68 @@ export function CopilotWorkspace(props: {
             className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-3 text-sm"
           />
         </Card>
+        <Card className="space-y-3">
+          <div className="text-sm font-medium">Sequence</div>
+          <select
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2 text-sm"
+            value={sequenceId}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSequenceId(next);
+              void patchConversation({ activeSequenceId: next || null });
+            }}
+          >
+            <option value="">No sequence</option>
+            {props.sequences.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.kind}: {s.name}
+              </option>
+            ))}
+          </select>
+          {currentStep ? (
+            <div className="space-y-2">
+              <div className="rounded-[10px] border border-white/10 p-2 text-sm text-white/70">
+                <div className="text-[11px] uppercase tracking-wide text-white/35">
+                  Step {sequenceStep + 1}/{activeSequence?.steps.length} · {currentStep.mediaHint} · price tier{" "}
+                  {currentStep.priceTier}
+                </div>
+                {currentStep.body}
+              </div>
+              <p className="text-xs text-white/40">
+                Stay on this beat. If he goes off-script, the AI acks once then continues this step.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-white/40">Pick a sequence to pin the next script beat for this chat.</p>
+          )}
+          <div className="flex flex-wrap gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || !currentStep}
+              onClick={() => void patchConversation({ insertSequenceStep: true })}
+            >
+              Insert this step
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || !sequenceId}
+              onClick={() => void patchConversation({ advanceSequence: true })}
+            >
+              Next step
+            </Button>
+          </div>
+        </Card>
+        <FanNotesCard
+          creatorId={props.conversation.creatorId}
+          subscriberId={props.conversation.subscriberId}
+          creatorName={props.conversation.creatorName}
+          fanName={props.conversation.subscriberName}
+          spend={props.spend}
+          initial={props.fanNote}
+        />
         <Card className="space-y-2 text-sm">
           <div>Detected intent: {generation?.intent ?? "—"}</div>
           <div>Funnel stage: {generation?.funnelStage ?? props.conversation.funnelStage}</div>

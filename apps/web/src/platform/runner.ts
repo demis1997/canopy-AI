@@ -124,8 +124,8 @@ export async function deliverAction(input: {
     });
     return { sent: false as const, reason: preflight.gate.reason };
   }
-  const text = preflight.decision.messages[0];
-  if (!text) return { sent: false as const, reason: "EMPTY" };
+  const bubbles = preflight.decision.messages.map((m) => m.trim()).filter(Boolean);
+  if (!bubbles.length) return { sent: false as const, reason: "EMPTY" };
 
   await prisma.automationAction.update({
     where: { id: input.actionId },
@@ -144,28 +144,34 @@ export async function deliverAction(input: {
     if (fan.externalFanId !== preflight.action.platformConversation.externalFanId) {
       throw new AdapterClosedError("SELECTOR_FAILURE", "Wrong fan conversation open");
     }
-    await input.adapter.typeMessage(text);
-    await input.adapter.sendCurrentMessage();
-    const verify = await input.adapter.verifySentMessage(text);
-    if (!verify.verified || verify.ambiguous || !verify.externalMessageId) {
-      await prisma.automationAction.update({
-        where: { id: input.actionId },
-        data: { status: "FAILED", lastError: "AMBIGUOUS_DELIVERY" },
-      });
-      await writeAutomationAudit({
-        organizationId: input.organizationId,
-        action: "AUTOMATION_FAIL",
-        entityType: "AutomationAction",
-        entityId: input.actionId,
-        metadata: { reason: "AMBIGUOUS_DELIVERY" },
-      });
-      return { sent: false as const, reason: "AMBIGUOUS_DELIVERY" };
+    let lastVerify: { verified: boolean; ambiguous: boolean; externalMessageId?: string; visibleText?: string } | null =
+      null;
+    for (let i = 0; i < bubbles.length; i += 1) {
+      const text = bubbles[i]!;
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 600));
+      await input.adapter.typeMessage(text);
+      await input.adapter.sendCurrentMessage();
+      lastVerify = await input.adapter.verifySentMessage(text);
+      if (!lastVerify.verified || lastVerify.ambiguous || !lastVerify.externalMessageId) {
+        await prisma.automationAction.update({
+          where: { id: input.actionId },
+          data: { status: "FAILED", lastError: "AMBIGUOUS_DELIVERY" },
+        });
+        await writeAutomationAudit({
+          organizationId: input.organizationId,
+          action: "AUTOMATION_FAIL",
+          entityType: "AutomationAction",
+          entityId: input.actionId,
+          metadata: { reason: "AMBIGUOUS_DELIVERY", bubble: i },
+        });
+        return { sent: false as const, reason: "AMBIGUOUS_DELIVERY" };
+      }
     }
     return markActionSent({
       organizationId: input.organizationId,
       actionId: input.actionId,
-      externalMessageId: verify.externalMessageId,
-      finalText: verify.visibleText ?? text,
+      externalMessageId: lastVerify!.externalMessageId!,
+      finalText: lastVerify?.visibleText ?? bubbles.join("\n"),
     });
   } catch (error) {
     const reason = error instanceof AdapterClosedError ? error.code : "DELIVERY_FAILED";

@@ -46,6 +46,10 @@ export type ProductCatalogItem = {
   description: string;
   standardPrice: number;
   minimumPrice: number;
+  secondPrice?: number | null;
+  discountLimitPercent?: number;
+  sendAttempt?: number;
+  allowedPrice?: number;
   available: boolean;
   explicitnessCategory: ExplicitnessLevel;
 };
@@ -71,6 +75,8 @@ export type PersonaSnapshot = {
   offlineMeetingPolicy: string;
   discountLimitPercent: number;
   approvedExampleMessages: string[];
+  favouriteColor?: string;
+  favouriteFlowers?: string;
 };
 
 export type MemorySnapshot = {
@@ -96,6 +102,23 @@ export type GenerationInput = {
   promptVersionId: string;
   model: string;
   pricing?: PricingContext;
+  fanNotes?: {
+    realName: string;
+    location: string;
+    dominance: string;
+    preferredTone: string;
+    notes: string;
+    extra: Record<string, string>;
+    spend: number;
+  } | null;
+  activeSequence?: {
+    name: string;
+    kind: string;
+    stepIndex: number;
+    current: { body: string; mediaHint: string; priceTier: number };
+    remaining: string[];
+  } | null;
+  followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
 };
 
 export type GenerationResult = {

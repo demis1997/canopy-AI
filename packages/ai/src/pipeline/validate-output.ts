@@ -1,5 +1,5 @@
 import type { GenerationOutput } from "@canopy/shared";
-import { generationOutputSchema } from "@canopy/shared";
+import { generationOutputSchema, ladderPrice, defaultSecondPrice, FIRST_PPV_MAX_DOLLARS } from "@canopy/shared";
 
 function stripFences(text: string): string {
   return text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
@@ -30,8 +30,11 @@ export function validateProductsAndPrices(
     available: boolean;
     creatorId?: string;
     resaleAllowed?: boolean;
+    secondPrice?: number | null;
+    sendAttempt?: number;
+    discountLimitPercent?: number;
   }[],
-  discountLimitPercent: number,
+  discountLimitPercent = 10,
   concessionAllowed = false,
   opts?: { creatorId?: string; purchasedProductIds?: string[] },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
@@ -74,9 +77,19 @@ export function validateProductsAndPrices(
         recommendedAction: "REQUEST_HUMAN_REVIEW",
       };
     } else if (next.approvedPrice != null) {
-      const minAllowed = Math.max(
+      const intro = product.standardPrice <= FIRST_PPV_MAX_DOLLARS + 0.009;
+      const attempt = intro ? 1 : (product.sendAttempt ?? 1);
+      const limit = product.discountLimitPercent ?? discountLimitPercent;
+      const minAllowed = ladderPrice({
+        standardPrice: product.standardPrice,
+        minimumPrice: product.minimumPrice,
+        discountLimitPercent: limit,
+        sendAttempt: attempt,
+        secondPrice: product.secondPrice,
+      }).price;
+      const absoluteFloor = Math.max(
         product.minimumPrice,
-        product.standardPrice * (1 - discountLimitPercent / 100),
+        product.standardPrice * (1 - limit / 100),
       );
       if (next.approvedPrice > product.standardPrice + 0.009) {
         errors.push("UNAUTHORISED_PRICE");
@@ -88,7 +101,7 @@ export function validateProductsAndPrices(
           riskFlags: [...next.riskFlags, "INVALID_PRICE"],
           recommendedAction: "REQUEST_HUMAN_REVIEW",
         };
-      } else if (next.approvedPrice < minAllowed - 0.009) {
+      } else if (next.approvedPrice < absoluteFloor - 0.009) {
         errors.push("UNAUTHORISED_PRICE");
         next = {
           ...next,
@@ -98,11 +111,17 @@ export function validateProductsAndPrices(
           riskFlags: [...next.riskFlags, "INVALID_PRICE"],
           recommendedAction: "REQUEST_HUMAN_REVIEW",
         };
-      } else if (!concessionAllowed && next.approvedPrice < product.standardPrice - 0.009) {
+      } else if (attempt <= 1 && next.approvedPrice < product.standardPrice - 0.009) {
         next = {
           ...next,
           approvedPrice: product.standardPrice,
           riskFlags: [...next.riskFlags, "EARLY_DISCOUNT_CLAMPED"],
+        };
+      } else if (attempt === 2 && next.approvedPrice < minAllowed - 0.009) {
+        next = {
+          ...next,
+          approvedPrice: minAllowed,
+          riskFlags: [...next.riskFlags, "LADDER_PRICE_CLAMPED"],
         };
       }
     }
@@ -117,7 +136,9 @@ export function validateProductsAndPrices(
   );
   if (inventedInText && next.recommendedProductId === null && /\$\s*\d+/.test(next.replyOptions.map((o) => o.text).join(" "))) {
     const prices = next.replyOptions.flatMap((o) => [...o.text.matchAll(/\$\s*(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])));
-    const allowed = new Set(catalog.flatMap((p) => [p.standardPrice, p.minimumPrice]));
+    const allowed = new Set(
+      catalog.flatMap((p) => [p.standardPrice, p.minimumPrice, p.secondPrice ?? defaultSecondPrice(p.standardPrice, p.minimumPrice)]),
+    );
     if (prices.some((p) => ![...allowed].some((a) => Math.abs(a - p) < 0.05))) {
       errors.push("INVENTED_PRICE_IN_TEXT");
       next = {

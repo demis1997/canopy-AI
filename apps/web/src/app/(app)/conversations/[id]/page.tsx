@@ -28,7 +28,7 @@ export default async function ConversationDetailPage({
   const allowedIds = await assignedCreatorIds(ctx);
   if (allowedIds && !allowedIds.includes(conversation.creatorId)) notFound();
 
-  const [memories, products, takeover, latestGeneration, inbox] = await Promise.all([
+  const [memories, products, takeover, latestGeneration, inbox, sequences, fanNote, spend] = await Promise.all([
     prisma.subscriberMemory.findMany({
       where: {
         organizationId: ctx.tenant.organizationId,
@@ -58,6 +58,33 @@ export default async function ConversationDetailPage({
       orderBy: { createdAt: "desc" },
     }),
     loadInbox(ctx.tenant.organizationId, allowedIds),
+    prisma.sequence.findMany({
+      where: {
+        organizationId: ctx.tenant.organizationId,
+        creatorId: conversation.creatorId,
+        active: true,
+      },
+      include: { steps: { orderBy: { position: "asc" } } },
+      orderBy: { name: "asc" },
+    }),
+    prisma.fanNote.findUnique({
+      where: {
+        creatorId_subscriberId: {
+          creatorId: conversation.creatorId,
+          subscriberId: conversation.subscriberId,
+        },
+      },
+    }),
+    prisma.purchase.aggregate({
+      where: {
+        organizationId: ctx.tenant.organizationId,
+        subscriberId: conversation.subscriberId,
+        refunded: false,
+        conversation: { creatorId: conversation.creatorId },
+      },
+      _sum: { amountCents: true },
+      _count: true,
+    }),
   ]);
 
   return (
@@ -80,6 +107,12 @@ export default async function ConversationDetailPage({
           explicitness: conversation.creator.personas[0]?.allowedExplicitness ?? "SUGGESTIVE",
           summary: conversation.summary?.summary ?? null,
           mutedAi: conversation.mutedAi,
+          creatorId: conversation.creatorId,
+          subscriberId: conversation.subscriberId,
+          activeSequenceId: conversation.activeSequenceId,
+          activeSequenceStep: conversation.activeSequenceStep,
+          unansweredFollowUps: conversation.unansweredFollowUps,
+          purchasedPpvCount: spend._count,
         }}
         messages={conversation.messages.map((m) => ({
           id: m.id,
@@ -104,7 +137,31 @@ export default async function ConversationDetailPage({
           name: p.name,
           price: p.standardPriceCents / 100,
           min: p.minimumPriceCents / 100,
+          second: p.secondPriceCents != null ? p.secondPriceCents / 100 : null,
         }))}
+        sequences={sequences.map((s) => ({
+          id: s.id,
+          name: s.name,
+          kind: s.kind,
+          steps: s.steps.map((step) => ({
+            body: step.body,
+            mediaHint: step.mediaHint,
+            priceTier: step.priceTier,
+          })),
+        }))}
+        fanNote={
+          fanNote
+            ? {
+                realName: fanNote.realName,
+                location: fanNote.location,
+                dominance: fanNote.dominance,
+                preferredTone: fanNote.preferredTone,
+                notes: fanNote.notes,
+                extra: (fanNote.extra as Record<string, string>) ?? {},
+              }
+            : null
+        }
+        spend={(spend._sum.amountCents ?? conversation.subscriber.spendCents) / 100}
         initialGeneration={
           latestGeneration
             ? {
@@ -119,6 +176,7 @@ export default async function ConversationDetailPage({
                 replyOptions: latestGeneration.replyOptions.map((o) => ({
                   id: o.id,
                   text: o.text,
+                  messages: o.text.split(/\n+/).map((s) => s.trim()).filter(Boolean),
                   tone: o.tone,
                   internalReason: o.internalReason,
                 })),

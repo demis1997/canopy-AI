@@ -13,6 +13,7 @@ import {
   type AutomationDecision,
   type AutomationPolicySnapshot,
   type AutonomyMode,
+  splitReplyBubbles,
   type FeatureFlags,
 } from "@canopy/shared";
 import { addSubscriberMessage, generateForConversation, recordAnalytics, selectReply } from "../generate";
@@ -456,7 +457,7 @@ export async function generateAutomationDecision(input: {
     const post = evaluateAutomationSafety({
       adultStatus: conversation.adultStatus,
       subscriberText: trigger.body,
-      generatedTexts: generation.replyOptions.map((o) => o.text),
+      generatedTexts: generation.replyOptions.flatMap((o) => splitReplyBubbles(o.text)),
       allowedLanguages: policy.allowedLanguages,
       prohibitedWords: persona?.prohibitedWords,
     });
@@ -475,7 +476,7 @@ export async function generateAutomationDecision(input: {
         generation.recommendedProductId;
       decision = automationDecisionSchema.parse({
         action: wantsPpv ? "SEND_PPV" : "SEND_TEXT",
-        messages: [option.text],
+        messages: splitReplyBubbles(option.text, { splitSentences: true }),
         productId: "recommendedProductId" in generation ? generation.recommendedProductId : null,
         price: "approvedPrice" in generation ? generation.approvedPrice : null,
         confidence,

@@ -47,7 +47,7 @@ const replyOptionSchema = z.preprocess(
   },
   z.object({
     text: z.string().min(1).max(2000),
-    messages: z.array(z.string().min(1).max(280)).min(1).max(4),
+    messages: z.array(z.string().min(1).max(280)).min(1).max(3),
     tone: z.enum(TONES),
     internalReason: z.string().max(500),
   }),

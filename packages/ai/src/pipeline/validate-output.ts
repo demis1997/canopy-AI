@@ -1,5 +1,13 @@
 import type { GenerationOutput } from "@canopy/shared";
-import { generationOutputSchema, ladderPrice, defaultSecondPrice, FIRST_PPV_MAX_DOLLARS } from "@canopy/shared";
+import {
+  generationOutputSchema,
+  ladderPrice,
+  defaultSecondPrice,
+  FIRST_PPV_MAX_DOLLARS,
+  containsMeetSpeak,
+  normalizeReplyBubbles,
+  TOS_OFFLINE_FALLBACK,
+} from "@canopy/shared";
 
 function stripFences(text: string): string {
   return text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
@@ -23,10 +31,30 @@ export function parseGenerationOutput(
     if (!parsed.success) {
       return { success: false, error: parsed.error.message };
     }
-    return { success: true, data: parsed.data };
+    return { success: true, data: scrubOfflineAsks(parsed.data) };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "invalid json" };
   }
+}
+
+function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
+  if (!output.replyOptions.some((o) => containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak))) {
+    return output;
+  }
+  const cleaned = normalizeReplyBubbles({ text: TOS_OFFLINE_FALLBACK });
+  return {
+    ...output,
+    replyOptions: output.replyOptions.map((o) =>
+      containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak)
+        ? {
+            ...o,
+            text: cleaned.text,
+            messages: cleaned.messages,
+            internalReason: `${o.internalReason} · tos offline refusal`,
+          }
+        : o,
+    ),
+  };
 }
 
 export function validateProductsAndPrices(
@@ -47,7 +75,7 @@ export function validateProductsAndPrices(
   opts?: { creatorId?: string; purchasedProductIds?: string[] },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
-  let next = { ...output };
+  let next = scrubOfflineAsks({ ...output });
 
   if (next.recommendedProductId) {
     const product = catalog.find((p) => p.id === next.recommendedProductId);

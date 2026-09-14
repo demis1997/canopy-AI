@@ -1,4 +1,14 @@
-export const MAX_REPLY_BUBBLES = 4;
+export const MAX_REPLY_BUBBLES = 3;
+
+/** Meet / meetup / m33tup and close spellings — never appear in outbound copy. */
+export const MEET_SPEAK_RE =
+  /\b(m+[e3]+e*[e3]*t+(?:[\s\-_.]*u+p+s?|ings?)?|m33t(?:up|ing)?s?)\b/i;
+
+export const TOS_OFFLINE_FALLBACK = [
+  "nahh i dont do irl babe its against tos",
+  "i spent too long building this page to get banned over a risk like that",
+  "lets keep it here tell me what u wanna unlock",
+].join("\n");
 
 function splitSentences(line: string): string[] {
   const words = line.split(/\s+/).filter(Boolean);
@@ -67,4 +77,12 @@ export function collectOperatorRejections(
     if (out.length >= limit) break;
   }
   return out;
+}
+
+export function containsMeetSpeak(text: string): boolean {
+  return MEET_SPEAK_RE.test(text);
+}
+
+export function scrubMeetSpeak(text: string): string {
+  return containsMeetSpeak(text) ? TOS_OFFLINE_FALLBACK : text;
 }

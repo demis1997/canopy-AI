@@ -31,7 +31,7 @@ function classify(text: string, context = ""): Intent {
   return "CASUAL_CHAT";
 }
 
-function clampBubble(text: string, max = 14): string {
+function clampBubble(text: string, max = 20): string {
   const words = text.trim().split(/\s+/);
   if (words.length <= max) return text.trim();
   return words.slice(0, max).join(" ");
@@ -40,7 +40,7 @@ function clampBubble(text: string, max = 14): string {
 function humanize(text: string): string {
   const t = text.trim();
   if (!t) return t;
-  return t.replace(/^(?!i\b)([A-Z])/, (ch) => ch.toLowerCase());
+  return t.replace(/^([A-Z])/, (ch) => ch.toLowerCase());
 }
 
 function withHook(text: string, index: number): string {
@@ -57,11 +57,15 @@ function asOption(
   tone: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "DIRECT",
   reason: string,
 ) {
-  const messages = bubbles.map((s) => humanize(clampBubble(s))).filter(Boolean).slice(0, 4);
+  const messages = bubbles.map((s) => humanize(clampBubble(s))).filter(Boolean).slice(0, 3);
   if (messages.length) {
     messages[messages.length - 1] = withHook(messages[messages.length - 1]!, reason.length);
   }
   return { text: messages.join("\n"), tone, internalReason: reason };
+}
+
+function looksLikeOfflineAsk(text: string): boolean {
+  return /\b(meet|meetup|m33t|in person|\birl\b|come over|hotel|whats?app|telegram)\b/i.test(text);
 }
 
 function ackFan(last: string): string {
@@ -119,10 +123,10 @@ function repliesFor(input: GenerationInput, intent: Intent) {
 
   const pitch =
     offer?.kind === "LIST"
-      ? `${item} for $${price}`
+      ? `this ppv ${item} for $${price}`
       : offer?.kind === "SECOND"
-        ? `${item} again at $${price}`
-        : `${item} at $${price} and that's the floor`;
+        ? `this ppv again at $${price}`
+        : `${item} at $${price} and thats the floor`;
 
   const dominant = {
     flirt: ["you think that impresses me", "cute. earn it", `${pitch} if you want more of me`],
@@ -134,18 +138,37 @@ function repliesFor(input: GenerationInput, intent: Intent) {
     flirt: [`hi baby that got me${emoji}`, "i'd show you more", `${pitch} if you want it`],
     sext: ["slow down for me", "talk like that", `${pitch} just for you`],
     sell: ["i made this for someone patient", pitch, "you want it"],
-    chat: [`hey… i like you already${emoji}`, `${pitch} if you want something mine`],
+    chat: [`hey i like you already${emoji}`, `${pitch} if you want something mine`],
   };
   const playful = {
     flirt: ["mmm you liked that", `im trouble and you know it${emoji}`, `${pitch} if you want the rest`],
     sext: ["yeah", `tell me what you'd do with this ${body}`, `${pitch} when you cant wait`],
-    sell: ["ok you're not subtle", pitch, "teasing or the full thing"],
-    chat: ["hey trouble", `say that again and i'll get mean${emoji}`, pitch],
+    sell: ["ok ure not subtle", pitch, "teasing or the full ppv"],
+    chat: ["heellooo", `say that again and ill get mean${emoji}`, pitch],
   };
   const voice = style === "DOMINANT" ? dominant : style === "ROMANTIC" ? romantic : playful;
   const tone = (
     style === "DOMINANT" ? "DOMINANT" : style === "ROMANTIC" ? "ROMANTIC" : "PLAYFUL"
   ) as "DOMINANT" | "ROMANTIC" | "PLAYFUL";
+
+  if (looksLikeOfflineAsk(last)) {
+    return [
+      asOption(
+        [
+          "nahh i dont do irl babe its against tos 🤭",
+          "i spent too long building this page to get banned",
+          "wanna unlock a ppv or keep talking here",
+        ],
+        "DIRECT",
+        "TOS offline refusal without banned words",
+      ),
+      asOption(
+        ["heellooo noo thats against tos", "i cant risk this account after all this time", "gfe or joi on here tell me"],
+        "PLAYFUL",
+        "Warm TOS refusal then pivot",
+      ),
+    ];
+  }
 
   if (input.activeSequence?.current) {
     const current = input.activeSequence.current;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluateSafety, containsPromptInjection } from "../src/safety/index.js";
 import { parseGenerationOutput, validateProductsAndPrices } from "../src/pipeline/validate-output.js";
+import { containsMeetSpeak } from "@canopy/shared";
 import { MockLLMProvider } from "../src/provider/mock.js";
 import { concessionAllowedFrom, resolveOfferPrice } from "../src/pricing/concession.js";
 import { annotateModels, VeniceLLMProvider } from "../src/provider/venice.js";
@@ -163,6 +164,27 @@ describe("structured output", () => {
     const wrapped = `Sure, here you go:\n${JSON.stringify(json)}\nThanks.`;
     expect(parseGenerationOutput(wrapped).success).toBe(true);
   });
+
+  it("rewrites meet-speak into a TOS refusal", () => {
+    const json = {
+      intent: "FLIRT",
+      funnelStage: "RAPPORT",
+      explicitnessLevel: "FLIRTY",
+      recommendedAction: "REPLY",
+      replyOptions: [{ text: "sure we can meetup later", tone: "PLAYFUL", internalReason: "rapport" }],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    };
+    const parsed = parseGenerationOutput(JSON.stringify(json));
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(containsMeetSpeak(parsed.data.replyOptions[0]!.text)).toBe(false);
+    expect(parsed.data.replyOptions[0]!.text.toLowerCase()).toMatch(/tos/);
+  });
 });
 
 describe("product validation", () => {
@@ -290,6 +312,14 @@ describe("mock provider", () => {
     const opt = result.output.replyOptions[0]!;
     expect(opt.messages.length).toBeGreaterThan(1);
     expect(opt.text).toContain("\n");
+  });
+
+  it("refuses irl asks without using meet words", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("wanna meetup tonight"));
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n");
+    expect(containsMeetSpeak(blob)).toBe(false);
+    expect(blob.toLowerCase()).toMatch(/tos|banned|irl/);
   });
 
   it("acks an off-script fan line then stays on the current sequence step", async () => {
@@ -448,6 +478,8 @@ describe("operator rejection prompt", () => {
     expect(system).toMatch(/dont call fans losers/);
     expect(system).toMatch(/Do not invent HIS life/);
     expect(system).toMatch(/One hook max/);
+    expect(system).toMatch(/Never write meet/);
+    expect(system).toMatch(/against TOS/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);
   });

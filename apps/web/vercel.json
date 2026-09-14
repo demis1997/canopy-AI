@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm --filter @canopy/database generate && pnpm --filter @canopy/database migrate && pnpm --filter @canopy/web build"
+  "buildCommand": "cd ../.. && pnpm --filter @canopy/database generate && if [ -n \"$DATABASE_URL\" ]; then pnpm --filter @canopy/database migrate; fi && pnpm --filter @canopy/web build"
 }

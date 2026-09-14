@@ -446,6 +446,8 @@ describe("operator rejection prompt", () => {
     const system = String(messages[0]?.content ?? "");
     const user = String(messages[1]?.content ?? "");
     expect(system).toMatch(/dont call fans losers/);
+    expect(system).toMatch(/Do not invent HIS life/);
+    expect(system).toMatch(/One hook max/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);
   });

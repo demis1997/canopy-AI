@@ -226,7 +226,7 @@ export class VeniceLLMProvider implements LLMProvider {
     attempt: number,
   ): Promise<GenerationResult> {
     const prompt = composeGenerationPrompt(input);
-    const temperature = attempt === 0 ? 0.85 : 0.35;
+    const temperature = attempt === 0 ? 0.7 : 0.35;
     const first = await this.chat({
       requestId: input.requestId,
       model,
@@ -354,7 +354,7 @@ export class VeniceLLMProvider implements LLMProvider {
             this.client.chat.completions.create({
               model: opts.model,
               messages: opts.messages,
-              temperature: opts.temperature ?? 0.85,
+              temperature: opts.temperature ?? 0.7,
               ...(opts.json ? { response_format: { type: "json_object" } } : {}),
             }),
           { retries: this.retries, requestId: opts.requestId, isRetryable },

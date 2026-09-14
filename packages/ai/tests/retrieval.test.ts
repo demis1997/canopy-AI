@@ -22,6 +22,18 @@ describe("agency training retrieval", () => {
     expect(hits.join(" ").toLowerCase()).toMatch(/hold|never go below|discount/);
   });
 
+  it("does not tell chatters to interview about being single", () => {
+    const hits = retrieveTraining({
+      message: "hey",
+      intent: "CASUAL_CHAT",
+      funnelStage: "NEW_FAN",
+      transPersona: false,
+    });
+    const blob = hits.join(" ").toLowerCase();
+    expect(blob).toMatch(/at most one question/);
+    expect(blob).not.toMatch(/weave one question at a time: age/);
+  });
+
   it("hides trans vocabulary from cis personas", () => {
     const hits = retrieveTraining({
       message: "hey",

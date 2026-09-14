@@ -200,16 +200,22 @@ export function CopilotWorkspace(props: {
   async function generate(rewriteStyle?: (typeof REWRITES)[number]["id"]) {
     setBusy(true);
     setNotice("");
-    const res = await fetch(`/api/conversations/${props.conversation.id}/generate`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ conversationId: props.conversation.id, rewriteStyle, regenerate: true }),
-    });
-    const gen = (await res.json()) as Generation;
+    const post = async () => {
+      const res = await fetch(`/api/conversations/${props.conversation.id}/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversationId: props.conversation.id, rewriteStyle, regenerate: true }),
+      });
+      return (await res.json()) as Generation;
+    };
+    let gen = await post();
+    if (gen.failed && !gen.blocked) {
+      gen = await post();
+    }
     setGeneration(gen);
     setDrafts(Object.fromEntries((gen.replyOptions ?? []).map((o) => [o.id, o.text])));
     if (gen.blocked) setNotice(gen.chatterMessage || "Reply blocked.");
-    else if (gen.failed) setNotice(gen.chatterMessage || "Provider failed.");
+    else if (gen.failed) setNotice(gen.chatterMessage || "The model missed that send. Hit generate again.");
     else if (gen.chatterMessage) setNotice(gen.chatterMessage);
     else setNotice(rewriteStyle ? `Rewritten (${rewriteStyle.toLowerCase()}).` : "Three suggestions ready. Approve before insert.");
     setBusy(false);
@@ -287,7 +293,7 @@ export function CopilotWorkspace(props: {
               href={`/conversations/${item.id}`}
               className={cn(
                 "block rounded-[10px] border border-transparent px-3 py-2 text-sm hover:bg-white/[0.04]",
-                item.id === props.conversation.id && "border-canopy-500/30 bg-canopy-500/10",
+                item.id === props.conversation.id && "border-leaf/30 bg-pine/40",
               )}
             >
               <div className="flex items-center justify-between gap-2">
@@ -307,7 +313,7 @@ export function CopilotWorkspace(props: {
 
       <section className="space-y-4">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.16em] text-canopy-400">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-mist">
             {props.conversation.personaName}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{props.conversation.creatorName}</h1>
@@ -342,12 +348,12 @@ export function CopilotWorkspace(props: {
                 <div
                   className={cn(
                     "inline-block max-w-[85%] rounded-[12px] px-3 py-2 text-sm leading-relaxed",
-                    fan ? "bg-white/10 text-white" : "bg-canopy-500/15 text-canopy-100",
+                    fan ? "bg-bark text-bone" : "bg-pine text-bone",
                   )}
                 >
                   {m.body}
                   {m.isPaid ? (
-                    <div className="mt-2 rounded-[10px] border border-white/10 px-2 py-1 text-xs">
+                    <div className="mt-2 rounded-[10px] border border-brass/40 px-2 py-1 text-xs text-brass">
                       PPV {m.priceCents != null ? `$${(m.priceCents / 100).toFixed(0)}` : ""} ·{" "}
                       {m.purchased ? "unlocked" : "locked"}
                     </div>
@@ -415,7 +421,7 @@ export function CopilotWorkspace(props: {
             </Button>
           </div>
         </Card>
-        {notice ? <Card className="border-amber-500/30 bg-amber-500/10 text-sm text-amber-100">{notice}</Card> : null}
+        {notice ? <Card className="border-brass/30 bg-brass/10 text-sm text-bone">{notice}</Card> : null}
       </section>
 
       <aside className="space-y-3 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto">
@@ -454,7 +460,7 @@ export function CopilotWorkspace(props: {
                       (bubble, bi) => (
                         <div
                           key={`${option.id}-b${bi}`}
-                          className="block w-fit max-w-[95%] rounded-[12px] bg-canopy-500/15 px-3 py-1.5 text-sm text-canopy-100"
+                          className="block w-fit max-w-[95%] rounded-[12px] bg-pine px-3 py-1.5 text-sm text-bone"
                         >
                           {bubble}
                         </div>

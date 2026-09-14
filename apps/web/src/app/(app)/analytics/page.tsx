@@ -77,7 +77,7 @@ export default async function AnalyticsPage({
           Segment
           <input name="segment" defaultValue={params.segment ?? ""} placeholder="Subscriber segment" className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2" />
         </label>
-        <button className="h-9 self-end rounded-[10px] bg-canopy-500 px-3 text-ink-950" type="submit">
+        <button className="h-9 self-end rounded-[10px] bg-leaf px-3 text-bone" type="submit">
           Apply filters
         </button>
       </form>

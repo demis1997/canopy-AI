@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Geist", "ui-sans-serif", system-ui;
+  --font-sans: "Inter", "Helvetica Neue", Arial, ui-sans-serif, system-ui;
   color-scheme: dark;
 }
 
 html,
 body {
-  background: rgb(8, 12, 18);
-  color: #e6edf3;
+  background: #161816;
+  color: #ebe5d9;
   min-height: 100%;
 }
 
@@ -23,18 +23,16 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid rgba(45, 212, 191, 0.7);
+  outline: 2px solid rgba(107, 143, 110, 0.7);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(45, 212, 191, 0.28);
+  background: rgba(196, 160, 86, 0.28);
 }
 
 .canopy-grid {
-  background:
-    radial-gradient(ellipse 70% 40% at 50% -10%, rgba(20, 184, 166, 0.08), transparent 50%),
-    rgb(8, 12, 18);
+  background: #161816;
 }
 
 input,
@@ -45,8 +43,8 @@ select {
 
 html.demo-light,
 html.demo-light body {
-  background: #f3f5f7;
-  color: #1e293b;
+  background: #ebe5d9;
+  color: #161816;
   color-scheme: light;
 }
 

@@ -37,10 +37,19 @@ function clampBubble(text: string, max = 14): string {
   return words.slice(0, max).join(" ");
 }
 
-function withQuestion(text: string): string {
-  const clipped = clampBubble(text);
-  if (clipped.includes("?")) return clipped;
-  return `${clipped.replace(/[.!]*$/, "")}?`;
+function humanize(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  return t.replace(/^(?!i\b)([A-Z])/, (ch) => ch.toLowerCase());
+}
+
+function withHook(text: string, index: number): string {
+  const clipped = humanize(clampBubble(text)).replace(/[.!?]+$/, "");
+  if (/\b(tell me|show me|unlock|say it|wanna|or not)\b/i.test(clipped) || clipped.includes("?")) {
+    return clipped;
+  }
+  const hooks = ["tell me", "or not", "show me", "say it"];
+  return `${clipped} ${hooks[index % hooks.length]}`;
 }
 
 function asOption(
@@ -48,9 +57,9 @@ function asOption(
   tone: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "DIRECT",
   reason: string,
 ) {
-  const messages = bubbles.map((s) => clampBubble(s)).filter(Boolean).slice(0, 4);
-  if (messages.length && !messages[messages.length - 1]!.includes("?")) {
-    messages[messages.length - 1] = withQuestion(messages[messages.length - 1]!);
+  const messages = bubbles.map((s) => humanize(clampBubble(s))).filter(Boolean).slice(0, 4);
+  if (messages.length) {
+    messages[messages.length - 1] = withHook(messages[messages.length - 1]!, reason.length);
   }
   return { text: messages.join("\n"), tone, internalReason: reason };
 }
@@ -116,20 +125,20 @@ function repliesFor(input: GenerationInput, intent: Intent) {
         : `${item} at $${price} and that's the floor`;
 
   const dominant = {
-    flirt: ["you think that impresses me?", "cute. earn it", `${pitch} if you want more of me`],
-    sext: [compliment ?? "nice cock", "kneel", `${pitch} — you don't get the rest for free`],
-    sell: ["don't haggle", pitch, "you buying or wasting my time"],
-    chat: ["hi. don't be boring", "tell me what you want", pitch],
+    flirt: ["you think that impresses me", "cute. earn it", `${pitch} if you want more of me`],
+    sext: [compliment ?? "nice cock", "kneel", `${pitch} — you dont get the rest for free`],
+    sell: ["dont haggle", pitch, "you buying or wasting my time"],
+    chat: ["hi. dont be boring", "tell me what you want", pitch],
   };
   const romantic = {
     flirt: [`hi baby that got me${emoji}`, "i'd show you more", `${pitch} if you want it`],
-    sext: ["slow down for me…", "talk like that", `${pitch} just for you`],
+    sext: ["slow down for me", "talk like that", `${pitch} just for you`],
     sell: ["i made this for someone patient", pitch, "you want it"],
     chat: [`hey… i like you already${emoji}`, `${pitch} if you want something mine`],
   };
   const playful = {
-    flirt: ["mmm you liked that?", `i'm trouble and you know it${emoji}`, `${pitch} if you want the rest`],
-    sext: ["yeah?", `tell me what you'd do with this ${body}`, `${pitch} when you can't wait`],
+    flirt: ["mmm you liked that", `im trouble and you know it${emoji}`, `${pitch} if you want the rest`],
+    sext: ["yeah", `tell me what you'd do with this ${body}`, `${pitch} when you cant wait`],
     sell: ["ok you're not subtle", pitch, "teasing or the full thing"],
     chat: ["hey trouble", `say that again and i'll get mean${emoji}`, pitch],
   };

@@ -18,7 +18,7 @@ export default async function OnboardingPage() {
             placeholder="Agency name"
             className="h-9 w-full rounded-md border border-white/10 bg-ink-900 px-3 text-sm"
           />
-          <button className="h-9 rounded-md bg-canopy-500 px-3 text-sm text-ink-950">Continue</button>
+          <button className="h-9 rounded-md bg-leaf px-3 text-sm text-bone">Continue</button>
         </form>
       </Card>
     </div>

@@ -1,26 +1,26 @@
 body {
-  font: 13px/1.45 ui-sans-serif, system-ui;
-  background: #080c12;
-  color: #e6edf3;
+  font: 13px/1.45 Inter, Helvetica Neue, Arial, ui-sans-serif, system-ui;
+  background: #161816;
+  color: #ebe5d9;
   width: 360px;
   margin: 0;
   padding: 14px;
 }
 h1 { font-size: 16px; margin: 0 0 8px; }
-.muted { color: #8b9aab; }
+.muted { color: #8b9088; }
 input, textarea, button, pre {
   width: 100%;
   margin: 6px 0;
-  background: #121a24;
+  background: #0e100f;
   color: inherit;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid rgba(235,229,217,.08);
   border-radius: 10px;
   padding: 8px;
   box-sizing: border-box;
 }
-button { background: #14b8a6; color: #080c12; font-weight: 600; cursor: pointer; }
+button { background: #6b8f6e; color: #ebe5d9; font-weight: 600; cursor: pointer; }
 .row { display: flex; gap: 8px; }
-.row button { background: #1b2532; color: #e6edf3; }
+.row button { background: #2a332c; color: #ebe5d9; }
 pre { max-height: 120px; overflow: auto; white-space: pre-wrap; font-size: 11px; }
-a { color: #2dd4bf; }
-.suggestion { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 8px; margin: 6px 0; }
+a { color: #6b8f6e; }
+.suggestion { border: 1px solid rgba(235,229,217,.08); border-radius: 10px; padding: 8px; margin: 6px 0; }

@@ -18,9 +18,12 @@ import {
   personaLooksTrans,
   retrieveTraining,
   pricingContextFrom,
+  type LLMProvider,
+  type GenerationInput,
 } from "@canopy/ai";
 import {
   eligibleProducts,
+  collectOperatorRejections,
   followUpPhase,
   playbookFor,
   readFeatureFlags,
@@ -35,6 +38,39 @@ function looksLikeRefusal(text: string): boolean {
   return /\b(no thanks|nah|too expensive|too much|cheaper|discount|maybe later|not buying|pass)\b/i.test(
     text,
   );
+}
+
+async function generateRepliesWithRetry(provider: LLMProvider, input: GenerationInput) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await provider.generateReplies(input);
+    } catch (error) {
+      lastError = error;
+      const code = error instanceof ProviderError ? error.code : "UNKNOWN";
+      if (code === "INVALID_KEY" || code === "UNAUTHORIZED") throw error;
+    }
+  }
+  throw lastError;
+}
+
+function providerFailureMessage(code: string): string {
+  switch (code) {
+    case "TIMEOUT":
+      return "The model took too long. Hit generate again — a page reload is not required.";
+    case "RATE_LIMIT":
+      return "Venice is rate-limiting. Wait a few seconds, then generate again.";
+    case "INVALID_JSON":
+      return "The model returned a messy reply. Hit generate again.";
+    case "UNAVAILABLE":
+      return "Venice was briefly down. Hit generate again.";
+    case "INVALID_KEY":
+      return "The Venice API key was rejected. Check AI provider settings.";
+    case "CIRCUIT_OPEN":
+      return "The provider is cooling down. Generate again in a few seconds.";
+    default:
+      return "The model missed that send. Hit generate again — a reload is not required.";
+  }
 }
 
 export async function recordAnalytics(input: {
@@ -349,12 +385,22 @@ export async function generateForConversation(input: {
   };
 
   try {
-    const classified = await provider.classifyIntent({
-      message: subscriberText,
-      recentContext: recent.map((m) => `${m.authorType}: ${m.body}`).join("\n"),
-      funnelStage: conversation.funnelStage,
-      requestId,
-    });
+    let classified;
+    try {
+      classified = await provider.classifyIntent({
+        message: subscriberText,
+        recentContext: recent.map((m) => `${m.authorType}: ${m.body}`).join("\n"),
+        funnelStage: conversation.funnelStage,
+        requestId,
+      });
+    } catch {
+      classified = {
+        intent: "UNCERTAIN" as const,
+        confidence: 0.3,
+        latencyMs: 0,
+        model: model || "unknown",
+      };
+    }
 
     if (classified.intent === "PRICE_OBJECTION" || looksLikeRefusal(subscriberText)) {
       const open = [...conversation.offers].reverse().find((o) => o.accepted === null);
@@ -413,7 +459,15 @@ export async function generateForConversation(input: {
       ],
     });
 
-    const result = await provider.generateReplies({
+    const discardedRows = await prisma.replyOption.findMany({
+      where: { organizationId: tenant.organizationId, outcome: "DISCARDED" },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: { text: true, internalReason: true },
+    });
+    const operatorRejections = collectOperatorRejections(discardedRows);
+
+    const result = await generateRepliesWithRetry(provider, {
       requestId,
       model: model || "mock-qwen3-32b-uncensored",
       promptVersionId: PROMPT_VERSION,
@@ -472,6 +526,7 @@ export async function generateForConversation(input: {
         purchasedPpvCount,
       ),
       retrievedExamples: examples,
+      operatorRejections,
       toneOverride: input.toneOverride,
       rewriteStyle: input.rewriteStyle,
       pricing,
@@ -699,8 +754,7 @@ export async function generateForConversation(input: {
       failed: true as const,
       mockMode: mode === "mock",
       generationId: generation.id,
-      chatterMessage:
-        "The model provider failed. Write a reply manually. The circuit breaker will recover automatically.",
+      chatterMessage: providerFailureMessage(code),
       flags: [code],
       replyOptions: [],
     };

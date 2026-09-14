@@ -7,6 +7,7 @@ import { annotateModels, VeniceLLMProvider } from "../src/provider/venice.js";
 import { mapProviderError } from "../src/provider/errors.js";
 import { CircuitBreaker } from "../src/provider/circuit-breaker.js";
 import { createLLMProvider } from "../src/provider/factory.js";
+import { composeGenerationPrompt } from "../src/prompts/compose.js";
 import type { GenerationInput } from "../src/provider/types.js";
 
 const persona = {
@@ -143,6 +144,24 @@ describe("structured output", () => {
       suggestedFunnelTransition: null,
     };
     expect(parseGenerationOutput("```json\n" + JSON.stringify(json) + "\n```").success).toBe(true);
+  });
+
+  it("extracts a JSON object wrapped in prose", () => {
+    const json = {
+      intent: "FLIRT",
+      funnelStage: "RAPPORT",
+      explicitnessLevel: "FLIRTY",
+      recommendedAction: "REPLY",
+      replyOptions: [{ text: "hey", tone: "PLAYFUL", internalReason: "rapport" }],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    };
+    const wrapped = `Sure, here you go:\n${JSON.stringify(json)}\nThanks.`;
+    expect(parseGenerationOutput(wrapped).success).toBe(true);
   });
 });
 
@@ -366,14 +385,31 @@ describe("venice error mapping", () => {
   it("maps 429", () => {
     expect(mapProviderError({ status: 429 }, "r1").code).toBe("RATE_LIMIT");
   });
+  it("maps circuit open and dropped sockets", () => {
+    expect(mapProviderError({ code: "CIRCUIT_OPEN", message: "Circuit breaker open" }, "r1").code).toBe(
+      "CIRCUIT_OPEN",
+    );
+    expect(mapProviderError({ code: "ECONNRESET", message: "socket hang up" }, "r1").code).toBe(
+      "UNAVAILABLE",
+    );
+  });
 });
 
 describe("circuit breaker", () => {
-  it("opens after repeated failures", async () => {
+  it("opens after repeated 5xx failures", async () => {
     const breaker = new CircuitBreaker(2, 60_000);
-    await expect(breaker.exec(async () => { throw new Error("x"); })).rejects.toThrow();
-    await expect(breaker.exec(async () => { throw new Error("x"); })).rejects.toThrow();
+    const boom = () => Promise.reject(Object.assign(new Error("x"), { status: 503 }));
+    await expect(breaker.exec(boom)).rejects.toThrow();
+    await expect(breaker.exec(boom)).rejects.toThrow();
     await expect(breaker.exec(async () => "ok")).rejects.toThrow(/Circuit/);
+  });
+
+  it("does not open on timeouts", async () => {
+    const breaker = new CircuitBreaker(2, 60_000);
+    const boom = () => Promise.reject(Object.assign(new Error("timeout"), { code: "TIMEOUT" }));
+    await expect(breaker.exec(boom)).rejects.toThrow();
+    await expect(breaker.exec(boom)).rejects.toThrow();
+    await expect(breaker.exec(async () => "ok")).resolves.toBe("ok");
   });
 });
 
@@ -396,6 +432,22 @@ describe("venice model discovery", () => {
     expect(models[0]?.id).toBe("qwen3-32b-uncensored");
     expect(models[0]?.recommended).toBe(true);
     expect(models[1]?.recommended).toBe(false);
+  });
+});
+
+describe("operator rejection prompt", () => {
+  it("puts reject reasons in the system prompt as bans", () => {
+    const messages = composeGenerationPrompt({
+      ...genInput("hey"),
+      operatorRejections: [
+        { text: "kneel loser", reason: "dont call fans losers" },
+      ],
+    });
+    const system = String(messages[0]?.content ?? "");
+    const user = String(messages[1]?.content ?? "");
+    expect(system).toMatch(/dont call fans losers/);
+    expect(user).toMatch(/operator_rejections/);
+    expect(user).toMatch(/kneel loser/);
   });
 });
 

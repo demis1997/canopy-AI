@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -46,6 +46,35 @@ describe("generation schema", () => {
     const result = generationOutputSchema.safeParse({ intent: "NOPE" });
     expect(result.success).toBe(false);
   });
+
+  it("coerces messy enums, extra options, and string prices", () => {
+    const result = generationOutputSchema.parse({
+      intent: "flirty-chat",
+      funnelStage: "rapport",
+      explicitnessLevel: "suggestive",
+      recommendedAction: "reply-now",
+      replyOptions: [
+        { messages: ["Hey baby", "tell me"], tone: "sassy", internalReason: "ok" },
+        { messages: ["second"], tone: "PLAYFUL", internalReason: "x" },
+        { messages: ["third"], tone: "PLAYFUL", internalReason: "x" },
+        { messages: ["dropped"], tone: "PLAYFUL", internalReason: "x" },
+      ],
+      recommendedProductId: null,
+      approvedPrice: "12",
+      requiresHumanReview: "true",
+      riskFlags: [],
+      memoryUpdates: [],
+      suggestedFunnelTransition: "nope",
+    });
+    expect(result.intent).toBe("UNCERTAIN");
+    expect(result.funnelStage).toBe("RAPPORT");
+    expect(result.recommendedAction).toBe("REPLY");
+    expect(result.replyOptions).toHaveLength(3);
+    expect(result.replyOptions[0]!.tone).toBe("PLAYFUL");
+    expect(result.replyOptions[0]!.messages[0]).toBe("hey baby");
+    expect(result.approvedPrice).toBe(12);
+    expect(result.suggestedFunnelTransition).toBeNull();
+  });
 });
 
 describe("reply bubbles", () => {
@@ -70,6 +99,7 @@ describe("reply bubbles", () => {
       suggestedFunnelTransition: null,
     });
     expect(result.replyOptions[0]!.messages).toHaveLength(3);
+    expect(result.replyOptions[0]!.messages[2]).toBe("i would have a great time on it");
     expect(result.replyOptions[0]!.text).toContain("\n");
   });
 
@@ -100,6 +130,24 @@ describe("reply bubbles", () => {
       "well what i think is that your cock is a good size.",
       "I would have a great time on it",
     ]);
+  });
+});
+
+describe("operator reject reasons", () => {
+  it("parses the typed reason off the stored internal note", () => {
+    expect(parseOperatorRejectReason("Ack then sell · rejected: dont call fans losers")).toBe(
+      "dont call fans losers",
+    );
+  });
+
+  it("keeps unique reasons from discarded drafts", () => {
+    const rows = collectOperatorRejections([
+      { text: "kneel loser", internalReason: "domme · rejected: dont call fans losers" },
+      { text: "earn it loser", internalReason: "tease · rejected: dont call fans losers" },
+      { text: "hi baby", internalReason: "rapport · rejected: too generic" },
+      { text: "ok", internalReason: "no reason stored" },
+    ]);
+    expect(rows.map((r) => r.reason)).toEqual(["dont call fans losers", "too generic"]);
   });
 });
 

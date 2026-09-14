@@ -9,12 +9,41 @@ import {
 } from "./enums.js";
 import { normalizeReplyBubbles } from "./replies.js";
 
+function pickEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  if (typeof value !== "string") return fallback;
+  const v = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  return (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+}
+
+function coercePrice(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const n = Number(value.replace(/[^0-9.]+/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function coerceBool(value: unknown, fallback = true): boolean {
+  if (typeof value === "boolean") return value;
+  if (value === "true" || value === 1) return true;
+  if (value === "false" || value === 0) return false;
+  return fallback;
+}
+
 const replyOptionSchema = z.preprocess(
   (raw) => {
     if (!raw || typeof raw !== "object") return raw;
     const o = raw as Record<string, unknown>;
     const next = normalizeReplyBubbles(o);
-    return { ...o, text: next.text, messages: next.messages };
+    return {
+      ...o,
+      text: next.text,
+      messages: next.messages,
+      tone: pickEnum(o.tone, TONES, "PLAYFUL"),
+      internalReason: typeof o.internalReason === "string" ? o.internalReason : "",
+    };
   },
   z.object({
     text: z.string().min(1).max(2000),
@@ -24,7 +53,29 @@ const replyOptionSchema = z.preprocess(
   }),
 );
 
-export const generationOutputSchema = z.object({
+export const generationOutputSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object") return raw;
+  const o = raw as Record<string, unknown>;
+  const options = Array.isArray(o.replyOptions) ? o.replyOptions.slice(0, 3) : o.replyOptions;
+  const suggested = o.suggestedFunnelTransition;
+  const suggestedOk =
+    typeof suggested === "string" &&
+    (FUNNEL_STAGES as readonly string[]).includes(suggested.trim().toUpperCase().replace(/[\s-]+/g, "_"));
+  return {
+    ...o,
+    intent: pickEnum(o.intent, INTENTS, "UNCERTAIN"),
+    funnelStage: pickEnum(o.funnelStage, FUNNEL_STAGES, "RAPPORT"),
+    explicitnessLevel: pickEnum(o.explicitnessLevel, EXPLICITNESS_LEVELS, "SUGGESTIVE"),
+    recommendedAction: pickEnum(o.recommendedAction, RECOMMENDED_ACTIONS, "REPLY"),
+    replyOptions: options,
+    recommendedProductId: o.recommendedProductId ?? null,
+    approvedPrice: coercePrice(o.approvedPrice),
+    requiresHumanReview: coerceBool(o.requiresHumanReview, true),
+    riskFlags: Array.isArray(o.riskFlags) ? o.riskFlags.map(String) : [],
+    memoryUpdates: Array.isArray(o.memoryUpdates) ? o.memoryUpdates : [],
+    suggestedFunnelTransition: suggestedOk ? pickEnum(suggested, FUNNEL_STAGES, "RAPPORT") : null,
+  };
+}, z.object({
   intent: z.enum(INTENTS),
   funnelStage: z.enum(FUNNEL_STAGES),
   explicitnessLevel: z.enum(EXPLICITNESS_LEVELS),
@@ -44,7 +95,7 @@ export const generationOutputSchema = z.object({
     }),
   ),
   suggestedFunnelTransition: z.enum(FUNNEL_STAGES).nullable(),
-});
+}));
 
 export type GenerationOutput = z.infer<typeof generationOutputSchema>;
 

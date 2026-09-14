@@ -1,10 +1,17 @@
+function isBreakerFailure(error: unknown): boolean {
+  const err = error as { status?: number; code?: string };
+  if (err?.code === "CIRCUIT_OPEN" || err?.code === "TIMEOUT" || err?.code === "INVALID_JSON") return false;
+  if (typeof err?.status === "number" && err.status >= 500) return true;
+  return err?.code === "UNAVAILABLE" || err?.code === "RATE_LIMIT";
+}
+
 export class CircuitBreaker {
   private failures = 0;
   private openedAt: number | null = null;
 
   constructor(
-    private readonly threshold = 5,
-    private readonly resetMs = 60_000,
+    private readonly threshold = 8,
+    private readonly resetMs = 20_000,
   ) {}
 
   get open(): boolean {
@@ -26,9 +33,11 @@ export class CircuitBreaker {
       this.failures = 0;
       return result;
     } catch (error) {
-      this.failures += 1;
-      if (this.failures >= this.threshold) {
-        this.openedAt = Date.now();
+      if (isBreakerFailure(error)) {
+        this.failures += 1;
+        if (this.failures >= this.threshold) {
+          this.openedAt = Date.now();
+        }
       }
       throw error;
     }

@@ -27,8 +27,8 @@ export function readProviderEnv(env: NodeJS.Dict<string> = process.env) {
     baseURL: pick("AI_BASE_URL", "LLM_BASE_URL") || defaults[name] || defaults.venice,
     model: pick("AI_MODEL", "LLM_MODEL"),
     fallbackModel: pick("AI_FALLBACK_MODEL"),
-    timeoutMs: Number(pick("AI_TIMEOUT_MS", "LLM_TIMEOUT_MS") || 30_000),
-    retries: Number(env.LLM_MAX_RETRIES || 2),
+    timeoutMs: Number(pick("AI_TIMEOUT_MS", "LLM_TIMEOUT_MS") || 60_000),
+    retries: Number(env.LLM_MAX_RETRIES || 3),
   };
 }
 

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Suspense } from "react";
+import { CanopyMark } from "@/components/brand/canopy-mark";
+import Link from "next/link";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -34,10 +36,13 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <div className="text-xs uppercase tracking-[0.2em] text-canopy-400">Canopy</div>
-      <h1 className="mt-2 text-2xl font-semibold">Sign in</h1>
-      <p className="mt-1 text-sm text-white/50">Agency operators and assigned chatters only.</p>
+    <Card className="w-full max-w-md bg-ink-950">
+      <Link href="/" className="flex items-center gap-2">
+        <CanopyMark size={28} />
+        <span className="text-[12px] font-medium tracking-[0.22em] text-bone">CANOPY</span>
+      </Link>
+      <h1 className="mt-4 text-2xl font-normal tracking-tight">Sign in</h1>
+      <p className="mt-1 text-sm text-mist">Agency operators and assigned chatters only.</p>
       <form className="mt-6 space-y-4" onSubmit={onSubmit}>
         <div className="space-y-1">
           <Label htmlFor="email">Email</Label>
@@ -53,12 +58,12 @@ function LoginForm() {
             required
           />
         </div>
-        {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="text-sm text-clay">{error}</p> : null}
         <Button className="w-full" disabled={pending} type="submit">
           {pending ? "Signing in…" : "Continue"}
         </Button>
       </form>
-      <p className="mt-4 text-xs text-white/40">
+      <p className="mt-4 text-xs text-mist">
         Demo: chatter1@demo.canopy / CanopyDemo!2026 — all seed users share this password.
       </p>
     </Card>
@@ -67,7 +72,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center bg-charcoal p-6">
       <Suspense>
         <LoginForm />
       </Suspense>

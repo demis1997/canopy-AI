@@ -1,19 +1,19 @@
 body {
-  font: 13px/1.4 ui-sans-serif, system-ui;
-  background: #0b0f10;
-  color: #e8eef0;
+  font: 13px/1.4 Inter, Helvetica Neue, Arial, ui-sans-serif, system-ui;
+  background: #161816;
+  color: #ebe5d9;
   padding: 12px;
 }
 h1 { font-size: 16px; }
-.muted { color: #9aa7ab; }
+.muted { color: #8b9088; }
 input, textarea, button, pre {
   width: 100%;
   margin: 6px 0;
-  background: #171e21;
+  background: #0e100f;
   color: inherit;
-  border: 1px solid #2a353a;
+  border: 1px solid #2a332c;
   border-radius: 6px;
   padding: 8px;
 }
-button { background: #14b8a6; color: #0b0f10; font-weight: 600; cursor: pointer; }
+button { background: #6b8f6e; color: #ebe5d9; font-weight: 600; cursor: pointer; }
 pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }

@@ -119,6 +119,7 @@ export type GenerationInput = {
     remaining: string[];
   } | null;
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
+  operatorRejections?: { text: string; reason: string }[];
 };
 
 export type GenerationResult = {

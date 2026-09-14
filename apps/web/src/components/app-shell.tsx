@@ -24,6 +24,7 @@ import {
   Database,
   Bot,
 } from "lucide-react";
+import { CanopyMark } from "@/components/brand/canopy-mark";
 import { cn } from "@/lib/utils";
 import type { Role } from "@canopy/shared";
 import { hasPermission } from "@canopy/shared";
@@ -120,21 +121,19 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-[rgb(8,12,18)]">
+    <div className="flex min-h-screen bg-charcoal">
       <aside
         className={cn(
-          "sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/[0.06] bg-[rgb(10,15,22)]/95 backdrop-blur-sm transition-[width]",
+          "sticky top-0 flex h-screen shrink-0 flex-col border-r border-white/[0.06] bg-ink-950/95 backdrop-blur-sm transition-[width]",
           collapsed ? "w-[72px]" : "w-[248px]",
         )}
       >
         <div className={cn("flex items-center gap-2 px-3 py-4", collapsed && "justify-center")}>
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-canopy-500/15 text-xs font-semibold text-canopy-300">
-            C
-          </div>
+          <CanopyMark size={28} />
           {collapsed ? null : (
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">Canopy</div>
-              <div className="truncate text-[11px] text-white/35">
+              <div className="truncate text-[12px] font-medium tracking-[0.18em] text-bone">CANOPY</div>
+              <div className="truncate text-[11px] text-mist">
                 {workspace.name}
                 {workspace.isDemo ? " · DEMO" : ""}
               </div>
@@ -173,7 +172,7 @@ export function AppShell({
                         className={cn(
                           "flex items-center gap-2 rounded-[10px] px-2.5 py-2 text-sm text-white/60 transition hover:bg-white/[0.04] hover:text-white",
                           collapsed && "justify-center px-0",
-                          active && "bg-canopy-500/10 text-canopy-200",
+                          active && "bg-leaf/10 text-bone",
                         )}
                       >
                         <Icon size={16} />
@@ -198,7 +197,7 @@ export function AppShell({
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/[0.06] bg-[rgb(8,12,18)]/90 px-4 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/[0.06] bg-charcoal/90 px-4 backdrop-blur md:px-6">
           <form action="/conversations" className="relative min-w-0 flex-1 max-w-xl">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
             <input
@@ -206,7 +205,7 @@ export function AppShell({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search conversations"
-              className="h-9 w-full rounded-[10px] border border-white/[0.06] bg-white/[0.03] pl-9 pr-3 text-sm outline-none placeholder:text-white/30 focus:border-canopy-500/40"
+              className="h-9 w-full rounded-[10px] border border-white/[0.06] bg-white/[0.03] pl-9 pr-3 text-sm outline-none placeholder:text-white/30 focus:border-leaf/40"
             />
           </form>
           <Link
@@ -214,7 +213,7 @@ export function AppShell({
             className="hidden items-center gap-1.5 rounded-full border border-white/[0.06] px-2.5 py-1 text-[11px] text-white/50 md:inline-flex"
             title="Extension status"
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", extensionConnected ? "bg-canopy-400" : "bg-amber-400")} />
+            <span className={cn("h-1.5 w-1.5 rounded-full", extensionConnected ? "bg-sunfleck" : "bg-brass")} />
             {extensionConnected ? "Extension connected" : "Extension"}
           </Link>
           <Link href="/escalations" className="relative rounded-[10px] p-2 text-white/50 hover:bg-white/[0.04]">

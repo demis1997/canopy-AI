@@ -5,10 +5,18 @@ function stripFences(text: string): string {
   return text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
 }
 
+export function extractJsonObject(text: string): string {
+  const cleaned = stripFences(text);
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) return cleaned.slice(start, end + 1);
+  return cleaned;
+}
+
 export function parseGenerationOutput(
   text: string,
 ): { success: true; data: GenerationOutput } | { success: false; error: string } {
-  const cleaned = stripFences(text);
+  const cleaned = extractJsonObject(text);
   try {
     const json = JSON.parse(cleaned);
     const parsed = generationOutputSchema.safeParse(json);

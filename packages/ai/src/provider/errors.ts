@@ -26,8 +26,19 @@ export function mapProviderError(error: unknown, requestId: string): ProviderErr
     message?: string;
     name?: string;
   };
-  if (err?.name === "AbortError" || err?.code === "ETIMEDOUT") {
+  if (err?.code === "CIRCUIT_OPEN" || /circuit breaker/i.test(err?.message ?? "")) {
+    return new ProviderError("Provider cooling down", "CIRCUIT_OPEN", 503, requestId);
+  }
+  if (err?.name === "AbortError" || err?.code === "ETIMEDOUT" || err?.code === "UND_ERR_CONNECT_TIMEOUT") {
     return new ProviderError("Provider timed out", "TIMEOUT", 408, requestId);
+  }
+  if (
+    err?.code === "ECONNRESET" ||
+    err?.code === "ECONNREFUSED" ||
+    err?.code === "ENOTFOUND" ||
+    /fetch failed|network|socket/i.test(err?.message ?? "")
+  ) {
+    return new ProviderError("Provider unavailable", "UNAVAILABLE", 503, requestId);
   }
   if (err?.status === 401 || err?.status === 403) {
     return new ProviderError("Invalid or unauthorized API key", "INVALID_KEY", err.status, requestId);

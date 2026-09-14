@@ -3,15 +3,15 @@ import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canopy-400/70",
+  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-leaf/70",
   {
     variants: {
       variant: {
-        default: "bg-canopy-500 text-ink-950 hover:bg-canopy-400",
-        secondary: "bg-ink-700 text-white hover:bg-ink-700/80",
+        default: "bg-leaf text-bone hover:bg-forest",
+        secondary: "bg-bark text-bone hover:bg-pine",
         ghost: "hover:bg-white/5",
-        outline: "border border-white/10 hover:bg-white/5",
-        danger: "bg-red-500/90 text-white hover:bg-red-500",
+        outline: "border border-white/10 text-bone hover:bg-white/5",
+        danger: "bg-clay text-bone hover:bg-clay/90",
       },
       size: {
         default: "h-9 px-3",

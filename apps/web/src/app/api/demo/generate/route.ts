@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     })),
     20,
     Boolean(body.concessionAllowed),
-    { creatorId: body.creatorId, purchasedProductIds: body.purchasedProductIds },
+    { creatorId: body.creatorId, purchasedProductIds: body.purchasedProductIds, subscriberText: body.subscriberMessage },
   );
   const schemaCheck = generationOutputSchema.safeParse(validated.output);
   const product = eligible.find((p) => p.id === validated.output.recommendedProductId);

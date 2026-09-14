@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -152,9 +152,12 @@ describe("operator reject reasons", () => {
 
   it("flags meet-speak including leetspeak", () => {
     expect(containsMeetSpeak("wanna meetup later")).toBe(true);
+    expect(containsMeetSpeak("you're asking about meetups?")).toBe(true);
     expect(containsMeetSpeak("m33tup?")).toBe(true);
     expect(containsMeetSpeak("nahh i dont do irl babe")).toBe(false);
     expect(containsMeetSpeak(scrubMeetSpeak("lets meet up"))).toBe(false);
+    expect(looksLikeOfflineAsk("Do you do meetups with fans or not?")).toBe(true);
+    expect(looksLikePetNamePushback("Why are you calling me a good boy?")).toBe(true);
   });
 });
 

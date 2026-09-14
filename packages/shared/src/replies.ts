@@ -2,12 +2,31 @@ export const MAX_REPLY_BUBBLES = 3;
 
 /** Meet / meetup / m33tup and close spellings — never appear in outbound copy. */
 export const MEET_SPEAK_RE =
-  /\b(m+[e3]+e*[e3]*t+(?:[\s\-_.]*u+p+s?|ings?)?|m33t(?:up|ing)?s?)\b/i;
+  /\b(?:meet(?:ings?|[\s\-_.]*ups?)?|m33t(?:[\s\-_.]*ups?|ings?)?|m+[e3]{2,}t+(?:ings?|[\s\-_.]*ups?)?)\b/i;
 
 export const TOS_OFFLINE_FALLBACK = [
   "nahh i dont do irl babe its against tos",
   "i spent too long building this page to get banned over a risk like that",
-  "lets keep it here tell me what u wanna unlock",
+  "lets keep it here tell me what u wanna chat about",
+].join("\n");
+
+export const TOS_OFFLINE_VARIANTS = [
+  TOS_OFFLINE_FALLBACK,
+  [
+    "heellooo noo thats against tos",
+    "i cant risk this account after all this time",
+    "lets stay on here tell me what u wanna see",
+  ].join("\n"),
+  [
+    "i dont do irl its against tos 🤭",
+    "built this page too long to get banned",
+    "keep it on here what do u wanna talk about",
+  ].join("\n"),
+];
+
+export const PET_NAME_PUSHBACK_FALLBACK = [
+  "oops my bad wont do that",
+  "what do u wanna talk about",
 ].join("\n");
 
 function splitSentences(line: string): string[] {
@@ -80,9 +99,22 @@ export function collectOperatorRejections(
 }
 
 export function containsMeetSpeak(text: string): boolean {
+  MEET_SPEAK_RE.lastIndex = 0;
   return MEET_SPEAK_RE.test(text);
 }
 
 export function scrubMeetSpeak(text: string): string {
   return containsMeetSpeak(text) ? TOS_OFFLINE_FALLBACK : text;
+}
+
+export function looksLikeOfflineAsk(text: string): boolean {
+  return /\b(meet|meetup|meetups|meeting|m33t|m33tup|in person|\birl\b|come over|hotel|whats?app|telegram|kik)\b/i.test(
+    text,
+  );
+}
+
+export function looksLikePetNamePushback(text: string): boolean {
+  return /\b(why (are you|are u|u) calling me|don'?t call me|dont call me|i'?m not (your |ur )?(good boy|loser|baby|daddy))\b/i.test(
+    text,
+  );
 }

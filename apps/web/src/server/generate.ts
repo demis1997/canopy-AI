@@ -636,7 +636,7 @@ export async function generateForConversation(input: {
       })),
       10,
       pricing.concessionAllowed,
-      { creatorId: conversation.creatorId, purchasedProductIds },
+      { creatorId: conversation.creatorId, purchasedProductIds, subscriberText },
     );
 
     const nextFunnel = resolveFunnel({

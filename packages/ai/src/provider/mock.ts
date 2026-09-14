@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -62,10 +62,6 @@ function asOption(
     messages[messages.length - 1] = withHook(messages[messages.length - 1]!, reason.length);
   }
   return { text: messages.join("\n"), tone, internalReason: reason };
-}
-
-function looksLikeOfflineAsk(text: string): boolean {
-  return /\b(meet|meetup|m33t|in person|\birl\b|come over|hotel|whats?app|telegram)\b/i.test(text);
 }
 
 function ackFan(last: string): string {

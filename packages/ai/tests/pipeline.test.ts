@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluateSafety, containsPromptInjection } from "../src/safety/index.js";
-import { parseGenerationOutput, validateProductsAndPrices } from "../src/pipeline/validate-output.js";
+import { parseGenerationOutput, validateProductsAndPrices, applyReplyGuards } from "../src/pipeline/validate-output.js";
 import { containsMeetSpeak } from "@canopy/shared";
 import { MockLLMProvider } from "../src/provider/mock.js";
 import { concessionAllowedFrom, resolveOfferPrice } from "../src/pricing/concession.js";
@@ -184,6 +184,67 @@ describe("structured output", () => {
     if (!parsed.success) return;
     expect(containsMeetSpeak(parsed.data.replyOptions[0]!.text)).toBe(false);
     expect(parsed.data.replyOptions[0]!.text.toLowerCase()).toMatch(/tos/);
+  });
+
+  it("replaces a meetup echo and a random product pitch when the fan asked irl", () => {
+    const json = {
+      intent: "FLIRT" as const,
+      funnelStage: "RAPPORT" as const,
+      explicitnessLevel: "FLIRTY" as const,
+      recommendedAction: "PRESENT_OFFER" as const,
+      replyOptions: [
+        {
+          text: "you're asking about meetups?\nkeep it in the app good boy\nshower set $40",
+          tone: "PLAYFUL" as const,
+          internalReason: "bad",
+        },
+      ],
+      recommendedProductId: "prod_1",
+      approvedPrice: 40,
+      requiresHumanReview: true,
+      riskFlags: [] as string[],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    };
+    const result = validateProductsAndPrices(json, [{ id: "prod_1", standardPrice: 40, minimumPrice: 35, available: true }], 10, false, {
+      subscriberText: "Do you do meetups with fans or not?",
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(containsMeetSpeak(blob)).toBe(false);
+    expect(blob).not.toMatch(/good boy/);
+    expect(blob).not.toMatch(/shower set/);
+    expect(blob).toMatch(/tos|banned/);
+    expect(result.output.recommendedProductId).toBeNull();
+  });
+
+  it("drops a random pitch when he calls out a pet name", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "FLIRT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "PRESENT_OFFER",
+        replyOptions: [
+          {
+            text: "irl fans? keep it fun\nshower set $40 dont make me blush",
+            messages: ["irl fans? keep it fun", "shower set $40 dont make me blush"],
+            tone: "PLAYFUL",
+            internalReason: "bad",
+          },
+        ],
+        recommendedProductId: "prod_1",
+        approvedPrice: 40,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Why are you calling me a good boy?",
+    );
+    const blob = guarded.replyOptions[0]!.text.toLowerCase();
+    expect(blob).not.toMatch(/good boy/);
+    expect(blob).not.toMatch(/shower set/);
+    expect(guarded.recommendedProductId).toBeNull();
   });
 });
 

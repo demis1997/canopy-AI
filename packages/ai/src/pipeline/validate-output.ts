@@ -5,8 +5,11 @@ import {
   defaultSecondPrice,
   FIRST_PPV_MAX_DOLLARS,
   containsMeetSpeak,
+  looksLikeOfflineAsk,
+  looksLikePetNamePushback,
   normalizeReplyBubbles,
-  TOS_OFFLINE_FALLBACK,
+  TOS_OFFLINE_VARIANTS,
+  PET_NAME_PUSHBACK_FALLBACK,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -37,24 +40,39 @@ export function parseGenerationOutput(
   }
 }
 
+function replaceAllOptions(output: GenerationOutput, texts: string[]): GenerationOutput {
+  const options = output.replyOptions.map((o, i) => {
+    const cleaned = normalizeReplyBubbles({ text: texts[i] ?? texts[0]! });
+    return {
+      ...o,
+      text: cleaned.text,
+      messages: cleaned.messages,
+      internalReason: "guarded reply — no invented pitch or banned wording",
+    };
+  });
+  return {
+    ...output,
+    replyOptions: options,
+    recommendedProductId: null,
+    approvedPrice: null,
+  };
+}
+
 function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
   if (!output.replyOptions.some((o) => containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak))) {
     return output;
   }
-  const cleaned = normalizeReplyBubbles({ text: TOS_OFFLINE_FALLBACK });
-  return {
-    ...output,
-    replyOptions: output.replyOptions.map((o) =>
-      containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak)
-        ? {
-            ...o,
-            text: cleaned.text,
-            messages: cleaned.messages,
-            internalReason: `${o.internalReason} · tos offline refusal`,
-          }
-        : o,
-    ),
-  };
+  return replaceAllOptions(output, TOS_OFFLINE_VARIANTS);
+}
+
+export function applyReplyGuards(output: GenerationOutput, subscriberText = ""): GenerationOutput {
+  let next = scrubOfflineAsks(output);
+  if (looksLikeOfflineAsk(subscriberText)) {
+    next = replaceAllOptions(next, TOS_OFFLINE_VARIANTS);
+  } else if (looksLikePetNamePushback(subscriberText)) {
+    next = replaceAllOptions(next, [PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK]);
+  }
+  return next;
 }
 
 export function validateProductsAndPrices(
@@ -72,10 +90,10 @@ export function validateProductsAndPrices(
   }[],
   discountLimitPercent = 10,
   concessionAllowed = false,
-  opts?: { creatorId?: string; purchasedProductIds?: string[] },
+  opts?: { creatorId?: string; purchasedProductIds?: string[]; subscriberText?: string },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
-  let next = scrubOfflineAsks({ ...output });
+  let next = applyReplyGuards({ ...output }, opts?.subscriberText ?? "");
 
   if (next.recommendedProductId) {
     const product = catalog.find((p) => p.id === next.recommendedProductId);

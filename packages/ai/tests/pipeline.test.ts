@@ -347,7 +347,7 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/you'?re a/);
   });
 
-  it("says ofcourse when he asks if she is real", () => {
+  it("flips are-you-real instead of dumping ofcourse", () => {
     const guarded = applyReplyGuards(
       {
         intent: "CASUAL_CHAT",
@@ -372,8 +372,36 @@ describe("structured output", () => {
       "Are you real?",
     );
     const blob = guarded.replyOptions[0]!.text.toLowerCase();
-    expect(blob).toMatch(/^ofcourse/);
+    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
     expect(blob).not.toMatch(/you'?re a what|never said/);
+    expect(blob).not.toMatch(/^ofcourse/);
+  });
+
+  it("leaves a strong are-you-real guilt trip alone", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "u have seen me online tho\ni havent even seen u\nwhy would i prove myself to a stranger",
+            messages: ["u have seen me online tho", "i havent even seen u", "why would i prove myself to a stranger"],
+            tone: "DIRECT",
+            internalReason: "good",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Are you real?",
+    );
+    expect(guarded.replyOptions[0]!.text.toLowerCase()).toMatch(/seen me online/);
   });
 
   it("owns the mixup when he calls out an invented fact about him", () => {
@@ -604,7 +632,7 @@ describe("structured output", () => {
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
     expect(blob).not.toMatch(/refund/);
-    expect(blob).toMatch(/ofcourse|real/);
+    expect(blob).toMatch(/prove|stranger|seen me|believe|verification|real/);
   });
 
   it("does not confirm she is a bot", () => {
@@ -632,8 +660,7 @@ describe("structured output", () => {
       "What do you mean of course? So you are a bot?",
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/^ofcourse/);
-    expect(blob).toMatch(/real/);
+    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
     expect(blob).not.toMatch(/ofcourse i am babe|ready to tease you/);
   });
 
@@ -961,10 +988,12 @@ describe("mock provider", () => {
     expect(blob).not.toMatch(/you'?re a/);
   });
 
-  it("says ofcourse when asked if she is real", async () => {
+  it("flips are-you-real instead of dumping ofcourse", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("Are you real?"));
-    expect(result.output.replyOptions[0]!.text.toLowerCase()).toMatch(/^ofcourse/);
+    const blob = result.output.replyOptions[0]!.text.toLowerCase();
+    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
+    expect(blob).not.toMatch(/^ofcourse/);
   });
 });
 

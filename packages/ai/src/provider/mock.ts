@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, ARE_YOU_REAL_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -157,9 +157,9 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   }
 
   if (looksLikeAreYouReal(last) || looksLikeWhatsWrongFollowup(last)) {
-    return rotateVariants(ARE_YOU_REAL_VARIANTS, input.requestId).slice(0, 3).map((text, i) =>
-      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "He asked if she is real"),
-    );
+    return rotateVariants(areYouRealReplyVariants(Boolean(input.fanSentPics)), input.requestId)
+      .slice(0, 3)
+      .map((text, i) => asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "Flip the are-you-real ask"));
   }
 
   if (looksLikePetNamePushback(last)) {

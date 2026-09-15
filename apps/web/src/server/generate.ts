@@ -30,6 +30,7 @@ import {
   inferFanIntake,
   inferThreadLessons,
   mergeThreadLessonMemory,
+  fanSentMedia,
   looksLikePacingPushback,
   playbookFor,
   readFeatureFlags,
@@ -493,6 +494,9 @@ export async function generateForConversation(input: {
       inferThreadLessons(recent.map((m) => ({ authorType: m.authorType, body: m.body }))),
       memories.find((m) => m.key === "thread_lessons")?.value,
     );
+    const fanHasSentPics = fanSentMedia(
+      recent.map((m) => ({ authorType: m.authorType, body: m.body, attachments: m.attachments })),
+    );
     const operatorRejections = [
       ...collectOperatorRejections(
         discardedRows.map((row) => ({
@@ -592,6 +596,7 @@ export async function generateForConversation(input: {
       retrievedExamples: examples,
       operatorRejections,
       threadLessons: threadLessons.bans,
+      fanSentPics: fanHasSentPics,
       toneOverride: input.toneOverride,
       rewriteStyle: input.rewriteStyle,
       pricing,
@@ -729,6 +734,7 @@ export async function generateForConversation(input: {
         transPersona,
         threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
         threadLessons,
+        fanSentPics: fanHasSentPics,
       },
     );
 

@@ -389,6 +389,6 @@ describe("thread lessons", () => {
       { authorType: "SUBSCRIBER", body: "i'm so hard for you" },
     ]);
     expect(lessons.answeredAreYouReal).toBe(true);
-    expect(lessons.bans.join(" ")).toMatch(/sext back|ofcourse/i);
+    expect(lessons.bans.join(" ")).toMatch(/sext back|speech/i);
   });
 });

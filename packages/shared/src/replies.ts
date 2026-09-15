@@ -179,10 +179,32 @@ export const RAPPORT_ONLY_VARIANTS = [
 ];
 
 export const ARE_YOU_REAL_VARIANTS = [
-  ["ofcourse im real", "not a bot"].join("\n"),
-  ["ofcourse", "very real over here"].join("\n"),
-  ["ofcourse i am real", "why would i be fake"].join("\n"),
+  ["i could prove it rn", "i just dont see why i would for a stranger", "enough ppl already believe me"].join("\n"),
+  ["if u dont wanna keep talking thats fine", "im not doing a verification for someone i dont know", "plenty of fans know im real"].join("\n"),
+  ["thats a weird ask", "im not proving myself lol", "stay or dont"].join("\n"),
 ];
+
+export const ARE_YOU_REAL_NO_PIC_VARIANTS = [
+  ["u have seen me online tho", "i havent even seen u", "why would i prove myself to a stranger"].join("\n"),
+  ["funny", "youve been looking at me and i got nothing from u", "im not proving myself"].join("\n"),
+  ["youve seen me", "i havent seen you", "i dont owe a stranger a verification"].join("\n"),
+];
+
+export function areYouRealReplyVariants(fanSentPics = false): string[] {
+  return fanSentPics ? ARE_YOU_REAL_VARIANTS : [...ARE_YOU_REAL_NO_PIC_VARIANTS, ...ARE_YOU_REAL_VARIANTS];
+}
+
+export function looksLikeWeakAreYouReal(text: string): boolean {
+  const t = text.toLowerCase();
+  if (looksLikeRefundTalk(t)) return true;
+  if (/\b(you'?re a what|never said you'?re|ready to tease you)\b/i.test(t)) return true;
+  if (/\bunlock|this ppv\b/i.test(t)) return true;
+  if (/\bofcourse i am\b/i.test(t) && !/\breal\b/.test(t)) return true;
+  const hasGuilt = /\b(prove|stranger|seen me|havent seen|believe me|verification)\b/i.test(t);
+  if (/\bofcourse\b/i.test(t) && !hasGuilt) return true;
+  const words = t.split(/\s+/).filter(Boolean).length;
+  return words > 0 && words < 6 && !hasGuilt;
+}
 
 export const PET_NAME_PUSHBACK_VARIANTS = [
   ["oops my bad", "wont call u that"].join("\n"),
@@ -219,6 +241,20 @@ export const INVENTED_ABOUT_HIM_VARIANTS = [
 export function looksLikeAgeAsk(text: string): boolean {
   if (/\bhow old (do i|am i|i (have|gotta|got to|need to) be)\b/i.test(text)) return false;
   return /\bhow old (are you|are u|r u)\b/i.test(text) || /\bwhat(?:'?s| is) (?:your|ur) age\b/i.test(text);
+}
+
+export function fanSentMedia(
+  messages: { authorType?: string; body: string; attachments?: unknown }[],
+): boolean {
+  return messages.some((message) => {
+    if ((message.authorType ?? "SUBSCRIBER") !== "SUBSCRIBER") return false;
+    if (/\b(sent (a |you )?(pic|photo|selfie|vid)|here(?:'| i)?s (a |my )?(pic|photo|selfie)|\[(photo|image|video|pic)\])\b/i.test(message.body)) {
+      return true;
+    }
+    const attachments = message.attachments;
+    if (!Array.isArray(attachments) || attachments.length === 0) return false;
+    return /photo|image|pic|video|selfie|media/.test(JSON.stringify(attachments).toLowerCase());
+  });
 }
 
 export function looksLikeAreYouReal(text: string): boolean {

@@ -43,7 +43,9 @@ export function inferThreadLessons(messages: { authorType: string; body: string 
       if (looksLikeInventedAboutHimCallout(body) || /from the beach|beach fan/i.test(body)) bannedBeach = true;
       if (looksLikeTeaseAsk(body)) heWantsTease = true;
     } else {
-      if (looksLikeStaleAreYouReal(body)) answeredAreYouReal = true;
+      if (looksLikeStaleAreYouReal(body) || /\b(prove myself|seen me online|havent seen u|complete stranger)\b/i.test(body)) {
+        answeredAreYouReal = true;
+      }
       if (looksLikeRefundTalk(body)) bannedRefunds = true;
       if (looksLikeInventedBeach(body)) bannedBeach = true;
       if (looksLikeTeaseAsk(body) || looksLikeMetaTease(body)) heWantsTease = heWantsTease || looksLikeMetaTease(body);
@@ -53,7 +55,7 @@ export function inferThreadLessons(messages: { authorType: string; body: string 
   const bans: string[] = [];
   if (answeredAreYouReal) {
     bans.push(
-      "Already answered are-you-real. Do not say ofcourse / im real / not a bot unless he asks again THIS turn. If he is flirting or sexting now, sext back.",
+      "Already answered are-you-real. Do not rerun that speech unless he asks again THIS turn. If he is flirting or sexting now, sext back.",
     );
   }
   if (bannedPetNames) {

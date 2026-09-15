@@ -44,7 +44,8 @@ import {
   PET_NAME_PUSHBACK_VARIANTS,
   ABOUT_HIM_VARIANTS,
   RAPPORT_ONLY_VARIANTS,
-  ARE_YOU_REAL_VARIANTS,
+  areYouRealReplyVariants,
+  looksLikeWeakAreYouReal,
   INVENTED_ABOUT_HIM_VARIANTS,
   SOFT_TEASE_VARIANTS,
   REFUND_CALLOUT_VARIANTS,
@@ -141,6 +142,7 @@ export type ReplyGuardExtras = {
     bannedBeach?: boolean;
     heWantsTease?: boolean;
   };
+  fanSentPics?: boolean;
 };
 
 export function applyReplyGuards(
@@ -165,7 +167,8 @@ export function applyReplyGuards(
     next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
     guarded = true;
   } else if (looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText)) {
-    next = swap(next, ARE_YOU_REAL_VARIANTS);
+    const weak = next.replyOptions.some((o) => looksLikeWeakAreYouReal(o.text) || o.messages.some(looksLikeWeakAreYouReal));
+    if (weak) next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
     guarded = true;
   } else if (looksLikeRefundCallout(subscriberText)) {
     next = swap(next, REFUND_CALLOUT_VARIANTS);
@@ -225,7 +228,12 @@ export function applyReplyGuards(
     !looksLikeRefundCallout(subscriberText) &&
     next.replyOptions.some((o) => looksLikeRefundTalk(o.text) || o.messages.some(looksLikeRefundTalk))
   ) {
-    next = swap(next, looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText) ? ARE_YOU_REAL_VARIANTS : REFUND_CALLOUT_VARIANTS);
+    next = swap(
+      next,
+      looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText)
+        ? areYouRealReplyVariants(Boolean(extras?.fanSentPics))
+        : REFUND_CALLOUT_VARIANTS,
+    );
     guarded = true;
   }
 
@@ -342,6 +350,7 @@ export function validateProductsAndPrices(
     transPersona?: boolean;
     threadBannedPetNames?: boolean;
     threadLessons?: ReplyGuardExtras["threadLessons"];
+    fanSentPics?: boolean;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -361,6 +370,7 @@ export function validateProductsAndPrices(
     transPersona: opts?.transPersona,
     threadBannedPetNames: opts?.threadBannedPetNames,
     threadLessons: opts?.threadLessons,
+    fanSentPics: opts?.fanSentPics,
   });
 
   if (next.recommendedProductId) {

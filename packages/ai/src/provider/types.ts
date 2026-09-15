@@ -122,6 +122,7 @@ export type GenerationInput = {
   operatorRejections?: { text: string; reason: string; conversationId?: string }[];
   fanIntakeBeat?: string;
   threadLessons?: string[];
+  fanSentPics?: boolean;
 };
 
 export type GenerationResult = {

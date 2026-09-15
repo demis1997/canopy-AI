@@ -310,10 +310,99 @@ describe("structured output", () => {
         memoryUpdates: [],
         suggestedFunnelTransition: null,
       },
-      "Yeah. How old are you?",
+      "hey",
     );
     expect(guarded.replyOptions[0]!.text.toLowerCase()).not.toMatch(/good boy/);
-    expect(guarded.replyOptions[0]!.text).toMatch(/💋💋/);
+    expect(guarded.replyOptions[0]!.text).toMatch(/💋/);
+    expect(guarded.replyOptions[0]!.text).not.toMatch(/💋💋/);
+  });
+
+  it("answers her own age instead of projecting it onto him", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh? 28, huh? you're a 😏😏",
+            messages: ["oh? 28, huh? you're a 😏😏"],
+            tone: "PLAYFUL",
+            internalReason: "bad invert",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "How old are you?",
+      { creatorAge: 28 },
+    );
+    const blob = guarded.replyOptions[0]!.text.toLowerCase();
+    expect(blob).toMatch(/\bim 28\b|heellooo im 28/);
+    expect(blob).not.toMatch(/you'?re a/);
+  });
+
+  it("says ofcourse when he asks if she is real", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh? you're a what? 😏😏\nand you never said you're 28, huh?",
+            messages: ["oh? you're a what? 😏😏", "and you never said you're 28, huh?"],
+            tone: "PLAYFUL",
+            internalReason: "stale",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Are you real?",
+    );
+    const blob = guarded.replyOptions[0]!.text.toLowerCase();
+    expect(blob).toMatch(/^ofcourse/);
+    expect(blob).not.toMatch(/you'?re a what|never said/);
+  });
+
+  it("owns the mixup when he calls out an invented fact about him", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh? you're a what?\nand you never said you're 28, huh?",
+            messages: ["oh? you're a what?", "and you never said you're 28, huh?"],
+            tone: "PLAYFUL",
+            internalReason: "echo",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "I'm a what? And I never said I'm 28",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/my bad|mixed it up|talking about me/);
+    expect(blob).not.toMatch(/never said you'?re 28/);
   });
 
   it("answers when he asks what she wants to know about him", () => {
@@ -523,6 +612,23 @@ describe("mock provider", () => {
     const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
     expect(blob).not.toMatch(/curious about me/);
     expect(blob).toMatch(/lots|fun|told a girl/);
+  });
+
+  it("answers her age from the persona", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("How old are you?"),
+      persona: { ...persona, biography: "Fictional 28-year-old fitness creator" },
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/\bim 28\b|heellooo im 28/);
+    expect(blob).not.toMatch(/you'?re a/);
+  });
+
+  it("says ofcourse when asked if she is real", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("Are you real?"));
+    expect(result.output.replyOptions[0]!.text.toLowerCase()).toMatch(/^ofcourse/);
   });
 });
 

@@ -9,18 +9,23 @@ import {
   looksLikePetNamePushback,
   looksLikeFanInvitesQuestions,
   looksLikeInvertedCuriosity,
+  looksLikeAgeAsk,
+  looksLikeAreYouReal,
+  looksLikeInventedAboutHimCallout,
   petNamesAllowed,
   stripUnauthorizedPetNames,
   wantsNoPitch,
   bannedCatalogNames,
   catalogDisplayName,
   stripCatalogMentions,
-  doubleOneTrailingEmoji,
+  ageReplyVariants,
   normalizeReplyBubbles,
   TOS_OFFLINE_VARIANTS,
   PET_NAME_PUSHBACK_FALLBACK,
   ABOUT_HIM_VARIANTS,
   RAPPORT_ONLY_VARIANTS,
+  ARE_YOU_REAL_VARIANTS,
+  INVENTED_ABOUT_HIM_VARIANTS,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -91,6 +96,7 @@ export type ReplyGuardExtras = {
   catalog?: { id: string; name?: string }[];
   conversationId?: string;
   dominance?: string;
+  creatorAge?: number | null;
 };
 
 export function applyReplyGuards(
@@ -101,8 +107,14 @@ export function applyReplyGuards(
   let next = scrubOfflineAsks(output);
   if (looksLikeOfflineAsk(subscriberText)) {
     next = replaceAllOptions(next, TOS_OFFLINE_VARIANTS);
+  } else if (looksLikeAreYouReal(subscriberText)) {
+    next = replaceAllOptions(next, ARE_YOU_REAL_VARIANTS);
   } else if (looksLikePetNamePushback(subscriberText)) {
     next = replaceAllOptions(next, [PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK]);
+  } else if (looksLikeAgeAsk(subscriberText)) {
+    next = replaceAllOptions(next, ageReplyVariants(extras?.creatorAge ?? null));
+  } else if (looksLikeInventedAboutHimCallout(subscriberText)) {
+    next = replaceAllOptions(next, INVENTED_ABOUT_HIM_VARIANTS);
   } else if (
     looksLikeFanInvitesQuestions(subscriberText) &&
     next.replyOptions.some(
@@ -146,7 +158,7 @@ export function applyReplyGuards(
     }
   }
 
-  return mapOptionTexts(next, (text) => doubleOneTrailingEmoji(text));
+  return next;
 }
 
 export function validateProductsAndPrices(
@@ -172,6 +184,7 @@ export function validateProductsAndPrices(
     rejections?: OperatorRejection[];
     conversationId?: string;
     dominance?: string;
+    creatorAge?: number | null;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -180,6 +193,7 @@ export function validateProductsAndPrices(
     catalog,
     conversationId: opts?.conversationId,
     dominance: opts?.dominance,
+    creatorAge: opts?.creatorAge,
   });
 
   if (next.recommendedProductId) {

@@ -24,6 +24,7 @@ import {
 import {
   eligibleProducts,
   collectOperatorRejections,
+  creatorAgeFromText,
   followUpPhase,
   playbookFor,
   readFeatureFlags,
@@ -183,11 +184,15 @@ export async function generateForConversation(input: {
     throw new Error("Organization is suspended");
   }
 
-  const latest = await prisma.message.findFirst({
-    where: { conversationId: conversation.id, organizationId: tenant.organizationId },
+  const latestFan = await prisma.message.findFirst({
+    where: {
+      conversationId: conversation.id,
+      organizationId: tenant.organizationId,
+      authorType: "SUBSCRIBER",
+    },
     orderBy: { createdAt: "desc" },
   });
-  const subscriberText = latest?.authorType === "SUBSCRIBER" ? latest.body : "";
+  const subscriberText = latestFan?.body ?? "";
 
   await recordAnalytics({
     organizationId: tenant.organizationId,
@@ -654,6 +659,7 @@ export async function generateForConversation(input: {
         rejections: operatorRejections,
         conversationId: conversation.id,
         dominance: fanNote?.dominance,
+        creatorAge: creatorAgeFromText(persona.biography, persona.authorisedBackstory),
       },
     );
 

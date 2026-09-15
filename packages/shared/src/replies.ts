@@ -125,16 +125,66 @@ export function looksLikePetNamePushback(text: string): boolean {
 }
 
 export const ABOUT_HIM_VARIANTS = [
-  ["mmm lots 😏😏", "start with what u do for fun"].join("\n"),
+  ["mmm lots", "start with what u do for fun"].join("\n"),
   ["ok then", "tell me something u never told a girl on here"].join("\n"),
   ["i wanna know the fun stuff", "what do u do when ure bored"].join("\n"),
 ];
 
 export const RAPPORT_ONLY_VARIANTS = [
-  ["mmm yeah keep talking 😏😏", "i like this", "tell me more"].join("\n"),
+  ["mmm yeah keep talking", "i like this", "tell me more"].join("\n"),
   ["heellooo", "say that again", "im listening"].join("\n"),
   ["yeah?", "keep going", "what else"].join("\n"),
 ];
+
+export const ARE_YOU_REAL_VARIANTS = [
+  ["ofcourse", "very real over here"].join("\n"),
+  ["ofcourse i am", "why wouldnt i be"].join("\n"),
+  ["ofcourse 😏", "you think id be fake"].join("\n"),
+];
+
+export const INVENTED_ABOUT_HIM_VARIANTS = [
+  ["oops my bad", "that was about me not u"].join("\n"),
+  ["wait no that was me", "i mixed it up"].join("\n"),
+  ["lol my bad", "i was talking about me"].join("\n"),
+];
+
+export function looksLikeAgeAsk(text: string): boolean {
+  if (/\bhow old (do i|am i|i (have|gotta|got to|need to) be)\b/i.test(text)) return false;
+  return /\bhow old (are you|are u|r u)\b/i.test(text) || /\bwhat(?:'?s| is) (?:your|ur) age\b/i.test(text);
+}
+
+export function looksLikeAreYouReal(text: string): boolean {
+  return /\b(are you real|are u real|r u real|you real\??|are you even real|are u even real|are you a bot|are u a bot|are you (?:fake|ai)|are u (?:fake|ai))\b/i.test(
+    text,
+  );
+}
+
+export function looksLikeInventedAboutHimCallout(text: string): boolean {
+  return /\b(i never said i(?:'?m| am)|i didn'?t say i(?:'?m| am)|i'?m a what|and i never said)\b/i.test(text);
+}
+
+export function creatorAgeFromText(...parts: (string | undefined | null)[]): number | null {
+  const blob = parts.filter(Boolean).join(" ");
+  const match = blob.match(/\b(\d{2})-year-old\b/i);
+  if (!match) return null;
+  const age = Number(match[1]);
+  if (!Number.isFinite(age) || age < 18 || age > 60) return null;
+  return age;
+}
+
+export function ageReplyVariants(age: number | null): string[] {
+  if (age != null) {
+    return [
+      [`im ${age}`, "why u asking"].join("\n"),
+      [`heellooo im ${age}`].join("\n"),
+      [`im ${age} 😏`, "nosey huh"].join("\n"),
+    ];
+  }
+  return [
+    ["old enough", "why u asking"].join("\n"),
+    ["heellooo old enough"].join("\n"),
+  ];
+}
 
 const PET_NAME_TOKEN_RE = /\b(good boy|loser|baby|daddy)\b/i;
 const TRAILING_EMOJI_RE =

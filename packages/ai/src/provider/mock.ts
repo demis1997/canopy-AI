@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, wantsNoPitch, bannedCatalogNames } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, ageReplyVariants } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -91,7 +91,7 @@ function pickProduct(input: GenerationInput, intent: Intent) {
 function emojiOf(input: GenerationInput): string {
   const e = input.persona.preferredEmojis[0];
   if (!e || e === "—") return "";
-  return ` ${e}${e}`;
+  return ` ${e}`;
 }
 
 function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
@@ -167,16 +167,39 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     ];
   }
 
+  if (looksLikeAreYouReal(last)) {
+    return [
+      asOption(["ofcourse", "very real over here"], "DIRECT", "He asked if she is real"),
+      asOption(["ofcourse i am", "why wouldnt i be"], tone, "Warm ofcourse"),
+    ];
+  }
+
+  if (looksLikeAgeAsk(last)) {
+    const age = creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory);
+    const variants = ageReplyVariants(age);
+    return [
+      asOption(variants[0]!.split("\n"), tone, "Answer HER age not his"),
+      asOption((variants[1] ?? variants[0]!).split("\n"), "TEASING", "Short age answer"),
+    ];
+  }
+
+  if (looksLikeInventedAboutHimCallout(last)) {
+    return [
+      asOption(["oops my bad", "that was about me not u"], "DIRECT", "He called out an invented fact about him"),
+      asOption(["wait no that was me", "i mixed it up"], tone, "Own the mixup"),
+    ];
+  }
+
   if (looksLikeFanInvitesQuestions(last)) {
     return [
-      asOption(["mmm lots 😏😏", "start with what u do for fun"], tone, "He invited questions about himself"),
+      asOption(["mmm lots", "start with what u do for fun"], tone, "He invited questions about himself"),
       asOption(["ok then", "tell me something u never told a girl on here"], "TEASING", "Ask about him"),
     ];
   }
 
   if (!pitching) {
     return [
-      asOption(["mmm yeah keep talking 😏😏", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
+      asOption(["mmm yeah keep talking", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
       asOption(["heellooo", last.trim() ? ackFan(last) : "say that again", "im listening"], "TEASING", "Stay in the chat"),
     ];
   }

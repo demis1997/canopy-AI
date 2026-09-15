@@ -133,7 +133,7 @@ export async function PATCH(
       });
       data.funnelStage = "PURCHASE";
       data.unansweredFollowUps = 0;
-      const kind = purchaseCount >= 2 ? "AFTERCARE" : null;
+      const kind = purchaseCount >= AFTERCARE_AFTER_PURCHASES ? "AFTERCARE" : null;
       if (kind) {
         const sequence = await prisma.sequence.findFirst({
           where: {

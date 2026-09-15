@@ -1052,14 +1052,15 @@ describe("mock provider", () => {
     expect(blob).toMatch(/lots|fun|told a girl/);
   });
 
-  it("makes him guess her age in the fan flow", async () => {
+  it("teases and tells her age when he asks in the fan flow", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies({
       ...genInput("How old are you?"),
       persona: { ...persona, biography: "Fictional 28-year-old fitness creator" },
     });
     const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/how old do u think i am|guess/);
+    expect(blob).toMatch(/im 28|old enough|send u something|hold on/);
+    expect(blob).not.toMatch(/how old do u think i am/);
     expect(blob).not.toMatch(/you'?re a/);
   });
 

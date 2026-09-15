@@ -27,15 +27,24 @@ import {
   creatorAgeFromText,
   creatorCityFromText,
   followUpPhase,
+  assessSpendLikelihood,
+  boughtWelcomeMessage,
+  extractFanFacts,
   inferFanIntake,
   inferThreadLessons,
+  intakeComplete,
+  isExistingFan,
   mergeThreadLessonMemory,
   fanSentMedia,
   looksLikeOfflineAsk,
   looksLikePacingPushback,
+  looksLikeWillBuyNext,
   matchSellTarget,
+  nextLockedDropPolicy,
+  pickSequenceDropProduct,
   playbookFor,
   readFeatureFlags,
+  sequenceDropPrice,
   shouldRunFanIntake,
   splitReplyBubbles,
   threadBannedPetNames,
@@ -49,6 +58,13 @@ const TOKEN_USD_PER_MILLION = 0.5;
 function looksLikeRefusal(text: string): boolean {
   return /\b(no thanks|nah|too expensive|too much|cheaper|discount|maybe later|not buying|pass)\b/i.test(
     text,
+  );
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, String(item ?? "")]),
   );
 }
 
@@ -328,10 +344,11 @@ export async function generateForConversation(input: {
       refunded: false,
       conversation: { creatorId: conversation.creatorId },
     },
-    select: { productId: true },
+    select: { productId: true, amountCents: true },
   });
   const purchasedProductIds = purchases.map((p) => p.productId);
   const purchasedPpvCount = purchases.length;
+  const previousPurchasePrice = Math.max(0, ...purchases.map((p) => p.amountCents / 100));
   const catalog: CatalogProduct[] = productRows.map((p) => ({
     id: p.id,
     creatorId: p.creatorId,
@@ -521,42 +538,152 @@ export async function generateForConversation(input: {
       conversation.activeSequence?.steps[conversation.activeSequenceStep]?.productId ??
       conversation.activeSequence?.steps.find((s) => s.productId)?.productId ??
       null;
-    const sellMatch = matchSellTarget({
-      products: products.map((p) => ({
-        id: p.id,
-        name: p.name.replace(/\s*\(DEMO\)\s*/gi, "").trim(),
-        description: p.description,
-        tags: p.tags,
-        mediaType: p.mediaType,
-        standardPrice: p.standardPrice,
-        allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
-        available: p.available,
-      })),
+    const extra = stringRecord(fanNote?.extra);
+    const facts = extractFanFacts({
+      subscriberText,
+      recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
+      creatorCity,
+    });
+    const mergedExtra = { ...extra, ...facts.extra };
+    if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
+    if (Object.keys(facts.extra).length || facts.location || facts.dominance || facts.notesAppend) {
+      const nextNotes = [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n").trim();
+      await prisma.fanNote.upsert({
+        where: {
+          creatorId_subscriberId: {
+            creatorId: conversation.creatorId,
+            subscriberId: conversation.subscriberId,
+          },
+        },
+        create: {
+          organizationId: tenant.organizationId,
+          creatorId: conversation.creatorId,
+          subscriberId: conversation.subscriberId,
+          location: facts.location ?? "",
+          dominance: facts.dominance ?? "UNKNOWN",
+          notes: nextNotes,
+          extra: mergedExtra,
+        },
+        update: {
+          extra: mergedExtra,
+          ...(facts.location ? { location: facts.location } : {}),
+          ...(facts.dominance ? { dominance: facts.dominance } : {}),
+          ...(facts.notesAppend ? { notes: nextNotes } : {}),
+        },
+      });
+    }
+    const boughtWelcome = boughtWelcomeMessage({
+      extra: mergedExtra,
+      products,
+      purchasedProductIds,
+    });
+    const existingFan = isExistingFan({
+      funnelStage: conversation.funnelStage,
+      purchasedPpvCount: boughtWelcome ? Math.max(0, purchasedPpvCount - 1) : purchasedPpvCount,
+      priorCreatorMessages: recent.filter((m) => m.authorType !== "SUBSCRIBER").length,
+      extra: mergedExtra,
+      ageKnown: Boolean(mergedExtra.fan_age),
+      cityKnown: Boolean(fanNote?.location || facts.location || mergedExtra.fan_city),
+      jobKnown: Boolean(mergedExtra.fan_job),
+    });
+    const sellable = products.map((p) => ({
+      id: p.id,
+      name: p.name.replace(/\s*\(DEMO\)\s*/gi, "").trim(),
+      description: p.description,
+      tags: p.tags,
+      mediaType: p.mediaType,
+      standardPrice: p.standardPrice,
+      allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
+      available: p.available,
+    }));
+    let sellMatch = matchSellTarget({
+      products: sellable,
       subscriberTexts: recent.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
-      notes: `${fanNote?.notes ?? ""} ${conversation.subscriber.notes ?? ""}`,
+      notes: `${fanNote?.notes ?? ""} ${facts.notesAppend ?? ""} ${conversation.subscriber.notes ?? ""}`,
       memories: memories.map((m) => m.value),
       sequenceProductId,
     });
+    const unpaidLockedCount = new Set(
+      conversation.offers
+        .filter((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId))
+        .map((offer) => offer.productId),
+    ).size;
+    const lockPolicy = nextLockedDropPolicy({
+      unpaidLockedCount,
+      promisedNext: looksLikeWillBuyNext(subscriberText),
+      honoredPromise: extra.honored_next_promise === "true",
+    });
+    const spendTier = assessSpendLikelihood({
+      age: mergedExtra.fan_age,
+      city: facts.location ?? fanNote?.location ?? mergedExtra.fan_city,
+      job: mergedExtra.fan_job,
+    });
+    if (sellMatch?.reason !== "CONTEXT") {
+      if (lockPolicy === "STOP") {
+        sellMatch = null;
+      } else if (lockPolicy === "FOLLOW_UP") {
+        const unpaid = [...conversation.offers]
+          .reverse()
+          .find((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId));
+        const product = sellable.find((row) => row.id === unpaid?.productId);
+        if (product) sellMatch = { product, reason: "SEQUENCE" };
+      } else {
+        const target = sequenceDropPrice({
+          boughtWelcome,
+          spendTier,
+          purchasedSequenceCount: purchasedPpvCount,
+          previousPrice: previousPurchasePrice || null,
+        });
+        if (target != null) {
+          const picked = pickSequenceDropProduct(sellable, target, previousPurchasePrice || null);
+          if (picked) {
+            sellMatch = {
+              product: picked,
+              reason: sequenceProductId === picked.id ? "SEQUENCE" : "DEFAULT",
+            };
+          }
+        } else {
+          sellMatch = null;
+        }
+      }
+    }
+    const notesForIntake = {
+      location: facts.location ?? fanNote?.location,
+      notes: [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n"),
+      extra: mergedExtra,
+      dominance: facts.dominance ?? fanNote?.dominance,
+    };
     const fanIntake =
       (shouldRunFanIntake({
         funnelStage: conversation.funnelStage,
         intent: classified.intent,
         purchasedPpvCount,
         subscriberText,
+        sequenceKind: conversation.activeSequence?.kind,
+        intakeComplete: intakeComplete({
+          extra: mergedExtra,
+          location: notesForIntake.location,
+          notes: notesForIntake.notes,
+          dominance: notesForIntake.dominance,
+          boughtWelcome,
+        }),
       }) || looksLikePacingPushback(subscriberText)) &&
       !looksLikeOfflineAsk(subscriberText) &&
       sellMatch?.reason !== "CONTEXT"
         ? inferFanIntake({
             subscriberText,
             recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
-            fanNotes: fanNote
-              ? { location: fanNote.location, notes: fanNote.notes, extra: (fanNote.extra as Record<string, string>) ?? {} }
-              : null,
+            fanNotes: notesForIntake,
             subscriberName: conversation.subscriber.displayName,
             creatorAge,
             creatorCity,
+            boughtWelcome,
+            existingFan,
           })
         : null;
+    if (fanIntake?.id === "ignore" || fanIntake?.skipPitch) {
+      sellMatch = null;
+    }
 
     const result = await generateRepliesWithRetry(provider, {
       requestId,
@@ -627,6 +754,9 @@ export async function generateForConversation(input: {
       pricing,
       followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
       fanIntakeBeat: fanIntake?.variants[0],
+      boughtWelcome,
+      existingFan,
+      unpaidLockedCount,
       sellTarget: sellMatch
         ? {
             productId: sellMatch.product.id,
@@ -635,14 +765,14 @@ export async function generateForConversation(input: {
             reason: sellMatch.reason,
           }
         : null,
-      fanNotes: fanNote
+      fanNotes: fanNote || facts.notesAppend || facts.location || facts.dominance || Object.keys(facts.extra).length
         ? {
-            realName: fanNote.realName,
-            location: fanNote.location,
-            dominance: fanNote.dominance,
-            preferredTone: fanNote.preferredTone,
-            notes: fanNote.notes,
-            extra: (fanNote.extra as Record<string, string>) ?? {},
+            realName: fanNote?.realName ?? "",
+            location: facts.location ?? fanNote?.location ?? "",
+            dominance: facts.dominance ?? fanNote?.dominance ?? "UNKNOWN",
+            preferredTone: fanNote?.preferredTone ?? "",
+            notes: [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n"),
+            extra: mergedExtra,
             spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
           }
         : conversation.subscriber.notes
@@ -652,7 +782,7 @@ export async function generateForConversation(input: {
               dominance: "UNKNOWN",
               preferredTone: "",
               notes: conversation.subscriber.notes,
-              extra: {},
+              extra: mergedExtra,
               spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
             }
           : null,
@@ -755,7 +885,7 @@ export async function generateForConversation(input: {
         subscriberText,
         rejections: operatorRejections,
         conversationId: conversation.id,
-        dominance: fanNote?.dominance,
+        dominance: facts.dominance ?? fanNote?.dominance,
         creatorAge,
         creatorCity,
         funnelStage: conversation.funnelStage,

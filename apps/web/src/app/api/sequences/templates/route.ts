@@ -12,16 +12,15 @@ const TEMPLATES: {
   {
     name: "New / existing fan flow",
     kind: "STARTER",
-    description: "Intake script: opener, gym, what he’s doing, vibe check, age, location, job, then tease. One beat per send. Take notes.",
+    description: "PDF intake: how is he, vibe (hands), age/location/job into notes, then sub/dom. Welcome-paid skips to the bundle + check.",
     steps: [
-      { body: "oh heyy youre here NAME. hows it going? enjoying the view so far ;)", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "heyy NAME. how are you", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "im doing great actually was about to get ready to go to the gym and saw u here", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "well what you doing now? doing anything interesting besides talking to me? 😏", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "sooo before we keep going both hands free rn or is one of them busy... 👀", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "how many hands are you typing with?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "mmm how old are you? feel curious idk why", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "where are you from btw? lets see how close (or far) we are 😏", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "where are you from btw? lets see how close or far we are", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "soo last question then u always busy? what do u do for a living? just curiouss", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "done with the boring questions haha i want to tell you something now...", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "let me ask you a naughty question now tho. what turns you on, being in charge or submitting like a good boy?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
     ],
   },
   {
@@ -99,10 +98,11 @@ const TEMPLATES: {
   {
     name: "Aftercare",
     kind: "AFTERCARE",
-    description: "After the second PPV he bought. Not after the first unlock. No more pitching.",
+    description: "After the third sequence product he bought. Not after the first or second unlock. No more pitching.",
     steps: [
-      { body: "no pressure. i'm around when you want me, not going to spam you.", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "hope you're good. come back when you miss me.", mediaHint: "TEXT", delayMinutes: 1440, priceTier: 1 },
+      { body: "that was so good, seriously felt like cloud nine, haha", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "i want to get to know you more than just on a sexual note, because thats only gonna bring us closer together", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "and if we are closer together.. that means even our fun is gonna be spicier and spicier as we progress", mediaHint: "TEXT", delayMinutes: 1440, priceTier: 1 },
     ],
   },
 ];

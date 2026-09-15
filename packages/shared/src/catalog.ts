@@ -332,6 +332,35 @@ export function defaultSellProduct(
   return videos[0] ?? byPrice[0] ?? null;
 }
 
+export function boughtWelcomeMessage(input: {
+  extra?: Record<string, string> | null;
+  products?: { id: string; tags?: string[]; name?: string }[];
+  purchasedProductIds?: string[];
+}): boolean {
+  if (input.extra?.bought_welcome === "true" || input.extra?.welcome_purchased === "true") return true;
+  const purchased = new Set(input.purchasedProductIds ?? []);
+  return (input.products ?? []).some((product) => {
+    if (!purchased.has(product.id)) return false;
+    const blob = `${product.name ?? ""} ${(product.tags ?? []).join(" ")}`.toLowerCase();
+    return /\b(welcome|engagement)\b/.test(blob);
+  });
+}
+
+export function pickSequenceDropProduct(
+  products: SellableProduct[],
+  targetPrice: number,
+  previousPrice?: number | null,
+): SellableProduct | null {
+  const available = products.filter((p) => p.available !== false);
+  if (!available.length) return null;
+  const floor = previousPrice ?? 0;
+  const higher = available.filter((p) => p.standardPrice > floor + 0.009);
+  const pool = higher.length ? higher : available;
+  return [...pool].sort(
+    (a, b) => Math.abs(a.standardPrice - targetPrice) - Math.abs(b.standardPrice - targetPrice),
+  )[0] ?? null;
+}
+
 export function matchSellTarget(input: {
   products: SellableProduct[];
   subscriberTexts: string[];

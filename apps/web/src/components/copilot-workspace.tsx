@@ -186,11 +186,11 @@ export function CopilotWorkspace(props: {
     if (json.unansweredFollowUps != null) setFollowUps(json.unansweredFollowUps);
     if (json.purchasedPpvCount != null) setPurchasedPpvCount(json.purchasedPpvCount);
     if (json.inserted) setNotice("Sequence step inserted into the thread.");
-    if (payload.markPurchased && json.purchasedPpvCount === 1) {
-      setNotice("First PPV unlocked. Keep selling — no aftercare yet.");
+    if (payload.markPurchased && json.purchasedPpvCount >= 1 && json.purchasedPpvCount < 3) {
+      setNotice("Unlocked. Keep selling the next higher drop — aftercare after the third.");
     }
-    if (payload.markPurchased && json.purchasedPpvCount >= 2) {
-      setNotice("Second PPV unlocked. Aftercare is on.");
+    if (payload.markPurchased && json.purchasedPpvCount >= 3) {
+      setNotice("Third sequence product unlocked. Aftercare is on.");
     }
     setBusy(false);
     router.refresh();
@@ -338,11 +338,11 @@ export function CopilotWorkspace(props: {
             {generation?.mockMode ? <Badge tone="warn">MOCK PROVIDER</Badge> : null}
             <Badge tone={mutedAi ? "warn" : "good"}>{mutedAi ? "This chat paused" : "Autonomous on"}</Badge>
             {purchasedPpvCount > 0 ? (
-              <Badge tone={purchasedPpvCount >= 2 ? "good" : "accent"}>
-                {purchasedPpvCount >= 2 ? "Aftercare (2nd PPV)" : "1st PPV unlocked"}
+              <Badge tone={purchasedPpvCount >= 3 ? "good" : "accent"}>
+                {purchasedPpvCount >= 3 ? "Aftercare (3rd PPV)" : `${purchasedPpvCount} PPV unlocked`}
               </Badge>
             ) : null}
-            {followUps > 0 && purchasedPpvCount < 2 ? (
+            {followUps > 0 && purchasedPpvCount < 3 ? (
               <Badge tone="warn">
                 {followUps === 1 ? "Follow-up · still list" : `Follow-up ${followUps} · discount ok`}
               </Badge>

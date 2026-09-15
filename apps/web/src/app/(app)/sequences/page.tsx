@@ -40,7 +40,7 @@ export default async function SequencesPage() {
       <PageHeader
         eyebrow="Optimize"
         title="Sequences"
-        description="Per-model scripts like Inflow: openers, teasers, voice/photo captions, PPV at list, full-price follow-ups, discount only after silence, aftercare after the second unlock."
+        description="Per-model scripts like Inflow: openers, teasers, voice/photo captions, PPV at list, full-price follow-ups, discount only after silence, aftercare after the third unlock."
       />
       <SequenceEditor
         canEdit={hasPermission(ctx.role, "creators.manage") || ctx.isPlatformAdmin}

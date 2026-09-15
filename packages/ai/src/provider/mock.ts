@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, matchSellTarget, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -110,6 +110,12 @@ function emojiOf(input: GenerationInput): string {
 function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   const last =
     input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "";
+  if (input.followUpPhase === "AFTERCARE" || input.playbook === "AFTERCARE") {
+    return [
+      asOption(AFTERCARE_QUOTES, "ROMANTIC", "Aftercare after three sequence products"),
+      asOption(AFTERCARE_QUOTES.slice(0, 2), "PLAYFUL", "Shorter aftercare"),
+    ];
+  }
   const explicit =
     input.persona.allowedExplicitness === "EXPLICIT" ||
     input.persona.allowedExplicitness === "VERY_EXPLICIT";
@@ -208,6 +214,14 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
       intent,
       purchasedPpvCount: input.pricing?.purchasedPpvCount,
       subscriberText: last,
+      sequenceKind: input.activeSequence?.kind,
+      intakeComplete: intakeComplete({
+        extra: input.fanNotes?.extra,
+        location: input.fanNotes?.location,
+        notes: input.fanNotes?.notes,
+        dominance: input.fanNotes?.dominance,
+        boughtWelcome: input.boughtWelcome,
+      }),
     }) &&
     !looksLikeOfflineAsk(last)
   ) {
@@ -218,6 +232,8 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
       subscriberName: input.fanNotes?.realName,
       creatorAge: creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory),
       creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
+      boughtWelcome: input.boughtWelcome,
+      existingFan: input.existingFan,
     });
     if (intake) {
       return intake.variants.map((text, i) =>
@@ -374,8 +390,21 @@ export class MockLLMProvider implements LLMProvider {
       last,
       input.recentMessages.map((m) => m.body).join(" "),
     );
+    const intake = inferFanIntake({
+      subscriberText: last,
+      recentMessages: input.recentMessages,
+      fanNotes: input.fanNotes,
+      subscriberName: input.fanNotes?.realName,
+      creatorAge: creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory),
+      creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
+      boughtWelcome: input.boughtWelcome,
+      existingFan: input.existingFan,
+    });
     const skipPitch =
       wantsNoPitch(input.operatorRejections ?? []) ||
+      Boolean(intake?.skipPitch) ||
+      ((input.unpaidLockedCount ?? 0) >= 2 && input.sellTarget?.reason !== "CONTEXT") ||
+      input.followUpPhase === "AFTERCARE" ||
       intent === "COMPLAINT" ||
       intent === "REFUND" ||
       intent === "UNSAFE" ||
@@ -403,6 +432,18 @@ export class MockLLMProvider implements LLMProvider {
           sendAttempt: product.sendAttempt,
         })
       : null;
+    const facts = extractFanFacts({
+      subscriberText: last,
+      recentMessages: input.recentMessages,
+      creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
+    });
+    const memoryUpdates = Object.entries(facts.extra).map(([key, value]) => ({
+      category: "PERSONAL_DETAILS",
+      key,
+      value,
+      confidence: 0.9,
+      sourceMessageId: input.requestId,
+    }));
     const output = generationOutputSchema.parse({
       intent,
       funnelStage: input.funnelStage,
@@ -418,7 +459,7 @@ export class MockLLMProvider implements LLMProvider {
       approvedPrice: pitching ? (offer?.price ?? product?.standardPrice ?? null) : null,
       requiresHumanReview: true,
       riskFlags: [],
-      memoryUpdates: [],
+      memoryUpdates,
       suggestedFunnelTransition: (pitching ? "OFFER" : input.funnelStage) as FunnelStage,
     });
     return {

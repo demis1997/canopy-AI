@@ -180,7 +180,7 @@ export const RAPPORT_ONLY_VARIANTS = [
 
 export function looksLikeAimlessRapport(text: string): boolean {
   const t = text.toLowerCase();
-  if (/\b(prove myself|seen me|verification|how old|where are you from|hands free|shot something|ppv|girlcock|for a living)\b/i.test(t)) {
+  if (/\b(prove myself|seen me|verification|how old|where are you from|how many hands|are you ready for me|naughty question|deal breaker|shot something|ppv|girlcock|for a living|cloud nine)\b/i.test(t)) {
     return false;
   }
   return /\b(tell me more|keep talking|im listening|what else|say that again)\b/i.test(t);
@@ -444,9 +444,12 @@ export function petNamesAllowed(opts: {
 }
 
 export function stripUnauthorizedPetNames(text: string): string {
-  return text
+  const marker = "§SUBDOM§";
+  const held = text.replace(/submitting like a good boy/gi, marker);
+  return held
     .replace(/\s*,\s*\b(good boy|loser+|baby|daddy)\b/gi, "")
     .replace(/\b(good boy|loser+|baby|daddy)\b,?\s*/gi, "")
+    .replace(new RegExp(marker, "g"), "submitting like a good boy")
     .replace(/\s{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .trim();

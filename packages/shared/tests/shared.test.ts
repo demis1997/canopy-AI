@@ -3,8 +3,8 @@ import { assertPermission, hasPermission, AuthorizationError } from "../src/perm
 import { canTransition, recommendedActionFor } from "../src/funnel.js";
 import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
-import { parseProductCsv, eligibleProducts, matchSellTarget } from "../src/catalog.js";
-import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
+import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt, sequenceDropPrice, nextLockedDropPolicy, assessSpendLikelihood } from "../src/crm.js";
+import { parseProductCsv, eligibleProducts, matchSellTarget, boughtWelcomeMessage, pickSequenceDropProduct } from "../src/catalog.js";
 import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, looksLikeAimlessRapport, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
@@ -371,10 +371,11 @@ describe("price ladder and aftercare", () => {
     ).toBe(3);
   });
 
-  it("applies aftercare after the second unlock, not after unanswered nudges", () => {
+  it("applies aftercare after the third sequence unlock, not after unanswered nudges", () => {
     expect(followUpPhase(4, 0)).toBe("FOLLOW_UP");
     expect(followUpPhase(0, 1)).toBe("NONE");
-    expect(followUpPhase(0, 2)).toBe("AFTERCARE");
+    expect(followUpPhase(0, 2)).toBe("NONE");
+    expect(followUpPhase(0, 3)).toBe("AFTERCARE");
   });
 
   it("applies max discount per product, not per creator", () => {
@@ -405,5 +406,98 @@ describe("thread lessons", () => {
     ]);
     expect(lessons.answeredAreYouReal).toBe(true);
     expect(lessons.bans.join(" ")).toMatch(/sext back|speech/i);
+  });
+});
+
+describe("fan flow pdf", () => {
+  it("starts unpaid new fans by asking how he is", async () => {
+    const { inferFanIntake } = await import("../src/fan-flow.js");
+    const beat = inferFanIntake({
+      subscriberText: "hey",
+      recentMessages: [],
+      subscriberName: "Alex",
+    });
+    expect(beat?.id).toBe("how_are");
+    expect(beat?.variants.join("\n")).toMatch(/how are you|hows it going/i);
+  });
+
+  it("jumps from jerking to the dive-deeper line instead of remaining intake", async () => {
+    const { inferFanIntake } = await import("../src/fan-flow.js");
+    const beat = inferFanIntake({
+      subscriberText: "one hand busy yeah",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(beat?.id).toBe("vibe_yes");
+    expect(beat?.variants.join("\n")).toMatch(/dive deeper/i);
+    expect(beat?.variants.join("\n")).not.toMatch(/how old/i);
+  });
+
+  it("uses the close vs far location lines", async () => {
+    const { inferFanIntake } = await import("../src/fan-flow.js");
+    const close = inferFanIntake({
+      subscriberText: "miami actually",
+      recentMessages: [{ authorType: "CHATTER", body: "where are you from btw" }],
+      creatorCity: "Miami",
+    });
+    expect(close?.variants.join("\n")).toMatch(/pretty close to me/i);
+    const far = inferFanIntake({
+      subscriberText: "london",
+      recentMessages: [{ authorType: "CHATTER", body: "where are you from btw" }],
+      creatorCity: "Miami",
+    });
+    expect(far?.variants.join("\n")).toMatch(/deal breaker/i);
+  });
+
+  it("skips to the welcome bundle then sub/dom check", async () => {
+    const { inferFanIntake } = await import("../src/fan-flow.js");
+    const beat = inferFanIntake({
+      subscriberText: "hey",
+      recentMessages: [],
+      boughtWelcome: true,
+    });
+    expect(beat?.id).toBe("welcome_bundle");
+    expect(beat?.variants.join("\n")).toMatch(/bundle/i);
+    expect(beat?.variants.join("\n")).toMatch(/submitting like a good boy/i);
+  });
+});
+
+describe("sequence ladder", () => {
+  it("never prices the next drop at or below the last one", () => {
+    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 0 })).toBe(7);
+    expect(
+      sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 1, previousPrice: 7 }),
+    ).toBe(17);
+    expect(sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 0 })).toBe(8);
+    expect(
+      sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 1, previousPrice: 8 }),
+    ).toBe(15);
+    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6 })).toBeNull();
+  });
+
+  it("blocks a third locked drop while two sit unpaid", () => {
+    expect(nextLockedDropPolicy({ unpaidLockedCount: 1, promisedNext: false })).toBe("FOLLOW_UP");
+    expect(nextLockedDropPolicy({ unpaidLockedCount: 1, promisedNext: true })).toBe("ALLOW_NEXT");
+    expect(nextLockedDropPolicy({ unpaidLockedCount: 2, promisedNext: true })).toBe("STOP");
+  });
+
+  it("treats doctors as high spend and welcome purchases as the welcome path", () => {
+    expect(assessSpendLikelihood({ job: "doctor" })).toBe("HIGH");
+    expect(assessSpendLikelihood({ job: "retail" })).toBe("LOW");
+    expect(
+      boughtWelcomeMessage({
+        purchasedProductIds: ["p1"],
+        products: [{ id: "p1", name: "Welcome bundle", tags: ["welcome"] }],
+      }),
+    ).toBe(true);
+    expect(
+      pickSequenceDropProduct(
+        [
+          { id: "a", name: "Engagement", standardPrice: 8, available: true },
+          { id: "b", name: "Ass", standardPrice: 25, available: true },
+        ],
+        17,
+        8,
+      )?.id,
+    ).toBe("b");
   });
 });

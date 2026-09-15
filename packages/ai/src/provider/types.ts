@@ -123,6 +123,9 @@ export type GenerationInput = {
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
   operatorRejections?: { text: string; reason: string; conversationId?: string }[];
   fanIntakeBeat?: string;
+  boughtWelcome?: boolean;
+  existingFan?: boolean;
+  unpaidLockedCount?: number;
   threadLessons?: string[];
   fanSentPics?: boolean;
   sellTarget?: {

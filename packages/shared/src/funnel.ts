@@ -35,7 +35,7 @@ export function playbookFor(
   unansweredFollowUps = 0,
   purchasedPpvCount = 0,
 ): string {
-  if (purchasedPpvCount >= 2) return "AFTERCARE";
+  if (purchasedPpvCount >= 3) return "AFTERCARE";
   if (unansweredFollowUps > 0) return "NO_RESPONSE_FOLLOW_UP";
   if (intent === "COMPLAINT" || intent === "REFUND") return "COMPLAINT_REFUND";
   if (intent === "PRICE_OBJECTION") return "PRICE_OBJECTION";

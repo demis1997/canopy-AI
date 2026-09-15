@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -140,14 +140,19 @@ describe("operator reject reasons", () => {
     );
   });
 
-  it("keeps unique reasons from discarded drafts", () => {
+  it("keeps unique discarded drafts even without a typed reason", () => {
     const rows = collectOperatorRejections([
       { text: "kneel loser", internalReason: "domme · rejected: dont call fans losers" },
       { text: "earn it loser", internalReason: "tease · rejected: dont call fans losers" },
       { text: "hi baby", internalReason: "rapport · rejected: too generic" },
       { text: "ok", internalReason: "no reason stored" },
     ]);
-    expect(rows.map((r) => r.reason)).toEqual(["dont call fans losers", "too generic"]);
+    expect(rows.map((r) => r.reason)).toEqual([
+      "dont call fans losers",
+      "dont call fans losers",
+      "too generic",
+      "Not a fit",
+    ]);
   });
 
   it("flags meet-speak including leetspeak", () => {
@@ -158,6 +163,30 @@ describe("operator reject reasons", () => {
     expect(containsMeetSpeak(scrubMeetSpeak("lets meet up"))).toBe(false);
     expect(looksLikeOfflineAsk("Do you do meetups with fans or not?")).toBe(true);
     expect(looksLikePetNamePushback("Why are you calling me a good boy?")).toBe(true);
+    expect(looksLikeFanInvitesQuestions("What do you wanna know about me?")).toBe(true);
+    expect(looksLikeInvertedCuriosity("oh? you're curious about me?")).toBe(true);
+    expect(looksLikeNoPitchAsk("stop mentioning the shower set because fan is just interested in conversating")).toBe(
+      true,
+    );
+    expect(stripUnauthorizedPetNames("i'm 28, good boy 💋")).toBe("i'm 28 💋");
+    expect(stripCatalogMentions("this ppv Shower set for $40 if you want more", ["Shower set"])).not.toMatch(
+      /shower set|\$40/i,
+    );
+    expect(
+      bannedCatalogNames(
+        [{ text: "shower set $40", reason: "stop mentioning the shower set" }],
+        [{ id: "p1", name: "Shower set (DEMO)" }],
+      ).ids,
+    ).toEqual(["p1"]);
+    expect(
+      wantsNoPitch([
+        {
+          text: "shower set $40",
+          reason: "stop mentioning the shower set because fan is just interested in conversating",
+        },
+      ]),
+    ).toBe(true);
+    expect(doubleOneTrailingEmoji("oh? curious about my age hmmm? 😏")).toBe("oh? curious about my age hmmm? 😏😏");
   });
 });
 

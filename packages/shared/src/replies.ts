@@ -74,25 +74,30 @@ export function deCapitalizeBubble(text: string): string {
   return text.replace(/^([A-Z])/, (ch) => ch.toLowerCase());
 }
 
+export type OperatorRejection = { text: string; reason: string; conversationId?: string };
+
 export function parseOperatorRejectReason(internalReason: string): string | null {
-  const match = internalReason.match(/rejected:\s*(.+)$/i);
+  const match = internalReason.match(/rejected:\s*([\s\S]+)$/i);
   const reason = match?.[1]?.trim();
   return reason || null;
 }
 
 export function collectOperatorRejections(
-  rows: { text: string; internalReason: string }[],
+  rows: { text: string; internalReason: string; conversationId?: string }[],
   limit = 12,
-): { text: string; reason: string }[] {
-  const out: { text: string; reason: string }[] = [];
+): OperatorRejection[] {
+  const out: OperatorRejection[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
-    const reason = parseOperatorRejectReason(row.internalReason);
-    if (!reason) continue;
-    const key = reason.toLowerCase();
+    const reason = parseOperatorRejectReason(row.internalReason) ?? "Not a fit";
+    const key = `${reason.toLowerCase()}|${row.text.slice(0, 80).toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ text: row.text.slice(0, 180), reason });
+    out.push({
+      text: row.text.slice(0, 180),
+      reason,
+      conversationId: row.conversationId,
+    });
     if (out.length >= limit) break;
   }
   return out;
@@ -117,4 +122,123 @@ export function looksLikePetNamePushback(text: string): boolean {
   return /\b(why (are you|are u|u) calling me|don'?t call me|dont call me|i'?m not (your |ur )?(good boy|loser|baby|daddy))\b/i.test(
     text,
   );
+}
+
+export const ABOUT_HIM_VARIANTS = [
+  ["mmm lots 😏😏", "start with what u do for fun"].join("\n"),
+  ["ok then", "tell me something u never told a girl on here"].join("\n"),
+  ["i wanna know the fun stuff", "what do u do when ure bored"].join("\n"),
+];
+
+export const RAPPORT_ONLY_VARIANTS = [
+  ["mmm yeah keep talking 😏😏", "i like this", "tell me more"].join("\n"),
+  ["heellooo", "say that again", "im listening"].join("\n"),
+  ["yeah?", "keep going", "what else"].join("\n"),
+];
+
+const PET_NAME_TOKEN_RE = /\b(good boy|loser|baby|daddy)\b/i;
+const TRAILING_EMOJI_RE =
+  /([😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤️🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥])(\s*)$/u;
+const DOUBLED_EMOJI_RE =
+  /([😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤️🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥])\1/u;
+
+export function looksLikeFanInvitesQuestions(text: string): boolean {
+  return /\b(what do (you|u) (wanna|want to|want) know about me|ask me (anything|something)|what (are you|are u|r u) curious about)\b/i.test(
+    text,
+  );
+}
+
+export function looksLikeInvertedCuriosity(text: string): boolean {
+  return /\b((you'?re|ure|ur) curious about me|oh\??\s+(you'?re|ure) curious|what do (you|u) (wanna|want to) know)\b/i.test(
+    text,
+  );
+}
+
+export function petNamesAllowed(opts: { subscriberText?: string; dominance?: string }): boolean {
+  if ((opts.dominance ?? "").toUpperCase() === "SUBMISSIVE") return true;
+  return PET_NAME_TOKEN_RE.test(opts.subscriberText ?? "");
+}
+
+export function stripUnauthorizedPetNames(text: string): string {
+  return text
+    .replace(/\s*,\s*\b(good boy|loser|baby|daddy)\b/gi, "")
+    .replace(/\b(good boy|loser|baby|daddy)\b,?\s*/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+export function catalogDisplayName(name: string): string {
+  return name.replace(/\s*\(DEMO\)\s*/gi, "").trim();
+}
+
+export function looksLikeNoPitchAsk(text: string): boolean {
+  return /\b(just (want to |wanna )?(talk|chat|conversat)|interested in conversat|don'?t (want to |wanna )?(buy|see ppv|get the)|not (buying|interested in (buying|the (set|ppv|video)))|stop (mentioning|selling|pitching)|don'?t (sell|pitch|mention)|no (more )?(ppv|pitch|selling)|he'?s just (talking|chatting|conversat)|fan is just|only (want to |wanna )?conversat|just interested in conversat)\b/i.test(
+    text,
+  );
+}
+
+export function wantsNoPitch(rejections: OperatorRejection[], conversationId?: string): boolean {
+  const rows = conversationId
+    ? rejections.filter((r) => !r.conversationId || r.conversationId === conversationId)
+    : rejections;
+  return rows.some((r) => looksLikeNoPitchAsk(`${r.reason} ${r.text}`));
+}
+
+export function bannedCatalogNames(
+  rejections: OperatorRejection[],
+  catalog: { id: string; name?: string }[],
+  conversationId?: string,
+): { ids: string[]; names: string[] } {
+  const rows = conversationId
+    ? rejections.filter((r) => !r.conversationId || r.conversationId === conversationId)
+    : rejections;
+  const blob = rows.map((r) => `${r.reason} ${r.text}`).join(" ").toLowerCase();
+  const names: string[] = [];
+  const ids: string[] = [];
+  for (const product of catalog) {
+    const name = catalogDisplayName(product.name ?? "");
+    if (!name || name.length < 3) continue;
+    if (blob.includes(name.toLowerCase())) {
+      names.push(name);
+      ids.push(product.id);
+    }
+  }
+  return { ids, names };
+}
+
+export function stripCatalogMentions(text: string, names: string[]): string {
+  let next = text;
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    next = next.replace(new RegExp(escaped, "gi"), "");
+  }
+  next = next.replace(/\bthis ppv\b(?:\s+(?:again\s+)?(?:at|for))?/gi, "");
+  next = next.replace(/\$\s*\d+(?:\.\d+)?/g, "");
+  next = next.replace(/\b(for|at)\s+(and|if|when|—|-)/gi, "$2");
+  next = next.replace(/[—–-]\s*$/gm, "");
+  next = next.replace(/^\s*[—–-]\s*/gm, "");
+  next = next.replace(/\s{2,}/g, " ");
+  next = next.replace(/[ \t]+\n/g, "\n");
+  next = next.replace(/\n{2,}/g, "\n");
+  return next.trim();
+}
+
+export function hasDoubledEmoji(text: string): boolean {
+  return DOUBLED_EMOJI_RE.test(text);
+}
+
+export function doubleOneTrailingEmoji(text: string): string {
+  if (hasDoubledEmoji(text)) return text;
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    TRAILING_EMOJI_RE.lastIndex = 0;
+    if (TRAILING_EMOJI_RE.test(line)) {
+      TRAILING_EMOJI_RE.lastIndex = 0;
+      lines[i] = line.replace(TRAILING_EMOJI_RE, "$1$1$2");
+      return lines.join("\n");
+    }
+  }
+  return text;
 }

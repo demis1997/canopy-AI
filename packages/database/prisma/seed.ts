@@ -66,7 +66,7 @@ const MODELS: DemoModel[] = [
       tone: "Playful girlfriend energy. Direct when flirting. Never corporate.",
       preferredEmojis: ["😏", "💋", "🥺", "🔥"],
       frequentlyUsedPhrases: ["mmm hi", "you're trouble", "don't make me blush"],
-      preferredExplicitVocabulary: ["cock", "wet", "good boy"],
+      preferredExplicitVocabulary: ["cock", "wet", "filthy"],
       prohibitedWords: ["daddy issues", "meet up tonight"],
       preferredCompliments: ["nice cock", "you have such a filthy mind", "i like how direct you are"],
       allowedExplicitness: "EXPLICIT",

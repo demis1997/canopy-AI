@@ -197,7 +197,7 @@ export function CopilotWorkspace(props: {
     return json;
   }
 
-  async function generate(rewriteStyle?: (typeof REWRITES)[number]["id"]) {
+  async function generate(rewriteStyle?: (typeof REWRITES)[number]["id"], afterNotice?: string) {
     setBusy(true);
     setNotice("");
     const post = async () => {
@@ -217,7 +217,7 @@ export function CopilotWorkspace(props: {
     if (gen.blocked) setNotice(gen.chatterMessage || "Reply blocked.");
     else if (gen.failed) setNotice(gen.chatterMessage || "The model missed that send. Hit generate again.");
     else if (gen.chatterMessage) setNotice(gen.chatterMessage);
-    else setNotice(rewriteStyle ? `Rewritten (${rewriteStyle.toLowerCase()}).` : "Three suggestions ready. Approve before insert.");
+    else setNotice(afterNotice ?? (rewriteStyle ? `Rewritten (${rewriteStyle.toLowerCase()}).` : "Three suggestions ready. Approve before insert."));
     setBusy(false);
     router.refresh();
   }
@@ -244,9 +244,14 @@ export function CopilotWorkspace(props: {
   }
 
   async function reject(option: Reply) {
-    if (!generationId) return;
+    if (!generationId) {
+      setNotice("Generate suggestions first, then reject one.");
+      return;
+    }
+    const reason = rejectReason.trim() || "Not a fit";
     setBusy(true);
-    await fetch(`/api/conversations/${props.conversation.id}/select-reply`, {
+    setNotice("");
+    const res = await fetch(`/api/conversations/${props.conversation.id}/select-reply`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -254,12 +259,20 @@ export function CopilotWorkspace(props: {
         generationId,
         replyOptionId: option.id,
         discard: true,
-        rejectReason: rejectReason || "Not a fit",
+        rejectReason: reason,
       }),
     });
-    setNotice(`Rejected: ${rejectReason || "Not a fit"}`);
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok || json.error) {
+      setNotice(json.error || "Reject failed. Try again.");
+      setBusy(false);
+      return;
+    }
+    setGeneration((g) =>
+      g ? { ...g, replyOptions: (g.replyOptions ?? []).filter((o) => o.id !== option.id) } : g,
+    );
     setBusy(false);
-    router.refresh();
+    await generate(undefined, `Rejected: ${reason}. New suggestions follow that.`);
   }
 
   async function escalate() {
@@ -439,6 +452,17 @@ export function CopilotWorkspace(props: {
               </Button>
             ))}
           </div>
+          <label className="block space-y-1">
+            <span className="text-[11px] text-white/40">
+              Reject reason — saved and applied when you reject, then we regenerate
+            </span>
+            <input
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. stop mentioning the shower set he just wants to talk"
+              className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-3 text-sm"
+            />
+          </label>
           {generation?.blocked ? (
             <div className="rounded-[10px] border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
               Safety warning: {generation.chatterMessage}
@@ -489,12 +513,6 @@ export function CopilotWorkspace(props: {
           ) : (
             <p className="text-sm text-white/40">No suggestions yet. Generate after the latest fan message.</p>
           )}
-          <input
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Reject reason"
-            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-3 text-sm"
-          />
         </Card>
         <Card className="space-y-3">
           <div className="text-sm font-medium">Sequence</div>

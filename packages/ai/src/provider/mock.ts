@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, wantsNoPitch, bannedCatalogNames } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -76,7 +76,8 @@ function catalogName(name: string): string {
 }
 
 function pickProduct(input: GenerationInput, intent: Intent) {
-  const available = input.products.filter((p) => p.available);
+  const banned = new Set(bannedCatalogNames(input.operatorRejections ?? [], input.products).ids);
+  const available = input.products.filter((p) => p.available && !banned.has(p.id));
   if (intent === "SEXTING" || intent === "CONTENT_REQUEST") {
     return (
       available.find(
@@ -90,10 +91,10 @@ function pickProduct(input: GenerationInput, intent: Intent) {
 function emojiOf(input: GenerationInput): string {
   const e = input.persona.preferredEmojis[0];
   if (!e || e === "—") return "";
-  return ` ${e}`;
+  return ` ${e}${e}`;
 }
 
-function repliesFor(input: GenerationInput, intent: Intent) {
+function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   const last =
     input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "";
   const explicit =
@@ -131,7 +132,7 @@ function repliesFor(input: GenerationInput, intent: Intent) {
     chat: ["hi. dont be boring", "tell me what you want", pitch],
   };
   const romantic = {
-    flirt: [`hi baby that got me${emoji}`, "i'd show you more", `${pitch} if you want it`],
+    flirt: [`hi babe that got me${emoji}`, "i'd show you more", `${pitch} if you want it`],
     sext: ["slow down for me", "talk like that", `${pitch} just for you`],
     sell: ["i made this for someone patient", pitch, "you want it"],
     chat: [`hey i like you already${emoji}`, `${pitch} if you want something mine`],
@@ -163,6 +164,20 @@ function repliesFor(input: GenerationInput, intent: Intent) {
         "PLAYFUL",
         "Warm TOS refusal then pivot",
       ),
+    ];
+  }
+
+  if (looksLikeFanInvitesQuestions(last)) {
+    return [
+      asOption(["mmm lots 😏😏", "start with what u do for fun"], tone, "He invited questions about himself"),
+      asOption(["ok then", "tell me something u never told a girl on here"], "TEASING", "Ask about him"),
+    ];
+  }
+
+  if (!pitching) {
+    return [
+      asOption(["mmm yeah keep talking 😏😏", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
+      asOption(["heellooo", last.trim() ? ackFan(last) : "say that again", "im listening"], "TEASING", "Stay in the chat"),
     ];
   }
 
@@ -284,8 +299,13 @@ export class MockLLMProvider implements LLMProvider {
       last,
       input.recentMessages.map((m) => m.body).join(" "),
     );
-    const product = pickProduct(input, intent) ?? null;
-    const pitching = intent !== "COMPLAINT" && intent !== "REFUND" && intent !== "UNSAFE";
+    const skipPitch =
+      wantsNoPitch(input.operatorRejections ?? []) ||
+      intent === "COMPLAINT" ||
+      intent === "REFUND" ||
+      intent === "UNSAFE";
+    const product = skipPitch ? null : (pickProduct(input, intent) ?? null);
+    const pitching = Boolean(product) && !skipPitch;
     const offer = product
       ? resolveOfferPrice({
           standardPrice: product.standardPrice,
@@ -305,7 +325,7 @@ export class MockLLMProvider implements LLMProvider {
           : pitching
             ? "PRESENT_OFFER"
             : "REPLY",
-      replyOptions: repliesFor(input, intent),
+      replyOptions: repliesFor(input, intent, pitching),
       recommendedProductId: pitching ? (product?.id ?? null) : null,
       approvedPrice: pitching ? (offer?.price ?? product?.standardPrice ?? null) : null,
       requiresHumanReview: true,

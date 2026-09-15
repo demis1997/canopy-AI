@@ -463,9 +463,19 @@ export async function generateForConversation(input: {
       where: { organizationId: tenant.organizationId, outcome: "DISCARDED" },
       orderBy: { createdAt: "desc" },
       take: 40,
-      select: { text: true, internalReason: true },
+      select: {
+        text: true,
+        internalReason: true,
+        generation: { select: { conversationId: true } },
+      },
     });
-    const operatorRejections = collectOperatorRejections(discardedRows);
+    const operatorRejections = collectOperatorRejections(
+      discardedRows.map((row) => ({
+        text: row.text,
+        internalReason: row.internalReason,
+        conversationId: row.generation.conversationId,
+      })),
+    );
 
     const result = await generateRepliesWithRetry(provider, {
       requestId,
@@ -625,6 +635,7 @@ export async function generateForConversation(input: {
       result.output,
       products.map((p) => ({
         id: p.id,
+        name: p.name,
         standardPrice: p.standardPrice,
         minimumPrice: p.minimumPrice,
         secondPrice: p.secondPrice,
@@ -636,7 +647,14 @@ export async function generateForConversation(input: {
       })),
       10,
       pricing.concessionAllowed,
-      { creatorId: conversation.creatorId, purchasedProductIds, subscriberText },
+      {
+        creatorId: conversation.creatorId,
+        purchasedProductIds,
+        subscriberText,
+        rejections: operatorRejections,
+        conversationId: conversation.id,
+        dominance: fanNote?.dominance,
+      },
     );
 
     const nextFunnel = resolveFunnel({
@@ -806,9 +824,7 @@ export async function selectReply(input: {
       data: {
         outcome: "DISCARDED",
         selectedById: input.userId,
-        internalReason: input.rejectReason
-          ? `${option.internalReason} · rejected: ${input.rejectReason}`
-          : option.internalReason,
+        internalReason: `${option.internalReason} · rejected: ${input.rejectReason?.trim() || "Not a fit"}`,
       },
     });
     await recordAnalytics({

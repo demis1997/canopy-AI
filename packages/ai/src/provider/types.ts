@@ -119,7 +119,7 @@ export type GenerationInput = {
     remaining: string[];
   } | null;
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
-  operatorRejections?: { text: string; reason: string }[];
+  operatorRejections?: { text: string; reason: string; conversationId?: string }[];
 };
 
 export type GenerationResult = {

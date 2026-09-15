@@ -111,6 +111,7 @@ export async function POST(request: Request) {
     result.output,
     eligible.map((p) => ({
       id: p.id,
+      name: p.name,
       standardPrice: p.standardPrice,
       minimumPrice: p.minimumPrice,
       available: p.available,

@@ -1,4 +1,4 @@
-import type { GenerationOutput } from "@canopy/shared";
+import type { GenerationOutput, OperatorRejection } from "@canopy/shared";
 import {
   generationOutputSchema,
   ladderPrice,
@@ -7,9 +7,20 @@ import {
   containsMeetSpeak,
   looksLikeOfflineAsk,
   looksLikePetNamePushback,
+  looksLikeFanInvitesQuestions,
+  looksLikeInvertedCuriosity,
+  petNamesAllowed,
+  stripUnauthorizedPetNames,
+  wantsNoPitch,
+  bannedCatalogNames,
+  catalogDisplayName,
+  stripCatalogMentions,
+  doubleOneTrailingEmoji,
   normalizeReplyBubbles,
   TOS_OFFLINE_VARIANTS,
   PET_NAME_PUSHBACK_FALLBACK,
+  ABOUT_HIM_VARIANTS,
+  RAPPORT_ONLY_VARIANTS,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -40,19 +51,29 @@ export function parseGenerationOutput(
   }
 }
 
-function replaceAllOptions(output: GenerationOutput, texts: string[]): GenerationOutput {
+function mapOptionTexts(
+  output: GenerationOutput,
+  fn: (text: string, index: number) => string,
+): GenerationOutput {
   const options = output.replyOptions.map((o, i) => {
-    const cleaned = normalizeReplyBubbles({ text: texts[i] ?? texts[0]! });
+    const cleaned = normalizeReplyBubbles({ text: fn(o.text, i) });
     return {
       ...o,
       text: cleaned.text,
       messages: cleaned.messages,
-      internalReason: "guarded reply — no invented pitch or banned wording",
     };
   });
+  return { ...output, replyOptions: options };
+}
+
+function replaceAllOptions(output: GenerationOutput, texts: string[]): GenerationOutput {
+  const next = mapOptionTexts(output, (_text, i) => texts[i] ?? texts[0]!);
   return {
-    ...output,
-    replyOptions: options,
+    ...next,
+    replyOptions: next.replyOptions.map((o) => ({
+      ...o,
+      internalReason: "guarded reply — no invented pitch or banned wording",
+    })),
     recommendedProductId: null,
     approvedPrice: null,
   };
@@ -65,20 +86,74 @@ function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
   return replaceAllOptions(output, TOS_OFFLINE_VARIANTS);
 }
 
-export function applyReplyGuards(output: GenerationOutput, subscriberText = ""): GenerationOutput {
+export type ReplyGuardExtras = {
+  rejections?: OperatorRejection[];
+  catalog?: { id: string; name?: string }[];
+  conversationId?: string;
+  dominance?: string;
+};
+
+export function applyReplyGuards(
+  output: GenerationOutput,
+  subscriberText = "",
+  extras?: ReplyGuardExtras,
+): GenerationOutput {
   let next = scrubOfflineAsks(output);
   if (looksLikeOfflineAsk(subscriberText)) {
     next = replaceAllOptions(next, TOS_OFFLINE_VARIANTS);
   } else if (looksLikePetNamePushback(subscriberText)) {
     next = replaceAllOptions(next, [PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK]);
+  } else if (
+    looksLikeFanInvitesQuestions(subscriberText) &&
+    next.replyOptions.some(
+      (o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity),
+    )
+  ) {
+    next = replaceAllOptions(next, ABOUT_HIM_VARIANTS);
   }
-  return next;
+
+  if (!petNamesAllowed({ subscriberText, dominance: extras?.dominance })) {
+    next = mapOptionTexts(next, (text) => stripUnauthorizedPetNames(text));
+  }
+
+  const rejections = extras?.rejections ?? [];
+  const catalog = extras?.catalog ?? [];
+  if (rejections.length) {
+    const noPitch = wantsNoPitch(rejections, extras?.conversationId);
+    const banned = bannedCatalogNames(rejections, catalog, extras?.conversationId);
+    if (noPitch || banned.names.length) {
+      const namesToStrip = noPitch
+        ? catalog.map((p) => catalogDisplayName(p.name ?? "")).filter((n) => n.length >= 3)
+        : banned.names;
+      const idsToDrop = new Set(noPitch ? catalog.map((p) => p.id) : banned.ids);
+      const dropProduct =
+        noPitch || (next.recommendedProductId != null && idsToDrop.has(next.recommendedProductId));
+      next = mapOptionTexts(next, (text, i) => {
+        const stripped = stripCatalogMentions(text, namesToStrip);
+        return stripped.trim() ? stripped : RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!;
+      });
+      if (dropProduct) {
+        next = {
+          ...next,
+          recommendedProductId: null,
+          approvedPrice: null,
+          recommendedAction:
+            next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+              ? "REPLY"
+              : next.recommendedAction,
+        };
+      }
+    }
+  }
+
+  return mapOptionTexts(next, (text) => doubleOneTrailingEmoji(text));
 }
 
 export function validateProductsAndPrices(
   output: GenerationOutput,
   catalog: {
     id: string;
+    name?: string;
     standardPrice: number;
     minimumPrice: number;
     available: boolean;
@@ -90,10 +165,22 @@ export function validateProductsAndPrices(
   }[],
   discountLimitPercent = 10,
   concessionAllowed = false,
-  opts?: { creatorId?: string; purchasedProductIds?: string[]; subscriberText?: string },
+  opts?: {
+    creatorId?: string;
+    purchasedProductIds?: string[];
+    subscriberText?: string;
+    rejections?: OperatorRejection[];
+    conversationId?: string;
+    dominance?: string;
+  },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
-  let next = applyReplyGuards({ ...output }, opts?.subscriberText ?? "");
+  let next = applyReplyGuards({ ...output }, opts?.subscriberText ?? "", {
+    rejections: opts?.rejections,
+    catalog,
+    conversationId: opts?.conversationId,
+    dominance: opts?.dominance,
+  });
 
   if (next.recommendedProductId) {
     const product = catalog.find((p) => p.id === next.recommendedProductId);

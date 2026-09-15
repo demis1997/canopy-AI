@@ -770,7 +770,7 @@ export function DemoWorkspace() {
                 <Row k="Intent" v={intent} />
                 <Row k="Funnel" v={convo.funnelStage} />
                 <Row k="Next action" v={action} />
-                <Row k="Prompt" v="canopy-copilot-v12" />
+                  <Row k="Prompt" v="canopy-copilot-v13" />
                 <Row k="Model" v="Demo model" />
                 <p className="text-xs text-slate-500">{convo.summary}</p>
                 {risk.length ? <p className="text-xs text-amber-700">Flags: {risk.join(", ")}</p> : null}

@@ -246,6 +246,105 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/shower set/);
     expect(guarded.recommendedProductId).toBeNull();
   });
+
+  it("strips a rejected catalog pitch when the operator said stop mentioning it", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "PRESENT_OFFER",
+        replyOptions: [
+          {
+            text: "heellooo\nthis ppv Shower set for $40\nunlock it",
+            messages: ["heellooo", "this ppv Shower set for $40", "unlock it"],
+            tone: "PLAYFUL",
+            internalReason: "pitch",
+          },
+        ],
+        recommendedProductId: "prod_1",
+        approvedPrice: 40,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "hey whats up",
+      {
+        rejections: [
+          {
+            text: "this ppv Shower set for $40",
+            reason: "stop mentioning the shower set because fan is just interested in conversating",
+          },
+        ],
+        catalog: [{ id: "prod_1", name: "Shower set (DEMO)" }],
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/shower set/);
+    expect(blob).not.toMatch(/\$40/);
+    expect(guarded.recommendedProductId).toBeNull();
+    expect(guarded.approvedPrice).toBeNull();
+    expect(guarded.recommendedAction).toBe("REPLY");
+  });
+
+  it("strips good boy unless he is marked submissive", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "i'm 28, good boy 💋",
+            messages: ["i'm 28, good boy 💋"],
+            tone: "PLAYFUL",
+            internalReason: "age",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Yeah. How old are you?",
+    );
+    expect(guarded.replyOptions[0]!.text.toLowerCase()).not.toMatch(/good boy/);
+    expect(guarded.replyOptions[0]!.text).toMatch(/💋💋/);
+  });
+
+  it("answers when he asks what she wants to know about him", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh? you're curious about me?\ntell me, what do you wanna know?",
+            messages: ["oh? you're curious about me?", "tell me, what do you wanna know?"],
+            tone: "PLAYFUL",
+            internalReason: "bad invert",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "What do you wanna know about me?",
+    );
+    const blob = guarded.replyOptions[0]!.text.toLowerCase();
+    expect(blob).not.toMatch(/curious about me/);
+    expect(blob).not.toMatch(/what do you wanna know/);
+    expect(blob).toMatch(/lots|fun|told a girl|bored/);
+  });
 });
 
 describe("product validation", () => {
@@ -400,6 +499,31 @@ describe("mock provider", () => {
     expect(blob).toMatch(/voice/);
     expect(blob).not.toMatch(/aftercare later|then the ppv/);
   });
+
+  it("does not pitch a rejected catalog item when the fan is just talking", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("hey whats up"),
+      operatorRejections: [
+        {
+          text: "this ppv Shower set for $40",
+          reason: "stop mentioning the shower set because fan is just interested in conversating",
+        },
+      ],
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/shower set/);
+    expect(result.output.recommendedProductId).toBeNull();
+    expect(result.output.recommendedAction).toBe("REPLY");
+  });
+
+  it("asks about him instead of flipping his question", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("What do you wanna know about me?"));
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/curious about me/);
+    expect(blob).toMatch(/lots|fun|told a girl/);
+  });
 });
 
 describe("pricing concession", () => {
@@ -541,6 +665,8 @@ describe("operator rejection prompt", () => {
     expect(system).toMatch(/One hook max/);
     expect(system).toMatch(/Never write meet/);
     expect(system).toMatch(/against TOS/);
+    expect(system).toMatch(/do not invert who is asking/);
+    expect(system).toMatch(/recommendedProductId null/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);
   });

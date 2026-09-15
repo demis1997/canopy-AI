@@ -16,9 +16,9 @@ export default function WelcomeMessagePage() {
   const [enabled, setEnabled] = useState(true);
   const [body, setBody] = useState("hey — thanks for being here. this one's just a hello 😏");
   const [paid, setPaid] = useState(true);
-  const [price, setPrice] = useState(5);
-  const [productId, setProductId] = useState("prod_welcome_ppv");
-  const [previewId, setPreviewId] = useState("media_welcome");
+  const [price, setPrice] = useState(8);
+  const [productId, setProductId] = useState("prod_engagement");
+  const [previewId, setPreviewId] = useState("media_engagement_prev");
   const [segment, setSegment] = useState("new_subscribers");
   const [notice, setNotice] = useState("");
   const [rewriting, setRewriting] = useState(false);

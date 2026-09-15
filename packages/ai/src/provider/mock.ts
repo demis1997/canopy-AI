@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, matchSellTarget, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -22,7 +22,7 @@ function classify(text: string, context = ""): Intent {
   if (/\b(refund|chargeback|scam)\b/.test(t) && !/\b(robot|bot|model)\b/.test(t)) return "REFUND";
   if (/\b(complaint|manager|report you)\b/.test(t)) return "COMPLAINT";
   if (/\b(too much|cheaper|discount|too expensive|\d+\s*(usd|\$))\b/.test(t)) return "PRICE_OBJECTION";
-  if (/\b(buy|ppv|video|pic|pics|custom|send it|send me|show me)\b/.test(t)) return "CONTENT_REQUEST";
+  if (/\b(buy|ppv|video|pic|pics|custom|send it|send me|show me|got anything|clip|joi|gfe|lingerie|girlcock|dildo|netflix|fleshlight|\bass\b|tits|boobs|feet)\b/.test(t)) return "CONTENT_REQUEST";
   if (/\b(tease me|then do it|combination of both)\b/.test(t)) return "SEXTING";
   if (/\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick)\b/.test(t)) return "SEXTING";
   if (/\b(sexy|hot|cute|beautiful|gorgeous|pretty|damn|story)\b/.test(t)) return "FLIRT";
@@ -79,6 +79,18 @@ function catalogName(name: string): string {
 function pickProduct(input: GenerationInput, intent: Intent) {
   const banned = new Set(bannedCatalogNames(input.operatorRejections ?? [], input.products).ids);
   const available = input.products.filter((p) => p.available && !banned.has(p.id));
+  if (input.sellTarget) {
+    const pinned = available.find((p) => p.id === input.sellTarget?.productId);
+    if (pinned) return pinned;
+  }
+  const matched = matchSellTarget({
+    products: available,
+    subscriberTexts: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
+    notes: input.fanNotes?.notes,
+    memories: input.memories.map((m) => m.value),
+    sequenceProductId: input.activeSequence?.current.productId,
+  });
+  if (matched) return available.find((p) => p.id === matched.product.id) ?? available[0];
   if (intent === "SEXTING" || intent === "CONTENT_REQUEST") {
     return (
       available.find(
@@ -197,7 +209,7 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
       purchasedPpvCount: input.pricing?.purchasedPpvCount,
       subscriberText: last,
     }) &&
-    !threadIsOnOfflineAsk(input.recentMessages)
+    !looksLikeOfflineAsk(last)
   ) {
     const intake = inferFanIntake({
       subscriberText: last,
@@ -258,8 +270,8 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
 
   if (!pitching) {
     return [
-      asOption(["mmm yeah keep talking", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
-      asOption(["heellooo", last.trim() ? ackFan(last) : "say that again", "im listening"], "TEASING", "Stay in the chat"),
+      asOption(["anyway", "i was gonna tell u something"], tone, "Ack then advance the sales sequence"),
+      asOption(["wait", last.trim() ? ackFan(last) : "ok", "i shot something earlier"], "TEASING", "Off-script then back to the drop"),
     ];
   }
 
@@ -372,6 +384,13 @@ export class MockLLMProvider implements LLMProvider {
         fanMessageCount: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").length,
         subscriberText: last,
         threadOnOffline: threadIsOnOfflineAsk(input.recentMessages),
+        catalogFit: input.sellTarget?.reason === "CONTEXT" || matchSellTarget({
+          products: input.products,
+          subscriberTexts: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
+          notes: input.fanNotes?.notes,
+          memories: input.memories.map((m) => m.value),
+          sequenceProductId: input.activeSequence?.current.productId,
+        })?.reason === "CONTEXT",
       });
     const product = skipPitch ? null : (pickProduct(input, intent) ?? null);
     const pitching = Boolean(product) && !skipPitch;

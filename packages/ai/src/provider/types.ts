@@ -52,6 +52,8 @@ export type ProductCatalogItem = {
   allowedPrice?: number;
   available: boolean;
   explicitnessCategory: ExplicitnessLevel;
+  tags?: string[];
+  mediaType?: string;
 };
 
 export type PersonaSnapshot = {
@@ -115,7 +117,7 @@ export type GenerationInput = {
     name: string;
     kind: string;
     stepIndex: number;
-    current: { body: string; mediaHint: string; priceTier: number };
+    current: { body: string; mediaHint: string; priceTier: number; productId?: string | null };
     remaining: string[];
   } | null;
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
@@ -123,6 +125,12 @@ export type GenerationInput = {
   fanIntakeBeat?: string;
   threadLessons?: string[];
   fanSentPics?: boolean;
+  sellTarget?: {
+    productId: string;
+    name: string;
+    price: number;
+    reason: "CONTEXT" | "DEFAULT" | "SEQUENCE";
+  } | null;
 };
 
 export type GenerationResult = {

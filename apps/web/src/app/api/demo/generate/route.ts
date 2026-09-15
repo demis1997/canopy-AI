@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   eligibleProducts,
   generationOutputSchema,
+  matchSellTarget,
   validateRecommendedOffer,
   type CatalogProduct,
 } from "@canopy/shared";
@@ -64,6 +65,13 @@ export async function POST(request: Request) {
     funnelStage: body.funnelStage,
     requestId: "demo",
   });
+  const sellMatch = matchSellTarget({
+    products: eligible,
+    subscriberTexts: [
+      ...body.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
+      body.subscriberMessage,
+    ],
+  });
   const result = await mock.generateReplies({
     requestId: "demo-gen",
     model: "demo-model",
@@ -99,6 +107,8 @@ export async function POST(request: Request) {
       standardPrice: p.standardPrice,
       minimumPrice: p.minimumPrice,
       available: p.available,
+      tags: p.tags,
+      mediaType: p.mediaType,
       explicitnessCategory: "SUGGESTIVE",
     })),
     funnelStage: body.funnelStage,
@@ -106,6 +116,14 @@ export async function POST(request: Request) {
     retrievedExamples: ["Tease then name a real catalog item at list price."],
     toneOverride: body.toneOverride,
     pricing: { concessionAllowed: Boolean(body.concessionAllowed), lastOffer: null, ladder: [] },
+    sellTarget: sellMatch
+      ? {
+          productId: sellMatch.product.id,
+          name: sellMatch.product.name,
+          price: sellMatch.product.standardPrice,
+          reason: sellMatch.reason,
+        }
+      : null,
   });
   const validated = validateProductsAndPrices(
     result.output,

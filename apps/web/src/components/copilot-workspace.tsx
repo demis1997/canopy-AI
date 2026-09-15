@@ -459,7 +459,7 @@ export function CopilotWorkspace(props: {
             <input
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="e.g. stop mentioning the shower set he just wants to talk"
+              placeholder="e.g. stop mentioning the dick clip he just wants to talk"
               className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-3 text-sm"
             />
           </label>

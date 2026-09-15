@@ -31,7 +31,9 @@ import {
   inferThreadLessons,
   mergeThreadLessonMemory,
   fanSentMedia,
+  looksLikeOfflineAsk,
   looksLikePacingPushback,
+  matchSellTarget,
   playbookFor,
   readFeatureFlags,
   shouldRunFanIntake,
@@ -515,6 +517,26 @@ export async function generateForConversation(input: {
     const creatorAge = creatorAgeFromText(persona.biography, persona.authorisedBackstory);
     const creatorCity = creatorCityFromText(persona.biography, persona.authorisedBackstory);
     const threadOnOffline = threadIsOnOfflineAsk(recent);
+    const sequenceProductId =
+      conversation.activeSequence?.steps[conversation.activeSequenceStep]?.productId ??
+      conversation.activeSequence?.steps.find((s) => s.productId)?.productId ??
+      null;
+    const sellMatch = matchSellTarget({
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name.replace(/\s*\(DEMO\)\s*/gi, "").trim(),
+        description: p.description,
+        tags: p.tags,
+        mediaType: p.mediaType,
+        standardPrice: p.standardPrice,
+        allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
+        available: p.available,
+      })),
+      subscriberTexts: recent.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
+      notes: `${fanNote?.notes ?? ""} ${conversation.subscriber.notes ?? ""}`,
+      memories: memories.map((m) => m.value),
+      sequenceProductId,
+    });
     const fanIntake =
       (shouldRunFanIntake({
         funnelStage: conversation.funnelStage,
@@ -522,7 +544,8 @@ export async function generateForConversation(input: {
         purchasedPpvCount,
         subscriberText,
       }) || looksLikePacingPushback(subscriberText)) &&
-      !threadOnOffline
+      !looksLikeOfflineAsk(subscriberText) &&
+      sellMatch?.reason !== "CONTEXT"
         ? inferFanIntake({
             subscriberText,
             recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
@@ -583,6 +606,8 @@ export async function generateForConversation(input: {
         sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
         allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
         available: p.available,
+        tags: p.tags,
+        mediaType: p.mediaType,
         explicitnessCategory:
           productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
       })),
@@ -602,6 +627,14 @@ export async function generateForConversation(input: {
       pricing,
       followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
       fanIntakeBeat: fanIntake?.variants[0],
+      sellTarget: sellMatch
+        ? {
+            productId: sellMatch.product.id,
+            name: sellMatch.product.name,
+            price: sellMatch.product.allowedPrice ?? sellMatch.product.standardPrice,
+            reason: sellMatch.reason,
+          }
+        : null,
       fanNotes: fanNote
         ? {
             realName: fanNote.realName,
@@ -633,7 +666,7 @@ export async function generateForConversation(input: {
                 conversation.activeSequence.steps[conversation.activeSequenceStep] ??
                 conversation.activeSequence.steps[0];
               return step
-                ? { body: step.body, mediaHint: step.mediaHint, priceTier: step.priceTier }
+                ? { body: step.body, mediaHint: step.mediaHint, priceTier: step.priceTier, productId: step.productId }
                 : { body: "", mediaHint: "TEXT", priceTier: 1 };
             })(),
             remaining: conversation.activeSequence.steps
@@ -735,6 +768,14 @@ export async function generateForConversation(input: {
         threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
         threadLessons,
         fanSentPics: fanHasSentPics,
+        sellTarget: sellMatch
+          ? {
+              productId: sellMatch.product.id,
+              name: sellMatch.product.name,
+              price: sellMatch.product.allowedPrice ?? sellMatch.product.standardPrice,
+              reason: sellMatch.reason,
+            }
+          : undefined,
       },
     );
 

@@ -43,6 +43,7 @@ import {
   PET_NAME_PUSHBACK_FALLBACK,
   PET_NAME_PUSHBACK_VARIANTS,
   ABOUT_HIM_VARIANTS,
+  looksLikeAimlessRapport,
   RAPPORT_ONLY_VARIANTS,
   areYouRealReplyVariants,
   looksLikeWeakAreYouReal,
@@ -143,6 +144,7 @@ export type ReplyGuardExtras = {
     heWantsTease?: boolean;
   };
   fanSentPics?: boolean;
+  sellTarget?: { productId: string; name: string; price: number; reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE" };
 };
 
 export function applyReplyGuards(
@@ -159,9 +161,6 @@ export function applyReplyGuards(
   let guarded = false;
   if (looksLikeOfflineAsk(subscriberText)) {
     next = swap(next, TOS_OFFLINE_VARIANTS);
-    guarded = true;
-  } else if (extras?.threadOnOffline) {
-    next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
     guarded = true;
   } else if (looksLikePetNamePushback(subscriberText)) {
     next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
@@ -185,7 +184,12 @@ export function applyReplyGuards(
   } else if (looksLikeLocationAsk(subscriberText)) {
     next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : locationReplyVariants(extras?.creatorCity ?? null));
     guarded = true;
-  } else if (extras?.fanIntake?.length && !looksLikeSextAsk(subscriberText) && !looksLikeTeaseAsk(subscriberText)) {
+  } else if (
+    extras?.fanIntake?.length &&
+    !looksLikeSextAsk(subscriberText) &&
+    !looksLikeTeaseAsk(subscriberText) &&
+    extras?.sellTarget?.reason !== "CONTEXT"
+  ) {
     next = swap(next, extras.fanIntake);
     guarded = true;
   } else if (looksLikeAgeAsk(subscriberText)) {
@@ -199,6 +203,9 @@ export function applyReplyGuards(
   ) {
     next = swap(next, ABOUT_HIM_VARIANTS);
     guarded = true;
+  } else if (extras?.threadOnOffline) {
+    next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
+    guarded = true;
   }
 
   const sextNow =
@@ -211,7 +218,10 @@ export function applyReplyGuards(
     !looksLikeWhatsWrongFollowup(subscriberText) &&
     next.replyOptions.some((o) => looksLikeStaleAreYouReal(o.text) || o.messages.some(looksLikeStaleAreYouReal))
   ) {
-    next = swap(next, sextNow ? teasePool : RAPPORT_ONLY_VARIANTS);
+    next = swap(
+      next,
+      sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+    );
     guarded = true;
   }
 
@@ -248,7 +258,7 @@ export function applyReplyGuards(
     !guarded &&
     next.replyOptions.some((o) => recent.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))))
   ) {
-    next = swap(next, looksLikeTeaseAsk(subscriberText) ? teasePool : RAPPORT_ONLY_VARIANTS);
+    next = swap(next, looksLikeTeaseAsk(subscriberText) ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
   }
 
   if (!petNamesAllowed({
@@ -313,6 +323,36 @@ export function applyReplyGuards(
     };
   }
 
+  if (
+    !looksLikeAreYouReal(subscriberText) &&
+    !looksLikeOfflineAsk(subscriberText) &&
+    !looksLikeTeaseAsk(subscriberText) &&
+    next.replyOptions.some((o) => looksLikeAimlessRapport(o.text) || o.messages.some(looksLikeAimlessRapport))
+  ) {
+    next = swap(
+      next,
+      sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+    );
+  }
+
+  if (
+    extras?.sellTarget &&
+    next.recommendedProductId &&
+    next.recommendedProductId !== extras.sellTarget.productId &&
+    (extras.catalog ?? []).some((p) => p.id === extras.sellTarget!.productId)
+  ) {
+    const namesToStrip = (extras.catalog ?? [])
+      .filter((p) => p.id !== extras.sellTarget!.productId)
+      .map((p) => catalogDisplayName(p.name ?? ""))
+      .filter((n) => n.length >= 3);
+    next = mapOptionTexts(next, (text) => stripCatalogMentions(text, namesToStrip));
+    next = {
+      ...next,
+      recommendedProductId: extras.sellTarget.productId,
+      approvedPrice: extras.sellTarget.price,
+    };
+  }
+
   return mapOptionTexts(next, (text) => rewriteDirectUnlockPitch(text));
 }
 
@@ -351,6 +391,7 @@ export function validateProductsAndPrices(
     threadBannedPetNames?: boolean;
     threadLessons?: ReplyGuardExtras["threadLessons"];
     fanSentPics?: boolean;
+    sellTarget?: ReplyGuardExtras["sellTarget"];
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -371,6 +412,7 @@ export function validateProductsAndPrices(
     threadBannedPetNames: opts?.threadBannedPetNames,
     threadLessons: opts?.threadLessons,
     fanSentPics: opts?.fanSentPics,
+    sellTarget: opts?.sellTarget,
   });
 
   if (next.recommendedProductId) {

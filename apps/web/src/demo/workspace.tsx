@@ -350,7 +350,7 @@ export function DemoWorkspace() {
     setCreatorId("creator_maya");
     selectConvo("conv_alex");
     setDemoStep(1);
-    setTip("1–2. Alex is selected with the gym request waiting.");
+    setTip("1–2. Alex is selected with the girlcock request waiting.");
     setTab("AI Copilot");
     await new Promise((r) => setTimeout(r, 350));
     setDemoStep(4);
@@ -770,7 +770,7 @@ export function DemoWorkspace() {
                 <Row k="Intent" v={intent} />
                 <Row k="Funnel" v={convo.funnelStage} />
                 <Row k="Next action" v={action} />
-                  <Row k="Prompt" v="canopy-copilot-v20" />
+                  <Row k="Prompt" v="canopy-copilot-v22" />
                 <Row k="Model" v="Demo model" />
                 <p className="text-xs text-slate-500">{convo.summary}</p>
                 {risk.length ? <p className="text-xs text-amber-700">Flags: {risk.join(", ")}</p> : null}

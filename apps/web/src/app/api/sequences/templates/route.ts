@@ -60,6 +60,43 @@ const TEMPLATES: {
     ],
   },
   {
+    name: "S1 Black lingerie",
+    kind: "TEASER",
+    description: "Black lace warmup with dildo tease. First PPV is the $8 lingerie drop.",
+    steps: [
+      { body: "dont get too excited.. i havent done anything yet", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "im just getting warmed up baby... and by the looks of things so are you", mediaHint: "PHOTO", delayMinutes: 2, priceTier: 1 },
+      { body: "this one's the black lace tease. list price. u actually wanna see", mediaHint: "PPV", delayMinutes: 4, priceTier: 1, useProduct: true },
+    ],
+  },
+  {
+    name: "S2 Netflix script",
+    kind: "PPV",
+    description: "Movie-night sexting into the Netflix PPV.",
+    steps: [
+      { body: "put something on netflix and keep ur hands where i can use them", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "i shot the rest of that scene. wanna watch it with me", mediaHint: "PPV", delayMinutes: 6, priceTier: 1, useProduct: true },
+    ],
+  },
+  {
+    name: "S3 Dominant script",
+    kind: "PPV",
+    description: "Control / JOI into the dominant drop.",
+    steps: [
+      { body: "good. now be obedient and dont touch till i say", mediaHint: "VOICE", delayMinutes: 0, priceTier: 1 },
+      { body: "this is the mean one. list price. u earning it or wasting my time", mediaHint: "PPV", delayMinutes: 5, priceTier: 1, useProduct: true },
+    ],
+  },
+  {
+    name: "Sexting script — fleshlight",
+    kind: "PPV",
+    description: "Toy / fleshlight sexting into that PPV.",
+    steps: [
+      { body: "grab that toy. i wanna hear it", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "i filmed me using one too. u getting it or just talking", mediaHint: "PPV", delayMinutes: 5, priceTier: 1, useProduct: true },
+    ],
+  },
+  {
     name: "Aftercare",
     kind: "AFTERCARE",
     description: "After the second PPV he bought. Not after the first unlock. No more pitching.",

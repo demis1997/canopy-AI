@@ -3,9 +3,9 @@ import { assertPermission, hasPermission, AuthorizationError } from "../src/perm
 import { canTransition, recommendedActionFor } from "../src/funnel.js";
 import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
-import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
+import { parseProductCsv, eligibleProducts, matchSellTarget } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, looksLikeAimlessRapport, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -213,6 +213,8 @@ describe("operator reject reasons", () => {
     expect(stripUnauthorizedPetNames("29 is a great age, loserr. why's it perfect")).not.toMatch(/loser/i);
     expect(creatorAgeFromText("Fictional 28-year-old fitness creator")).toBe(28);
     expect(looksLikeDirectUnlockPitch("unlock the girlcock video for $28 and I'll show you what i mean")).toBe(true);
+    expect(looksLikeAimlessRapport("mmm yeah keep talking\ntell me more babe")).toBe(true);
+    expect(looksLikeAimlessRapport("anyway\ni was gonna tell u something")).toBe(false);
     expect(
       pitchIsTooEarly({
         funnelStage: "INTEREST",
@@ -263,6 +265,19 @@ describe("catalog eligibility", () => {
     });
     expect(result.eligible).toHaveLength(0);
     expect(result.rejected[0]?.reason).toBe("ALREADY_PURCHASED");
+  });
+
+  it("sells the default video unless context fits another catalog item better", () => {
+    const engagement = { ...base, id: "engagement", name: "Engagement pic", standardPrice: 8, minimumPrice: 8, mediaType: "PHOTO" as const, tags: ["engagement"] };
+    const dick = { ...base, id: "dick", name: "Dick — playing with girlcock", description: "Short girlcock tease.", standardPrice: 19, minimumPrice: 18, mediaType: "VIDEO" as const, tags: ["dick", "girlcock"] };
+    const ass = { ...base, id: "ass", name: "Ass", description: "Ass video.", standardPrice: 25, minimumPrice: 25, mediaType: "VIDEO" as const, tags: ["ass"] };
+    const custom = { ...base, id: "custom", name: "Custom video", description: "He orders a custom.", standardPrice: 80, minimumPrice: 70, mediaType: "CUSTOM" as const, tags: ["custom"] };
+    const products = [engagement, dick, ass, custom];
+    expect(matchSellTarget({ products, subscriberTexts: ["hey"] })?.product.id).toBe("engagement");
+    expect(matchSellTarget({ products, subscriberTexts: ["hey"], sequenceProductId: "dick" })?.reason).toBe("SEQUENCE");
+    expect(matchSellTarget({ products, subscriberTexts: ["got any girlcock vids?"] })?.product.id).toBe("dick");
+    expect(matchSellTarget({ products, subscriberTexts: ["show me ur ass"] })?.product.id).toBe("ass");
+    expect(matchSellTarget({ products, subscriberTexts: ["can i order a custom video"] })?.product.id).toBe("custom");
   });
 });
 

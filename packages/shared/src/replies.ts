@@ -7,7 +7,7 @@ export const MEET_SPEAK_RE =
 export const TOS_OFFLINE_FALLBACK = [
   "nahh i dont do irl babe its against tos",
   "i spent too long building this page to get banned over a risk like that",
-  "lets keep it here tell me what u wanna chat about",
+    "anyway i was gonna tell u something",
 ].join("\n");
 
 export const TOS_OFFLINE_VARIANTS = [
@@ -15,36 +15,36 @@ export const TOS_OFFLINE_VARIANTS = [
   [
     "heellooo noo thats against tos",
     "i cant risk this account after all this time",
-    "gfe or just chat on here tell me",
+    "anyway i wanna show u a side of me",
   ].join("\n"),
   [
     "i dont do irl its against tos 🤭",
     "built this page too long to get banned",
-    "keep it on here what do u wanna talk about",
+    "ok but i shot something earlier",
   ].join("\n"),
   [
     "cute u asked but thats a tos thing",
     "im not gambling this page for anybody",
-    "what do u actually wanna do on here",
+    "i still wanna tell u something",
   ].join("\n"),
   [
     "noo not irl",
     "against tos and i like this account too much",
-    "stay on here with me what r u in the mood for",
+    "stay on here with me i was gonna show u something",
   ].join("\n"),
   [
     "everything stays on here babe",
     "tos would nuke the page and i spent forever on it",
-    "sooo what do u wanna talk about instead",
+    "sooo anyway i shot something filthy",
   ].join("\n"),
 ];
 
 export const TOS_OFFLINE_FOLLOWUP_VARIANTS = [
-  ["its not about the money", "its against tos and i wont risk this page", "lets keep it here"].join("\n"),
-  ["irl gets accounts banned", "im not throwing this one away", "what do u wanna talk about on here"].join("\n"),
-  ["nahh still no", "tos is tos even if u pay", "keep it on here with me"].join("\n"),
-  ["still a no on that", "id get banned and im not doing that", "chat with me on here instead"].join("\n"),
-  ["money doesnt change tos", "this page stays online", "tell me what u want on here"].join("\n"),
+  ["its not about the money", "its against tos and i wont risk this page", "anyway i was gonna tell u something"].join("\n"),
+  ["irl gets accounts banned", "im not throwing this one away", "anyway i was gonna tell u something"].join("\n"),
+  ["nahh still no", "tos is tos even if u pay", "ok but i wanna show u something"].join("\n"),
+  ["still a no on that", "id get banned and im not doing that", "i shot something earlier anyway"].join("\n"),
+  ["money doesnt change tos", "this page stays online", "anyway i was gonna tell u something"].join("\n"),
 ];
 
 /** Rotate a reply pool so generate does not always lead with the same first option. */
@@ -61,14 +61,14 @@ export function rotateVariants(variants: string[], seed?: string | null): string
 }
 
 export const SOFT_TEASE_VARIANTS = [
-  ["on here i can be worse than irl anyway", "tell me what u like"].join("\n"),
-  ["i can make that mood worse on here", "talk to me"].join("\n"),
-  ["stay with me on here", "i get filthier when its just us"].join("\n"),
+  ["on here i can be worse than irl anyway", "i was gonna show u something"].join("\n"),
+  ["i can make that mood worse on here", "wait i shot something earlier"].join("\n"),
+  ["stay with me on here", "anyway i wanna show u a side of me"].join("\n"),
 ];
 
 export const PET_NAME_PUSHBACK_FALLBACK = [
   "oops my bad wont do that",
-  "what do u wanna talk about",
+  "anyway i was gonna tell u something",
 ].join("\n");
 
 function splitSentences(line: string): string[] {
@@ -173,10 +173,18 @@ export const ABOUT_HIM_VARIANTS = [
 ];
 
 export const RAPPORT_ONLY_VARIANTS = [
-  ["mmm yeah keep talking", "i like this", "tell me more"].join("\n"),
-  ["heellooo", "say that again", "im listening"].join("\n"),
-  ["yeah?", "keep going", "what else"].join("\n"),
+  ["anyway", "i was gonna tell u something"].join("\n"),
+  ["wait", "i shot something earlier"].join("\n"),
+  ["ok but", "i wanna show u a side of me"].join("\n"),
 ];
+
+export function looksLikeAimlessRapport(text: string): boolean {
+  const t = text.toLowerCase();
+  if (/\b(prove myself|seen me|verification|how old|where are you from|hands free|shot something|ppv|girlcock|for a living)\b/i.test(t)) {
+    return false;
+  }
+  return /\b(tell me more|keep talking|im listening|what else|say that again)\b/i.test(t);
+}
 
 export const ARE_YOU_REAL_VARIANTS = [
   ["i could prove it rn", "i just dont see why i would for a stranger", "enough ppl already believe me"].join("\n"),
@@ -208,7 +216,7 @@ export function looksLikeWeakAreYouReal(text: string): boolean {
 
 export const PET_NAME_PUSHBACK_VARIANTS = [
   ["oops my bad", "wont call u that"].join("\n"),
-  ["got it dropping it", "what do u wanna talk about"].join("\n"),
+  ["got it dropping it", "anyway i was gonna tell u something"].join("\n"),
   ["ok ok i heard u", "no more of that"].join("\n"),
 ];
 
@@ -538,7 +546,7 @@ export function rewriteDirectUnlockPitch(text: string): string {
 }
 
 export function looksLikeContentAsk(text: string): boolean {
-  return /\b(buy|ppv|send (it|me|the)|show me|the video|custom|dick rate|\bjoi\b|\bgfe\b|how much|price|pics? please)\b/i.test(
+  return /\b(buy|ppv|send (it|me|the)|show me|the video|custom|dick rate|\bjoi\b|\bgfe\b|how much|price|pics? please|got anything|any (more )?(clips?|vids?|videos?|sets?)|from the gym|shower (set|clip|vid)|lingerie|girlcock|dildo|netflix|fleshlight|\bass\b|tits|boobs|feet|dick)\b/i.test(
     text,
   );
 }
@@ -569,9 +577,11 @@ export function pitchIsTooEarly(opts: {
   fanMessageCount?: number;
   subscriberText: string;
   threadOnOffline?: boolean;
+  catalogFit?: boolean;
 }): boolean {
   if (opts.threadOnOffline) return true;
   if (looksLikeOfflineAsk(opts.subscriberText)) return true;
+  if (opts.catalogFit) return false;
   if (looksLikeContentAsk(opts.subscriberText) || looksLikeSextAsk(opts.subscriberText)) return false;
   if (/\b(too much|cheaper|discount|too expensive|how much)\b/i.test(opts.subscriberText)) return false;
   const funnel = opts.funnelStage ?? "";

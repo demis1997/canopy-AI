@@ -691,7 +691,37 @@ describe("structured output", () => {
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
     expect(blob).not.toMatch(/ofcourse|not a bot/);
-    expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg|keep talking/);
+    expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg|show u|shot something/);
+  });
+
+  it("replaces idle tell-me-more with the next sales beat", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "mmm yeah keep talking\ntell me more babe",
+            messages: ["mmm yeah keep talking", "tell me more babe"],
+            tone: "PLAYFUL",
+            internalReason: "idle",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "hey",
+      { fanIntake: ["mmm how old are you?\nfeel curious idk why"] },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/tell me more/);
+    expect(blob).toMatch(/how old|tell u something|shot something|show u/);
   });
 
   it("acks pacing pushback instead of inventing a hobby", () => {
@@ -952,6 +982,51 @@ describe("mock provider", () => {
     expect(blob).not.toMatch(/aftercare later|then the ppv/);
   });
 
+  it("sells the girlcock clip when he asks for it instead of the default lingerie drop", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("got any girlcock vids?"),
+      funnelStage: "INTEREST",
+      products: [
+        {
+          id: "engagement",
+          name: "Engagement pic",
+          description: "Cheap hello still",
+          standardPrice: 8,
+          minimumPrice: 8,
+          available: true,
+          tags: ["engagement"],
+          mediaType: "PHOTO",
+          explicitnessCategory: "FLIRTY",
+        },
+        {
+          id: "dick",
+          name: "Dick — playing with girlcock",
+          description: "Short girlcock tease",
+          standardPrice: 19,
+          minimumPrice: 18,
+          available: true,
+          tags: ["dick", "girlcock", "tease"],
+          mediaType: "VIDEO",
+          explicitnessCategory: "VERY_EXPLICIT",
+        },
+        {
+          id: "ass",
+          name: "Ass",
+          description: "Ass video",
+          standardPrice: 25,
+          minimumPrice: 25,
+          available: true,
+          tags: ["ass"],
+          mediaType: "VIDEO",
+          explicitnessCategory: "EXPLICIT",
+        },
+      ],
+    });
+    expect(result.output.recommendedProductId).toBe("dick");
+    expect(result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase()).toMatch(/girlcock/);
+  });
+
   it("does not pitch a rejected catalog item when the fan is just talking", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies({
@@ -1141,6 +1216,18 @@ describe("operator rejection prompt", () => {
     expect(system).toMatch(/recommendedProductId null/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);
+    expect(system).toMatch(/sell_target|specific video|valid_products/i);
+  });
+
+  it("pins the sell_target in the prompt", () => {
+    const messages = composeGenerationPrompt({
+      ...genInput("got anything from the gym?"),
+      sellTarget: { productId: "dick", name: "Dick — playing with girlcock", price: 19, reason: "CONTEXT" },
+    });
+    const user = String(messages[1]?.content ?? "");
+    expect(user).toMatch(/sell_target/);
+    expect(user).toMatch(/girlcock/);
+    expect(user).toMatch(/CONTEXT/);
   });
 });
 

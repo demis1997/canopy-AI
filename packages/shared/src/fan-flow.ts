@@ -14,7 +14,7 @@ export const FAN_INTAKE_PLAYBOOK = `NEW/EXISTING FAN FLOW — stay on ONE beat p
 11 Job (SAVE TO NOTES): soo last question then u always busy? what do u do for a living just curiouss
 12 Cool job vs generic job: one follow-up, then stop interviewing
 13 Transition: done with the boring questions haha i want to tell you something now... then tease. Still no PPV.
-If he says why / we just started talking: first bubble owns it (haha my bad just getting to know u), then the current beat. Never invent a new topic.`;
+If he goes off-script: first bubble handles THAT, last bubble is the current sales beat. If he asks for a specific clip that exists in the vault, skip remaining intake and sell that. Never send only tell me more / keep talking. The chat exists to sell.`;
 
 export type FanIntakeVars = {
   name?: string;

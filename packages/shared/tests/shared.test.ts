@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeDirectUnlockPitch, pitchIsTooEarly, creatorAgeFromText, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -163,6 +163,8 @@ describe("operator reject reasons", () => {
     expect(containsMeetSpeak(scrubMeetSpeak("lets meet up"))).toBe(false);
     expect(looksLikeOfflineAsk("Do you do meetups with fans or not?")).toBe(true);
     expect(looksLikePetNamePushback("Why are you calling me a good boy?")).toBe(true);
+    expect(looksLikePetNamePushback("Stop calling me a loser")).toBe(true);
+    expect(looksLikePetNamePushback("No, so please stop using it")).toBe(true);
     expect(looksLikeFanInvitesQuestions("What do you wanna know about me?")).toBe(true);
     expect(looksLikeInvertedCuriosity("oh? you're curious about me?")).toBe(true);
     expect(looksLikeNoPitchAsk("stop mentioning the shower set because fan is just interested in conversating")).toBe(
@@ -190,7 +192,25 @@ describe("operator reject reasons", () => {
     expect(looksLikeAgeAsk("How old are you?")).toBe(true);
     expect(looksLikeAgeAsk("hi how old do i have to be to talk like this")).toBe(false);
     expect(looksLikeAreYouReal("Are you real?")).toBe(true);
+    expect(looksLikeAreYouReal("I'm talking to a robot")).toBe(true);
+    expect(looksLikeAreYouReal("So you are a bot?")).toBe(true);
     expect(looksLikeInventedAboutHimCallout("I'm a what? And I never said I'm 28")).toBe(true);
+    expect(looksLikeInventedAboutHimCallout("What do you mean 29 is perfect? You just said you're 29")).toBe(true);
+    expect(looksLikeLocationAsk("Where are you from?")).toBe(true);
+    expect(creatorCityFromText("Lives in a coastal city, has a rescue cat")).toBe("coastal city");
+    const firsts = new Set(
+      ["a", "bb", "hello", "world", "irl-1", "irl-2", "seed-9"].map((seed) => rotateVariants(["a", "b", "c", "d", "e", "f"], seed)[0]),
+    );
+    expect(firsts.size).toBeGreaterThan(1);
+    expect(
+      threadIsOnOfflineAsk([
+        { authorType: "SUBSCRIBER", body: "do you do IRL stuff? I pay a lot of money" },
+        { authorType: "CHATTER", body: "nahh i dont do irl babe its against tos" },
+        { authorType: "SUBSCRIBER", body: "Where are you from?" },
+      ]),
+    ).toBe(false);
+    expect(threadIsOnOfflineAsk([{ authorType: "SUBSCRIBER", body: "So do you do IRL stuff?" }])).toBe(true);
+    expect(stripUnauthorizedPetNames("29 is a great age, loserr. why's it perfect")).not.toMatch(/loser/i);
     expect(creatorAgeFromText("Fictional 28-year-old fitness creator")).toBe(28);
     expect(looksLikeDirectUnlockPitch("unlock the girlcock video for $28 and I'll show you what i mean")).toBe(true);
     expect(

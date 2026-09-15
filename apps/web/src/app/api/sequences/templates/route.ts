@@ -10,12 +10,18 @@ const TEMPLATES: {
   steps: { body: string; mediaHint: "TEXT" | "VOICE" | "PHOTO" | "PPV"; delayMinutes: number; priceTier: number; useProduct?: boolean }[];
 }[] = [
   {
-    name: "Welcome / openers",
+    name: "New / existing fan flow",
     kind: "STARTER",
-    description: "First messages after he subscribes or says hi.",
+    description: "Intake script: opener, gym, what he’s doing, vibe check, age, location, job, then tease. One beat per send. Take notes.",
     steps: [
-      { body: "mmm hi, you caught me at a good time. what pulled you in?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "don't be shy. tell me what you liked first.", mediaHint: "TEXT", delayMinutes: 15, priceTier: 1 },
+      { body: "oh heyy youre here NAME. hows it going? enjoying the view so far ;)", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "im doing great actually was about to get ready to go to the gym and saw u here", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "well what you doing now? doing anything interesting besides talking to me? 😏", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "sooo before we keep going both hands free rn or is one of them busy... 👀", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "mmm how old are you? feel curious idk why", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "where are you from btw? lets see how close (or far) we are 😏", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "soo last question then u always busy? what do u do for a living? just curiouss", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "done with the boring questions haha i want to tell you something now...", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
     ],
   },
   {

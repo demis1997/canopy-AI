@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, ageReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, rotateVariants, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, ARE_YOU_REAL_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -19,10 +19,11 @@ import type {
 
 function classify(text: string, context = ""): Intent {
   const t = text.toLowerCase();
-  if (/\b(refund|chargeback|scam)\b/.test(t)) return "REFUND";
+  if (/\b(refund|chargeback|scam)\b/.test(t) && !/\b(robot|bot|model)\b/.test(t)) return "REFUND";
   if (/\b(complaint|manager|report you)\b/.test(t)) return "COMPLAINT";
   if (/\b(too much|cheaper|discount|too expensive|\d+\s*(usd|\$))\b/.test(t)) return "PRICE_OBJECTION";
   if (/\b(buy|ppv|video|pic|pics|custom|send it|send me|show me)\b/.test(t)) return "CONTENT_REQUEST";
+  if (/\b(tease me|then do it|combination of both)\b/.test(t)) return "SEXTING";
   if (/\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick)\b/.test(t)) return "SEXTING";
   if (/\b(sexy|hot|cute|beautiful|gorgeous|pretty|damn|story)\b/.test(t)) return "FLIRT";
   const blob = `${t} ${context.toLowerCase()}`;
@@ -149,29 +150,68 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   ) as "DOMINANT" | "ROMANTIC" | "PLAYFUL";
 
   if (looksLikeOfflineAsk(last)) {
+    const rotated = rotateVariants(TOS_OFFLINE_VARIANTS, input.requestId);
+    return rotated.slice(0, 3).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : "PLAYFUL", "TOS offline refusal without banned words"),
+    );
+  }
+
+  if (looksLikeAreYouReal(last) || looksLikeWhatsWrongFollowup(last)) {
+    return rotateVariants(ARE_YOU_REAL_VARIANTS, input.requestId).slice(0, 3).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "He asked if she is real"),
+    );
+  }
+
+  if (looksLikePetNamePushback(last)) {
+    return PET_NAME_PUSHBACK_VARIANTS.map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "Drop the pet name"),
+    );
+  }
+
+  if (looksLikeRefundCallout(last)) {
+    return REFUND_CALLOUT_VARIANTS.map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "Do not double down on an invented refund"),
+    );
+  }
+
+  if (looksLikeTeaseAsk(last)) {
+    const trans = /\b(girlcock|tgirl|trans girl)\b/i.test(
+      `${input.persona.biography} ${input.persona.authorisedBackstory} ${input.persona.preferredExplicitVocabulary.join(" ")}`,
+    );
+    return rotateVariants(teaseReplyVariants(trans), input.requestId).slice(0, 3).map((text, i) =>
+      asOption(text.split("\n"), "TEASING", "Actually tease, do not talk about teasing"),
+    );
+  }
+
+  if (looksLikeInventedAboutHimCallout(last)) {
     return [
-      asOption(
-        [
-          "nahh i dont do irl babe its against tos 🤭",
-          "i spent too long building this page to get banned",
-          "lets keep it here tell me what u wanna chat about",
-        ],
-        "DIRECT",
-        "TOS offline refusal without banned words",
-      ),
-      asOption(
-        ["heellooo noo thats against tos", "i cant risk this account after all this time", "gfe or joi on here tell me"],
-        "PLAYFUL",
-        "Warm TOS refusal then pivot",
-      ),
+      asOption(["oops my bad", "that was about me not u"], "DIRECT", "He called out an invented fact about him"),
+      asOption(["wait no that was me", "i mixed it up"], tone, "Own the mixup"),
     ];
   }
 
-  if (looksLikeAreYouReal(last)) {
-    return [
-      asOption(["ofcourse", "very real over here"], "DIRECT", "He asked if she is real"),
-      asOption(["ofcourse i am", "why wouldnt i be"], tone, "Warm ofcourse"),
-    ];
+  if (
+    shouldRunFanIntake({
+      funnelStage: input.funnelStage,
+      intent,
+      purchasedPpvCount: input.pricing?.purchasedPpvCount,
+      subscriberText: last,
+    }) &&
+    !threadIsOnOfflineAsk(input.recentMessages)
+  ) {
+    const intake = inferFanIntake({
+      subscriberText: last,
+      recentMessages: input.recentMessages,
+      fanNotes: input.fanNotes,
+      subscriberName: input.fanNotes?.realName,
+      creatorAge: creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory),
+      creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
+    });
+    if (intake) {
+      return intake.variants.map((text, i) =>
+        asOption(text.split("\n"), i === 0 ? tone : "TEASING", `Fan intake ${intake.id}`),
+      );
+    }
   }
 
   if (looksLikeAgeAsk(last)) {
@@ -183,11 +223,11 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     ];
   }
 
-  if (looksLikeInventedAboutHimCallout(last)) {
-    return [
-      asOption(["oops my bad", "that was about me not u"], "DIRECT", "He called out an invented fact about him"),
-      asOption(["wait no that was me", "i mixed it up"], tone, "Own the mixup"),
-    ];
+  if (looksLikeLocationAsk(last)) {
+    const city = creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory);
+    return rotateVariants(locationReplyVariants(city), input.requestId).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? tone : "TEASING", "Answer HER city not his"),
+    );
   }
 
   if (looksLikeFanInvitesQuestions(last)) {

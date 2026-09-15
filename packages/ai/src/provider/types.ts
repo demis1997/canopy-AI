@@ -120,6 +120,7 @@ export type GenerationInput = {
   } | null;
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
   operatorRejections?: { text: string; reason: string; conversationId?: string }[];
+  fanIntakeBeat?: string;
 };
 
 export type GenerationResult = {

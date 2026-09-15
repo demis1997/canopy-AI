@@ -25,10 +25,15 @@ import {
   eligibleProducts,
   collectOperatorRejections,
   creatorAgeFromText,
+  creatorCityFromText,
   followUpPhase,
+  inferFanIntake,
+  looksLikePacingPushback,
   playbookFor,
   readFeatureFlags,
+  shouldRunFanIntake,
   splitReplyBubbles,
+  threadBannedPetNames,
   threadIsOnOfflineAsk,
   type CatalogProduct,
 } from "@canopy/shared";
@@ -490,6 +495,29 @@ export async function generateForConversation(input: {
       })),
     );
 
+    const creatorAge = creatorAgeFromText(persona.biography, persona.authorisedBackstory);
+    const creatorCity = creatorCityFromText(persona.biography, persona.authorisedBackstory);
+    const threadOnOffline = threadIsOnOfflineAsk(recent);
+    const fanIntake =
+      (shouldRunFanIntake({
+        funnelStage: conversation.funnelStage,
+        intent: classified.intent,
+        purchasedPpvCount,
+        subscriberText,
+      }) || looksLikePacingPushback(subscriberText)) &&
+      !threadOnOffline
+        ? inferFanIntake({
+            subscriberText,
+            recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
+            fanNotes: fanNote
+              ? { location: fanNote.location, notes: fanNote.notes, extra: (fanNote.extra as Record<string, string>) ?? {} }
+              : null,
+            subscriberName: conversation.subscriber.displayName,
+            creatorAge,
+            creatorCity,
+          })
+        : null;
+
     const result = await generateRepliesWithRetry(provider, {
       requestId,
       model: model || "mock-qwen3-32b-uncensored",
@@ -542,7 +570,7 @@ export async function generateForConversation(input: {
           productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
       })),
       funnelStage: conversation.funnelStage,
-      playbook: playbookFor(
+      playbook: fanIntake ? "FAN_INTAKE_FLOW" : playbookFor(
         conversation.funnelStage,
         classified.intent,
         conversation.unansweredFollowUps,
@@ -554,6 +582,7 @@ export async function generateForConversation(input: {
       rewriteStyle: input.rewriteStyle,
       pricing,
       followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
+      fanIntakeBeat: fanIntake?.variants[0],
       fanNotes: fanNote
         ? {
             realName: fanNote.realName,
@@ -592,7 +621,15 @@ export async function generateForConversation(input: {
               .slice(conversation.activeSequenceStep + 1)
               .map((s) => s.body),
           }
-        : null,
+        : fanIntake
+          ? {
+              name: "New / existing fan flow",
+              kind: "STARTER",
+              stepIndex: 0,
+              current: { body: fanIntake.variants[0] ?? "", mediaHint: "TEXT", priceTier: 1 },
+              remaining: [],
+            }
+          : null,
     });
 
     const post = evaluateSafety({
@@ -667,10 +704,16 @@ export async function generateForConversation(input: {
         rejections: operatorRejections,
         conversationId: conversation.id,
         dominance: fanNote?.dominance,
-        creatorAge: creatorAgeFromText(persona.biography, persona.authorisedBackstory),
+        creatorAge,
+        creatorCity,
         funnelStage: conversation.funnelStage,
         fanMessageCount,
-        threadOnOffline: threadIsOnOfflineAsk(recent),
+        threadOnOffline,
+        fanIntake: fanIntake?.variants,
+        variantSeed: requestId,
+        recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
+        transPersona,
+        threadBannedPetNames: threadBannedPetNames(recent),
       },
     );
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluateSafety, containsPromptInjection } from "../src/safety/index.js";
 import { parseGenerationOutput, validateProductsAndPrices, applyReplyGuards } from "../src/pipeline/validate-output.js";
-import { containsMeetSpeak } from "@canopy/shared";
+import { containsMeetSpeak, inferFanIntake } from "@canopy/shared";
 import { MockLLMProvider } from "../src/provider/mock.js";
 import { concessionAllowedFrom, resolveOfferPrice } from "../src/pricing/concession.js";
 import { annotateModels, VeniceLLMProvider } from "../src/provider/venice.js";
@@ -435,6 +435,242 @@ describe("structured output", () => {
     expect(blob).toMatch(/lots|fun|told a girl|bored/);
   });
 
+  it("owns the mixup when he says she projected her age onto him", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "29 is a great age, loserr. why's it perfect, you ask?",
+            messages: ["29 is a great age, loserr. why's it perfect, you ask?"],
+            tone: "PLAYFUL",
+            internalReason: "projected",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "What do you mean 29 is perfect? You just said you're 29",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/my bad|mixed it up|that was about me|that was me/);
+    expect(blob).not.toMatch(/loser|perfect/);
+  });
+
+  it("answers her city instead of inventing that he is a beach fan", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh really? you're from the beach?\ni'm from... well nevermind. where are you from? tell me",
+            messages: ["oh really? you're from the beach?", "i'm from... well nevermind. where are you from? tell me"],
+            tone: "PLAYFUL",
+            internalReason: "invert",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Where are you from?",
+      { creatorCity: "coastal city" },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/you'?re from the beach/);
+    expect(blob).toMatch(/coast|water/);
+  });
+
+  it("rotates irl refusals so the first option is not always the same", () => {
+    const draft = {
+      intent: "CASUAL_CHAT" as const,
+      funnelStage: "RAPPORT" as const,
+      explicitnessLevel: "FLIRTY" as const,
+      recommendedAction: "REPLY" as const,
+      replyOptions: [
+        { text: "placeholder", messages: ["placeholder"], tone: "PLAYFUL" as const, internalReason: "x" },
+        { text: "placeholder2", messages: ["placeholder2"], tone: "PLAYFUL" as const, internalReason: "x" },
+        { text: "placeholder3", messages: ["placeholder3"], tone: "PLAYFUL" as const, internalReason: "x" },
+      ],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [] as string[],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    };
+    const firsts = new Set(
+      ["seed-one", "seed-two", "seed-three", "alpha", "omega", "irl-ask-7"].map(
+        (seed) => applyReplyGuards(draft, "So do you do IRL stuff?", { variantSeed: seed }).replyOptions[0]!.text,
+      ),
+    );
+    expect(firsts.size).toBeGreaterThan(1);
+  });
+
+  it("actually teases instead of talking about teasing", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "SEXTING",
+        funnelStage: "OFFER",
+        explicitnessLevel: "EXPLICIT",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh really? you want me to tease you? you're gonna love it.",
+            messages: ["oh really? you want me to tease you? you're gonna love it."],
+            tone: "TEASING",
+            internalReason: "meta",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Tease me then",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/you want me to tease|gonna love it|what i do best/);
+    expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg/);
+  });
+
+  it("drops loser when he says stop calling me that", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh? you dont like that name, hmmm?\nwhat's your fav then, loser?",
+            messages: ["oh? you dont like that name, hmmm?", "what's your fav then, loser?"],
+            tone: "PLAYFUL",
+            internalReason: "bad",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Stop calling me a loser",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/loser/);
+    expect(blob).toMatch(/my bad|dropping it|heard u|wont call/);
+  });
+
+  it("does not invent a refund when he says he is talking to a robot", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "REFUND",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "nahh i dont do refunds, babe.",
+            messages: ["nahh i dont do refunds, babe."],
+            tone: "DIRECT",
+            internalReason: "invented",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Of course I'm not happy. I'm talking to a robot. I want to speak with the actual model",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/refund/);
+    expect(blob).toMatch(/ofcourse|real/);
+  });
+
+  it("does not confirm she is a bot", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "ofcourse i am babe\nreal and ready to tease you",
+            messages: ["ofcourse i am babe", "real and ready to tease you"],
+            tone: "PLAYFUL",
+            internalReason: "stale",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "What do you mean of course? So you are a bot?",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/^ofcourse/);
+    expect(blob).toMatch(/real/);
+    expect(blob).not.toMatch(/ofcourse i am babe|ready to tease you/);
+  });
+
+  it("acks pacing pushback instead of inventing a hobby", () => {
+    const beat = inferFanIntake({
+      subscriberText: "Why? we just started talking",
+      recentMessages: [{ authorType: "CHATTER", body: "sooo both hands free rn" }],
+    });
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "INTEREST",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "oh a beach fan huh?\ni like the water too, though my skin burns easily",
+            messages: ["oh a beach fan huh?", "i like the water too, though my skin burns easily"],
+            tone: "PLAYFUL",
+            internalReason: "off topic",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Why? we just started talking",
+      { fanIntake: beat?.variants },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/beach|water|burns/);
+    expect(blob).toMatch(/getting to know|no rush|what u doing|fair/);
+  });
+
   it("does not pitch a named ppv on an irl follow-up", () => {
     const guarded = applyReplyGuards(
       {
@@ -684,14 +920,14 @@ describe("mock provider", () => {
     expect(blob).toMatch(/lots|fun|told a girl/);
   });
 
-  it("answers her age from the persona", async () => {
+  it("makes him guess her age in the fan flow", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies({
       ...genInput("How old are you?"),
       persona: { ...persona, biography: "Fictional 28-year-old fitness creator" },
     });
     const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/\bim 28\b|heellooo im 28/);
+    expect(blob).toMatch(/how old do u think i am|guess/);
     expect(blob).not.toMatch(/you'?re a/);
   });
 
@@ -842,6 +1078,7 @@ describe("operator rejection prompt", () => {
     expect(system).toMatch(/Never write meet/);
     expect(system).toMatch(/against TOS/);
     expect(system).toMatch(/do not invert who is asking/);
+    expect(system).toMatch(/FAN_INTAKE_FLOW|new\/existing fan/i);
     expect(system).toMatch(/recommendedProductId null/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);

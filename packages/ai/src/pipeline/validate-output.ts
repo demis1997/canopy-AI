@@ -12,7 +12,16 @@ import {
   looksLikeAgeAsk,
   looksLikeAreYouReal,
   looksLikeInventedAboutHimCallout,
+  looksLikeLocationAsk,
   looksLikeSexualPivot,
+  looksLikePacingPushback,
+  looksLikeTeaseAsk,
+  looksLikeMetaTease,
+  looksLikeRefundTalk,
+  looksLikeRefundAsk,
+  looksLikeRefundCallout,
+  looksLikeInventedBeach,
+  looksLikeWhatsWrongFollowup,
   petNamesAllowed,
   stripUnauthorizedPetNames,
   wantsNoPitch,
@@ -22,15 +31,21 @@ import {
   rewriteDirectUnlockPitch,
   stripCatalogMentions,
   ageReplyVariants,
+  locationReplyVariants,
+  pickFreshVariants,
+  tooSimilar,
+  teaseReplyVariants,
   normalizeReplyBubbles,
   TOS_OFFLINE_VARIANTS,
   TOS_OFFLINE_FOLLOWUP_VARIANTS,
   PET_NAME_PUSHBACK_FALLBACK,
+  PET_NAME_PUSHBACK_VARIANTS,
   ABOUT_HIM_VARIANTS,
   RAPPORT_ONLY_VARIANTS,
   ARE_YOU_REAL_VARIANTS,
   INVENTED_ABOUT_HIM_VARIANTS,
   SOFT_TEASE_VARIANTS,
+  REFUND_CALLOUT_VARIANTS,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -76,8 +91,14 @@ function mapOptionTexts(
   return { ...output, replyOptions: options };
 }
 
-function replaceAllOptions(output: GenerationOutput, texts: string[]): GenerationOutput {
-  const next = mapOptionTexts(output, (_text, i) => texts[i] ?? texts[0]!);
+function replaceAllOptions(
+  output: GenerationOutput,
+  texts: string[],
+  seed?: string | null,
+  recent: string[] = [],
+): GenerationOutput {
+  const pool = pickFreshVariants(texts, recent, seed);
+  const next = mapOptionTexts(output, (_text, i) => pool[i] ?? pool[0]!);
   return {
     ...next,
     replyOptions: next.replyOptions.map((o) => ({
@@ -105,6 +126,12 @@ export type ReplyGuardExtras = {
   funnelStage?: string;
   fanMessageCount?: number;
   threadOnOffline?: boolean;
+  fanIntake?: string[];
+  variantSeed?: string | null;
+  creatorCity?: string | null;
+  recentOutbound?: string[];
+  transPersona?: boolean;
+  threadBannedPetNames?: boolean;
 };
 
 export function applyReplyGuards(
@@ -112,32 +139,92 @@ export function applyReplyGuards(
   subscriberText = "",
   extras?: ReplyGuardExtras,
 ): GenerationOutput {
+  const seed = extras?.variantSeed;
+  const recent = extras?.recentOutbound ?? [];
+  const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
+  const swap = (next: GenerationOutput, pool: string[]) => replaceAllOptions(next, pool, seed, recent);
+
   let next = scrubOfflineAsks(output);
+  let guarded = false;
   if (looksLikeOfflineAsk(subscriberText)) {
-    next = replaceAllOptions(next, TOS_OFFLINE_VARIANTS);
+    next = swap(next, TOS_OFFLINE_VARIANTS);
+    guarded = true;
   } else if (extras?.threadOnOffline) {
-    next = replaceAllOptions(
-      next,
-      looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS,
-    );
-  } else if (looksLikeAreYouReal(subscriberText)) {
-    next = replaceAllOptions(next, ARE_YOU_REAL_VARIANTS);
+    next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
+    guarded = true;
   } else if (looksLikePetNamePushback(subscriberText)) {
-    next = replaceAllOptions(next, [PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK, PET_NAME_PUSHBACK_FALLBACK]);
-  } else if (looksLikeAgeAsk(subscriberText)) {
-    next = replaceAllOptions(next, ageReplyVariants(extras?.creatorAge ?? null));
+    next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
+    guarded = true;
+  } else if (looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText)) {
+    next = swap(next, ARE_YOU_REAL_VARIANTS);
+    guarded = true;
+  } else if (looksLikeRefundCallout(subscriberText)) {
+    next = swap(next, REFUND_CALLOUT_VARIANTS);
+    guarded = true;
   } else if (looksLikeInventedAboutHimCallout(subscriberText)) {
-    next = replaceAllOptions(next, INVENTED_ABOUT_HIM_VARIANTS);
+    next = swap(next, INVENTED_ABOUT_HIM_VARIANTS);
+    guarded = true;
+  } else if (looksLikeTeaseAsk(subscriberText)) {
+    next = swap(next, teasePool);
+    guarded = true;
+  } else if (looksLikePacingPushback(subscriberText) && extras?.fanIntake?.length) {
+    next = swap(next, extras.fanIntake);
+    guarded = true;
+  } else if (looksLikeLocationAsk(subscriberText)) {
+    next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : locationReplyVariants(extras?.creatorCity ?? null));
+    guarded = true;
+  } else if (extras?.fanIntake?.length) {
+    next = swap(next, extras.fanIntake);
+    guarded = true;
+  } else if (looksLikeAgeAsk(subscriberText)) {
+    next = swap(next, ageReplyVariants(extras?.creatorAge ?? null));
+    guarded = true;
   } else if (
     looksLikeFanInvitesQuestions(subscriberText) &&
     next.replyOptions.some(
       (o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity),
     )
   ) {
-    next = replaceAllOptions(next, ABOUT_HIM_VARIANTS);
+    next = swap(next, ABOUT_HIM_VARIANTS);
+    guarded = true;
   }
 
-  if (!petNamesAllowed({ subscriberText, dominance: extras?.dominance })) {
+  if (
+    looksLikeTeaseAsk(subscriberText) &&
+    next.replyOptions.some((o) => looksLikeMetaTease(o.text) || o.messages.some(looksLikeMetaTease))
+  ) {
+    next = swap(next, teasePool);
+    guarded = true;
+  }
+
+  if (
+    !looksLikeRefundAsk(subscriberText) &&
+    !looksLikeRefundCallout(subscriberText) &&
+    next.replyOptions.some((o) => looksLikeRefundTalk(o.text) || o.messages.some(looksLikeRefundTalk))
+  ) {
+    next = swap(next, looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText) ? ARE_YOU_REAL_VARIANTS : REFUND_CALLOUT_VARIANTS);
+    guarded = true;
+  }
+
+  if (
+    next.replyOptions.some((o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach))
+  ) {
+    next = swap(next, INVENTED_ABOUT_HIM_VARIANTS);
+    guarded = true;
+  }
+
+  if (
+    !guarded &&
+    next.replyOptions.some((o) => recent.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))))
+  ) {
+    next = swap(next, looksLikeTeaseAsk(subscriberText) ? teasePool : RAPPORT_ONLY_VARIANTS);
+  }
+
+  if (!petNamesAllowed({
+    subscriberText,
+    dominance: extras?.dominance,
+    threadBanned: extras?.threadBannedPetNames,
+  })) {
     next = mapOptionTexts(next, (text) => stripUnauthorizedPetNames(text));
   }
 
@@ -225,6 +312,12 @@ export function validateProductsAndPrices(
     funnelStage?: string;
     fanMessageCount?: number;
     threadOnOffline?: boolean;
+    fanIntake?: string[];
+    variantSeed?: string | null;
+    creatorCity?: string | null;
+    recentOutbound?: string[];
+    transPersona?: boolean;
+    threadBannedPetNames?: boolean;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -237,6 +330,12 @@ export function validateProductsAndPrices(
     funnelStage: opts?.funnelStage,
     fanMessageCount: opts?.fanMessageCount,
     threadOnOffline: opts?.threadOnOffline,
+    fanIntake: opts?.fanIntake,
+    variantSeed: opts?.variantSeed,
+    creatorCity: opts?.creatorCity,
+    recentOutbound: opts?.recentOutbound,
+    transPersona: opts?.transPersona,
+    threadBannedPetNames: opts?.threadBannedPetNames,
   });
 
   if (next.recommendedProductId) {

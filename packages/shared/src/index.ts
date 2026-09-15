@@ -7,3 +7,4 @@ export * from "./catalog.js";
 export * from "./automation.js";
 export * from "./crm.js";
 export * from "./replies.js";
+export * from "./fan-flow.js";

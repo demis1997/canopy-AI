@@ -219,6 +219,7 @@ export async function generateForConversation(input: {
     },
     orderBy: { createdAt: "desc" },
   });
+  // Latest subscriber message only — never rolling summary, last creator line, or combined history.
   const subscriberText = latestFan?.body ?? "";
 
   await recordAnalytics({
@@ -894,6 +895,7 @@ export async function generateForConversation(input: {
         fanIntake: fanIntake?.variants,
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
+        recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
         transPersona,
         threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
         threadLessons,

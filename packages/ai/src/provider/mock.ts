@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeConfirmedInventedAboutHimCallout, looksLikeMixupCalloutLanguage, looksLikeDirectCreatorQuestion, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, looksLikeRelationshipAsk, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, relationshipReplyVariants, inventedAboutHimReplyVariants, MIXUP_CLARIFY_VARIANTS, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -201,11 +201,25 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     );
   }
 
-  if (looksLikeInventedAboutHimCallout(last)) {
-    return [
-      asOption(["oops my bad", "that was about me not u"], "DIRECT", "He called out an invented fact about him"),
-      asOption(["wait no that was me", "i mixed it up"], tone, "Own the mixup"),
-    ];
+  if (looksLikeRelationshipAsk(last)) {
+    return rotateVariants(relationshipReplyVariants(), input.requestId).slice(0, 3).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? tone : "PLAYFUL", "Answer HER relationship status"),
+    );
+  }
+
+  const mixup = looksLikeConfirmedInventedAboutHimCallout({
+    subscriberText: last,
+    recentMessages: input.recentMessages,
+  });
+  if (mixup.matched) {
+    return inventedAboutHimReplyVariants(mixup.aboutMe).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "Confirmed mixup about him"),
+    );
+  }
+  if (looksLikeMixupCalloutLanguage(last) && !looksLikeDirectCreatorQuestion(last)) {
+    return MIXUP_CLARIFY_VARIANTS.map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "DIRECT" : tone, "Unconfirmed mixup — ask what he means"),
+    );
   }
 
   if (

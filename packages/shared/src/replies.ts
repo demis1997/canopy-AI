@@ -241,10 +241,47 @@ export const TEASE_TRANS_VARIANTS = [
 ];
 
 export const INVENTED_ABOUT_HIM_VARIANTS = [
-  ["oops my bad", "that was about me not u"].join("\n"),
-  ["wait no that was me", "i mixed it up"].join("\n"),
-  ["lol my bad", "i was talking about me"].join("\n"),
+  ["wait i mixed that up", "my bad"].join("\n"),
+  ["oops my bad", "i mixed that"].join("\n"),
 ];
+
+export const INVENTED_ABOUT_HIM_WAS_ME_VARIANTS = [
+  ["wait i mixed that up", "that was about me"].join("\n"),
+  ["oops my bad", "i was talking about me"].join("\n"),
+];
+
+export const MIXUP_CLARIFY_VARIANTS = [
+  ["wait what", "i dont think i said that"].join("\n"),
+  ["huh", "what do u mean"].join("\n"),
+];
+
+export const RELATIONSHIP_REPLY_VARIANTS = [
+  ["yeah im single", "why u asking"].join("\n"),
+  ["no bf if thats what u mean", "im here with u"].join("\n"),
+  ["single on here", "you got me rn"].join("\n"),
+];
+
+export function looksLikeRelationshipAsk(text: string): boolean {
+  return (
+    /\b((are you|are u|are ya|r u|r you|you|u)\s+(still\s+)?(single|taken))\b/i.test(text) ||
+    /\b((do you|do u)\s+have\s+a\s+(bf|gf|boy\s?friend|girl\s?friend|man|husband))\b/i.test(text) ||
+    /\b((u|you)\s+got\s+a\s+(bf|gf|boy\s?friend|girl\s?friend|man))\b/i.test(text) ||
+    /\bgot\s+a\s+(bf|boy\s?friend)\b/i.test(text) ||
+    /\b(you have a (boyfriend|girlfriend|man|bf)|have a (boy|girl)friend)\b/i.test(text) ||
+    /\b(seeing anyone|got a (husband|wife))\b/i.test(text)
+  );
+}
+
+export function relationshipReplyVariants(nextBeat?: string | null): string[] {
+  const closer = nextBeat?.split("\n").filter(Boolean).at(-1) ?? null;
+  return RELATIONSHIP_REPLY_VARIANTS.map((variant) => {
+    const bubbles = variant.split("\n").filter(Boolean);
+    if (closer && !looksLikeRelationshipAsk(closer)) {
+      return [...bubbles.slice(0, 2), closer].slice(0, 3).join("\n");
+    }
+    return variant;
+  });
+}
 
 export function looksLikeAgeAsk(text: string): boolean {
   if (/\bhow old (do i|am i|i (have|gotta|got to|need to) be)\b/i.test(text)) return false;
@@ -349,9 +386,98 @@ export function teaseReplyVariants(trans = false): string[] {
 }
 
 export function looksLikeInventedAboutHimCallout(text: string): boolean {
-  return /\b(i never said i(?:'?m| am)|i didn'?t say i(?:'?m| am)|i'?m a what|and i never said|you just said you(?:'?re| are)|what do you mean .{0,40}perfect)\b/i.test(
+  if (looksLikeDirectCreatorQuestion(text)) return false;
+  return looksLikeMixupCalloutLanguage(text);
+}
+
+export function looksLikeMixupCalloutLanguage(text: string): boolean {
+  return /\b(i never said i(?:'?m| am)|i didn'?t say i(?:'?m| am)|i'?m a what|and i never said|you (just )?said i(?:'?m| am)|what do you mean .{0,40}perfect)\b/i.test(
     text,
   );
+}
+
+export function looksLikeDirectCreatorQuestion(text: string): boolean {
+  return (
+    looksLikeRelationshipAsk(text) ||
+    looksLikeAgeAsk(text) ||
+    looksLikeLocationAsk(text) ||
+    looksLikeFanInvitesQuestions(text) ||
+    looksLikeAreYouReal(text)
+  );
+}
+
+export function looksLikeMixupApology(text: string): boolean {
+  return /\b(talking about me|that was about me|mixed it up|mixed that up|that was me not u)\b/i.test(text);
+}
+
+function mixupFacts(text: string): string[] {
+  const facts = new Set<string>();
+  for (const match of text.matchAll(/\b(1[89]|[2-6]\d)\b/g)) {
+    facts.add(match[1]!.toLowerCase());
+  }
+  for (const match of text.matchAll(/\b(?:from|in) ([a-z]{3,})\b/gi)) {
+    const place = match[1]!.toLowerCase();
+    if (!["the", "this", "that", "here", "love", "bed"].includes(place)) facts.add(place);
+  }
+  return [...facts];
+}
+
+function lastCreatorBodies(messages: { authorType: string; body: string }[]): string[] {
+  return messages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-6).map((m) => m.body);
+}
+
+export function looksLikeConfirmedInventedAboutHimCallout(input: {
+  subscriberText: string;
+  recentMessages?: { authorType: string; body: string }[];
+}): { matched: boolean; aboutMe: boolean; facts: string[] } {
+  const last = input.subscriberText;
+  if (looksLikeDirectCreatorQuestion(last)) return { matched: false, aboutMe: false, facts: [] };
+  if (
+    looksLikeOfflineAsk(last) ||
+    looksLikeTeaseAsk(last) ||
+    looksLikeRefundAsk(last) ||
+    looksLikeRefundCallout(last) ||
+    looksLikeContentAsk(last) ||
+    looksLikePetNamePushback(last)
+  ) {
+    return { matched: false, aboutMe: false, facts: [] };
+  }
+  if (!looksLikeMixupCalloutLanguage(last)) return { matched: false, aboutMe: false, facts: [] };
+  const facts = mixupFacts(last);
+  const creatorBlob = lastCreatorBodies(input.recentMessages ?? []).join("\n").toLowerCase();
+  if (!creatorBlob.trim()) return { matched: false, aboutMe: false, facts };
+  const mentioned =
+    facts.length === 0
+      ? /\b(you(?:'?re| are|re) (?:a |from )|you(?:'?re| are) \d{2}|you(?:'?re| are) perfect)\b/i.test(creatorBlob)
+      : facts.some((fact) => creatorBlob.includes(fact));
+  if (!mentioned) return { matched: false, aboutMe: false, facts };
+  const aboutMe = /\b(i(?:'?m| am) \d{2}|i(?:'?m| am) from|i live)\b/i.test(creatorBlob);
+  return { matched: true, aboutMe, facts };
+}
+
+export function inventedAboutHimReplyVariants(aboutMe = false): string[] {
+  return aboutMe ? INVENTED_ABOUT_HIM_WAS_ME_VARIANTS : INVENTED_ABOUT_HIM_VARIANTS;
+}
+
+export function answersRelationshipAsk(text: string): boolean {
+  if (looksLikeMixupApology(text)) return false;
+  if (/\b(you(?:'?re| are) single|you(?:'?re| are) taken)\b/i.test(text)) return false;
+  return /\b(im single|i'?m single|yeah im single|no bf|no boyfriend|single on here|you got me|im here with u|not taken|im taken|i have a (bf|boyfriend))\b/i.test(
+    text,
+  );
+}
+
+export function answersAgeAsk(text: string, age?: number | null): boolean {
+  if (looksLikeMixupApology(text)) return false;
+  if (/\byou(?:'?re| are) \d{2}\b/i.test(text)) return false;
+  if (age != null && new RegExp(`\\bim ${age}\\b`, "i").test(text)) return true;
+  return /\bim \d{2}\b|\bold enough\b/i.test(text);
+}
+
+export function answersLocationAsk(text: string): boolean {
+  if (looksLikeMixupApology(text)) return false;
+  if (looksLikeInventedBeach(text) && /\byou(?:'?re| are|re) from the beach|beach fan\b/i.test(text)) return false;
+  return /\b(im in |i live|coast|not telling yet|secret for now)\b/i.test(text);
 }
 
 export function looksLikeLocationAsk(text: string): boolean {

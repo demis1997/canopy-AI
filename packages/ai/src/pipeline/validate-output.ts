@@ -11,7 +11,10 @@ import {
   looksLikeInvertedCuriosity,
   looksLikeAgeAsk,
   looksLikeAreYouReal,
-  looksLikeInventedAboutHimCallout,
+  looksLikeConfirmedInventedAboutHimCallout,
+  looksLikeMixupCalloutLanguage,
+  looksLikeDirectCreatorQuestion,
+  looksLikeMixupApology,
   looksLikeLocationAsk,
   looksLikeSexualPivot,
   looksLikePacingPushback,
@@ -24,6 +27,12 @@ import {
   looksLikeWhatsWrongFollowup,
   looksLikeSextAsk,
   looksLikeStaleAreYouReal,
+  looksLikeRelationshipAsk,
+  answersRelationshipAsk,
+  answersAgeAsk,
+  answersLocationAsk,
+  inventedAboutHimReplyVariants,
+  MIXUP_CLARIFY_VARIANTS,
   petNamesAllowed,
   stripUnauthorizedPetNames,
   wantsNoPitch,
@@ -47,9 +56,9 @@ import {
   RAPPORT_ONLY_VARIANTS,
   areYouRealReplyVariants,
   looksLikeWeakAreYouReal,
-  INVENTED_ABOUT_HIM_VARIANTS,
   SOFT_TEASE_VARIANTS,
   REFUND_CALLOUT_VARIANTS,
+  relationshipReplyVariants,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -121,6 +130,51 @@ function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
   return replaceAllOptions(output, TOS_OFFLINE_VARIANTS);
 }
 
+export type AppliedGuard =
+  | "relationship"
+  | "age"
+  | "location"
+  | "about-him"
+  | "invented-about-him"
+  | "invented-about-him-clarify"
+  | "offline"
+  | "refund"
+  | "tease"
+  | "are-you-real"
+  | "pet-name"
+  | "intake"
+  | "pacing"
+  | "offline-followup"
+  | null;
+
+const LOCKED_GUARDS = new Set<AppliedGuard>([
+  "relationship",
+  "age",
+  "location",
+  "about-him",
+  "invented-about-him",
+  "invented-about-him-clarify",
+  "offline",
+  "refund",
+  "tease",
+  "are-you-real",
+  "pet-name",
+]);
+
+function envFlag(name: string): string | undefined {
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return proc?.env?.[name];
+}
+
+function isGuardDebug(): boolean {
+  return envFlag("NODE_ENV") === "development" || envFlag("CANOPY_GUARD_LOG") === "1";
+}
+
+function logGuardDebug(payload: Record<string, unknown>): void {
+  if (envFlag("NODE_ENV") === "production" || !isGuardDebug()) return;
+  console.info("[canopy-guard]", JSON.stringify(payload));
+}
+
 export type ReplyGuardExtras = {
   rejections?: OperatorRejection[];
   catalog?: { id: string; name?: string }[];
@@ -134,6 +188,7 @@ export type ReplyGuardExtras = {
   variantSeed?: string | null;
   creatorCity?: string | null;
   recentOutbound?: string[];
+  recentMessages?: { authorType: string; body: string }[];
   transPersona?: boolean;
   threadBannedPetNames?: boolean;
   threadLessons?: {
@@ -147,6 +202,10 @@ export type ReplyGuardExtras = {
   sellTarget?: { productId: string; name: string; price: number; reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE" };
 };
 
+function firstText(output: GenerationOutput): string {
+  return output.replyOptions[0]?.text ?? "";
+}
+
 export function applyReplyGuards(
   output: GenerationOutput,
   subscriberText = "",
@@ -154,66 +213,163 @@ export function applyReplyGuards(
 ): GenerationOutput {
   const seed = extras?.variantSeed;
   const recent = extras?.recentOutbound ?? [];
+  const recentMessages =
+    extras?.recentMessages ??
+    recent.map((body) => ({ authorType: "CREATOR", body }));
   const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
-  const swap = (next: GenerationOutput, pool: string[]) => replaceAllOptions(next, pool, seed, recent);
+  const swap = (current: GenerationOutput, pool: string[]) => replaceAllOptions(current, pool, seed, recent);
 
   let next = scrubOfflineAsks(output);
-  let guarded = false;
-  if (looksLikeOfflineAsk(subscriberText)) {
+  let applied: AppliedGuard = null;
+  let replaced = false;
+  let reason = "kept-model-output";
+
+  const confirmMixup = looksLikeConfirmedInventedAboutHimCallout({
+    subscriberText,
+    recentMessages,
+  });
+  const hits: Record<string, boolean> = {
+    offline: looksLikeOfflineAsk(subscriberText),
+    "pet-name": looksLikePetNamePushback(subscriberText),
+    "are-you-real": looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText),
+    refund: looksLikeRefundCallout(subscriberText),
+    relationship: looksLikeRelationshipAsk(subscriberText),
+    tease: looksLikeTeaseAsk(subscriberText),
+    pacing: looksLikePacingPushback(subscriberText) && Boolean(extras?.fanIntake?.length),
+    location: looksLikeLocationAsk(subscriberText),
+    age: looksLikeAgeAsk(subscriberText),
+    "about-him": looksLikeFanInvitesQuestions(subscriberText),
+    "direct-creator-question": looksLikeDirectCreatorQuestion(subscriberText),
+    "confirmed-mixup": confirmMixup.matched,
+    "mixup-language": looksLikeMixupCalloutLanguage(subscriberText),
+  };
+  const matched = Object.entries(hits)
+    .filter(([, hit]) => hit)
+    .map(([name]) => name);
+
+  if (hits.offline) {
     next = swap(next, TOS_OFFLINE_VARIANTS);
-    guarded = true;
-  } else if (looksLikePetNamePushback(subscriberText)) {
+    applied = "offline";
+    replaced = true;
+    reason = "offline-tos";
+  } else if (hits["pet-name"]) {
     next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
-    guarded = true;
-  } else if (looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText)) {
+    applied = "pet-name";
+    replaced = true;
+    reason = "pet-name-pushback";
+  } else if (hits["are-you-real"]) {
     const weak = next.replyOptions.some((o) => looksLikeWeakAreYouReal(o.text) || o.messages.some(looksLikeWeakAreYouReal));
-    if (weak) next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
-    guarded = true;
-  } else if (looksLikeRefundCallout(subscriberText)) {
+    if (weak) {
+      next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
+      replaced = true;
+      reason = "are-you-real-weak-draft";
+    } else {
+      reason = "are-you-real-kept";
+    }
+    applied = "are-you-real";
+  } else if (hits.refund) {
     next = swap(next, REFUND_CALLOUT_VARIANTS);
-    guarded = true;
-  } else if (looksLikeInventedAboutHimCallout(subscriberText)) {
-    next = swap(next, INVENTED_ABOUT_HIM_VARIANTS);
-    guarded = true;
-  } else if (looksLikeTeaseAsk(subscriberText)) {
+    applied = "refund";
+    replaced = true;
+    reason = "refund-callout";
+  } else if (hits.relationship) {
+    const pool =
+      extras?.fanIntake?.[0] && answersRelationshipAsk(extras.fanIntake[0])
+        ? extras.fanIntake
+        : relationshipReplyVariants();
+    if (!answersRelationshipAsk(firstText(next))) {
+      next = swap(next, pool);
+      replaced = true;
+      reason = "relationship-fallback";
+    } else {
+      reason = "relationship-kept";
+    }
+    applied = "relationship";
+  } else if (hits.tease) {
     next = swap(next, teasePool);
-    guarded = true;
-  } else if (looksLikePacingPushback(subscriberText) && extras?.fanIntake?.length) {
-    next = swap(next, extras.fanIntake);
-    guarded = true;
-  } else if (looksLikeLocationAsk(subscriberText)) {
-    next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : locationReplyVariants(extras?.creatorCity ?? null));
-    guarded = true;
+    applied = "tease";
+    replaced = true;
+    reason = "tease-ask";
+  } else if (hits.pacing) {
+    next = swap(next, extras!.fanIntake!);
+    applied = "pacing";
+    replaced = true;
+    reason = "pacing-intake";
+  } else if (hits.location) {
+    const pool =
+      extras?.fanIntake?.[0] && answersLocationAsk(extras.fanIntake[0])
+        ? extras.fanIntake
+        : locationReplyVariants(extras?.creatorCity ?? null);
+    if (!answersLocationAsk(firstText(next))) {
+      next = swap(next, pool);
+      replaced = true;
+      reason = "location-fallback";
+    } else {
+      reason = "location-kept";
+    }
+    applied = "location";
+  } else if (hits.age) {
+    const pool =
+      extras?.fanIntake?.[0] && answersAgeAsk(extras.fanIntake[0], extras?.creatorAge ?? null)
+        ? extras.fanIntake
+        : ageReplyVariants(extras?.creatorAge ?? null);
+    if (!answersAgeAsk(firstText(next), extras?.creatorAge ?? null)) {
+      next = swap(next, pool);
+      replaced = true;
+      reason = "age-fallback";
+    } else {
+      reason = "age-kept";
+    }
+    applied = "age";
+  } else if (
+    hits["about-him"] &&
+    (looksLikeMixupApology(firstText(next)) ||
+      next.replyOptions.some((o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity)))
+  ) {
+    next = swap(next, ABOUT_HIM_VARIANTS);
+    applied = "about-him";
+    replaced = true;
+    reason = "about-him-fallback";
+  } else if (hits["about-him"]) {
+    applied = "about-him";
+    reason = "about-him-kept";
+  } else if (hits["confirmed-mixup"]) {
+    next = swap(next, inventedAboutHimReplyVariants(confirmMixup.aboutMe));
+    applied = "invented-about-him";
+    replaced = true;
+    reason = confirmMixup.aboutMe ? "confirmed-mixup-was-me" : "confirmed-mixup";
+  } else if (hits["mixup-language"] && !hits["direct-creator-question"]) {
+    next = swap(next, MIXUP_CLARIFY_VARIANTS);
+    applied = "invented-about-him-clarify";
+    replaced = true;
+    reason = "unconfirmed-mixup-clarify";
   } else if (
     extras?.fanIntake?.length &&
     !looksLikeSextAsk(subscriberText) &&
-    !looksLikeTeaseAsk(subscriberText) &&
+    !hits.tease &&
     extras?.sellTarget?.reason !== "CONTEXT"
   ) {
+    matched.push("intake");
     next = swap(next, extras.fanIntake);
-    guarded = true;
-  } else if (looksLikeAgeAsk(subscriberText)) {
-    next = swap(next, ageReplyVariants(extras?.creatorAge ?? null));
-    guarded = true;
-  } else if (
-    looksLikeFanInvitesQuestions(subscriberText) &&
-    next.replyOptions.some(
-      (o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity),
-    )
-  ) {
-    next = swap(next, ABOUT_HIM_VARIANTS);
-    guarded = true;
+    applied = "intake";
+    replaced = true;
+    reason = "fan-intake";
   } else if (extras?.threadOnOffline) {
+    matched.push("offline-followup");
     next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
-    guarded = true;
+    applied = "offline-followup";
+    replaced = true;
+    reason = "offline-followup";
   }
 
   const sextNow =
     looksLikeTeaseAsk(subscriberText) ||
     looksLikeSextAsk(subscriberText) ||
     Boolean(extras?.threadLessons?.heWantsTease && !looksLikeAreYouReal(subscriberText));
+  const locked = LOCKED_GUARDS.has(applied);
 
   if (
+    !locked &&
     !looksLikeAreYouReal(subscriberText) &&
     !looksLikeWhatsWrongFollowup(subscriberText) &&
     next.replyOptions.some((o) => looksLikeStaleAreYouReal(o.text) || o.messages.some(looksLikeStaleAreYouReal))
@@ -222,18 +378,22 @@ export function applyReplyGuards(
       next,
       sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
     );
-    guarded = true;
+    replaced = true;
+    reason = "stale-are-you-real";
   }
 
   if (
+    !locked &&
     sextNow &&
     next.replyOptions.some((o) => looksLikeMetaTease(o.text) || o.messages.some(looksLikeMetaTease))
   ) {
     next = swap(next, teasePool);
-    guarded = true;
+    replaced = true;
+    reason = "meta-tease";
   }
 
   if (
+    !locked &&
     !looksLikeRefundAsk(subscriberText) &&
     !looksLikeRefundCallout(subscriberText) &&
     next.replyOptions.some((o) => looksLikeRefundTalk(o.text) || o.messages.some(looksLikeRefundTalk))
@@ -244,22 +404,36 @@ export function applyReplyGuards(
         ? areYouRealReplyVariants(Boolean(extras?.fanSentPics))
         : REFUND_CALLOUT_VARIANTS,
     );
-    guarded = true;
+    replaced = true;
+    reason = "refund-leak";
   }
 
   if (
+    !locked &&
     next.replyOptions.some((o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach))
   ) {
-    next = swap(next, INVENTED_ABOUT_HIM_VARIANTS);
-    guarded = true;
+    next = swap(next, inventedAboutHimReplyVariants(false));
+    replaced = true;
+    reason = "invented-beach-output";
   }
 
   if (
-    !guarded &&
+    !applied &&
     next.replyOptions.some((o) => recent.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))))
   ) {
     next = swap(next, looksLikeTeaseAsk(subscriberText) ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
+    replaced = true;
+    reason = "duplicate-outbound";
   }
+
+  logGuardDebug({
+    subscriberText: envFlag("NODE_ENV") === "development" ? subscriberText : undefined,
+    subscriberLen: subscriberText.length,
+    classifiers: matched,
+    selectedGuard: applied,
+    replaced,
+    reason,
+  });
 
   if (!petNamesAllowed({
     subscriberText,
@@ -387,6 +561,7 @@ export function validateProductsAndPrices(
     variantSeed?: string | null;
     creatorCity?: string | null;
     recentOutbound?: string[];
+    recentMessages?: { authorType: string; body: string }[];
     transPersona?: boolean;
     threadBannedPetNames?: boolean;
     threadLessons?: ReplyGuardExtras["threadLessons"];
@@ -408,6 +583,7 @@ export function validateProductsAndPrices(
     variantSeed: opts?.variantSeed,
     creatorCity: opts?.creatorCity,
     recentOutbound: opts?.recentOutbound,
+    recentMessages: opts?.recentMessages,
     transPersona: opts?.transPersona,
     threadBannedPetNames: opts?.threadBannedPetNames,
     threadLessons: opts?.threadLessons,

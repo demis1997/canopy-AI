@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt, sequenceDropPrice, nextLockedDropPolicy, assessSpendLikelihood } from "../src/crm.js";
 import { parseProductCsv, eligibleProducts, matchSellTarget, boughtWelcomeMessage, pickSequenceDropProduct } from "../src/catalog.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, looksLikeAimlessRapport, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeConfirmedInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, looksLikeAimlessRapport, looksLikeRelationshipAsk, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -166,6 +166,7 @@ describe("operator reject reasons", () => {
     expect(looksLikePetNamePushback("Stop calling me a loser")).toBe(true);
     expect(looksLikePetNamePushback("No, so please stop using it")).toBe(true);
     expect(looksLikeFanInvitesQuestions("What do you wanna know about me?")).toBe(true);
+    expect(looksLikeFanInvitesQuestions("what do you want to know about me?")).toBe(true);
     expect(looksLikeInvertedCuriosity("oh? you're curious about me?")).toBe(true);
     expect(looksLikeNoPitchAsk("stop mentioning the shower set because fan is just interested in conversating")).toBe(
       true,
@@ -196,6 +197,17 @@ describe("operator reject reasons", () => {
     expect(looksLikeAreYouReal("So you are a bot?")).toBe(true);
     expect(looksLikeInventedAboutHimCallout("I'm a what? And I never said I'm 28")).toBe(true);
     expect(looksLikeInventedAboutHimCallout("What do you mean 29 is perfect? You just said you're 29")).toBe(true);
+    expect(looksLikeInventedAboutHimCallout("you just said you're 29")).toBe(false);
+    expect(looksLikeInventedAboutHimCallout("Im asking are you single?")).toBe(false);
+    expect(looksLikeInventedAboutHimCallout("are you single?")).toBe(false);
+    expect(looksLikeInventedAboutHimCallout("how old are you?")).toBe(false);
+    expect(looksLikeRelationshipAsk("Im asking are you single?")).toBe(true);
+    expect(looksLikeRelationshipAsk("are you taken")).toBe(true);
+    expect(looksLikeRelationshipAsk("Are you single??")).toBe(true);
+    expect(looksLikeRelationshipAsk("r u single")).toBe(true);
+    expect(looksLikeRelationshipAsk("u got a bf")).toBe(true);
+    expect(looksLikeRelationshipAsk("you single rn?")).toBe(true);
+    expect(looksLikeRelationshipAsk("do you have a boyfriend?")).toBe(true);
     expect(looksLikeLocationAsk("Where are you from?")).toBe(true);
     expect(creatorCityFromText("Lives in a coastal city, has a rescue cat")).toBe("coastal city");
     const firsts = new Set(
@@ -458,6 +470,52 @@ describe("fan flow pdf", () => {
     expect(beat?.id).toBe("welcome_bundle");
     expect(beat?.variants.join("\n")).toMatch(/bundle/i);
     expect(beat?.variants.join("\n")).toMatch(/submitting like a good boy/i);
+  });
+
+  it("answers are-you-single about her instead of owning a mixup about him", async () => {
+    const { inferFanIntake } = await import("../src/fan-flow.js");
+    const beat = inferFanIntake({
+      subscriberText: "Im asking are you single?",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(beat?.id).toBe("her_single");
+    expect(beat?.variants.join("\n")).toMatch(/im single|no bf|single on here/i);
+    expect(beat?.variants.join("\n")).not.toMatch(/talking about me|that was about me|mixed it up/i);
+  });
+});
+
+describe("confirmed mixup classifier", () => {
+  it("requires a prior creator attribution before treating a callout as invented-about-him", () => {
+    expect(
+      looksLikeConfirmedInventedAboutHimCallout({
+        subscriberText: "i never said i'm 29",
+        recentMessages: [],
+      }).matched,
+    ).toBe(false);
+    expect(
+      looksLikeConfirmedInventedAboutHimCallout({
+        subscriberText: "are you single?",
+        recentMessages: [{ authorType: "CREATOR", body: "29 is perfect" }],
+      }).matched,
+    ).toBe(false);
+    expect(
+      looksLikeConfirmedInventedAboutHimCallout({
+        subscriberText: "i never said i'm 29",
+        recentMessages: [{ authorType: "CREATOR", body: "29 is perfect" }],
+      }).matched,
+    ).toBe(true);
+    expect(
+      looksLikeConfirmedInventedAboutHimCallout({
+        subscriberText: "i never said i'm 29",
+        recentMessages: [{ authorType: "CREATOR", body: "29 is perfect" }],
+      }).aboutMe,
+    ).toBe(false);
+    expect(
+      looksLikeConfirmedInventedAboutHimCallout({
+        subscriberText: "i never said i'm from london",
+        recentMessages: [{ authorType: "CREATOR", body: "so you're from london" }],
+      }).matched,
+    ).toBe(true);
   });
 });
 

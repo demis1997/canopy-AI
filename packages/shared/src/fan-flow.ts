@@ -7,6 +7,8 @@ import {
   looksLikePetNamePushback,
   looksLikeSextAsk,
   looksLikeContentAsk,
+  looksLikeRelationshipAsk,
+  relationshipReplyVariants,
 } from "./replies.js";
 
 export const FAN_INTAKE_PLAYBOOK = `NEW/EXISTING FAN FLOW — one beat per send. Quoted lines are word-for-word.
@@ -259,6 +261,12 @@ export function inferFanIntake(input: FanIntakeInput, skipPacing = false): FanIn
     if (!key) return inferFanIntake({ ...input, subscriberText: "ok" }, true);
     return inferFanIntake({ ...input, subscriberText: "ok", skipKeys: [...(input.skipKeys ?? []), key] }, true);
   };
+
+  if (!skipPacing && looksLikeRelationshipAsk(last)) {
+    const continued = inferFanIntake({ ...input, subscriberText: "ok" }, true);
+    const nextLine = continued?.variants[0]?.split("\n").filter(Boolean).at(-1) ?? null;
+    return beat("her_single", relationshipReplyVariants(nextLine));
+  }
 
   if (!skipPacing && (looksLikePacingPushback(last) || looksLikeWontAnswer(last))) {
     const continued = skipCurrentAndContinue();

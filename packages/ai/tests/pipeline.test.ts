@@ -427,9 +427,15 @@ describe("structured output", () => {
         suggestedFunnelTransition: null,
       },
       "I'm a what? And I never said I'm 28",
+      {
+        recentMessages: [
+          { authorType: "CREATOR", body: "28 is perfect" },
+          { authorType: "SUBSCRIBER", body: "I'm a what? And I never said I'm 28" },
+        ],
+      },
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/my bad|mixed it up|talking about me/);
+    expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/never said you'?re 28/);
   });
 
@@ -486,10 +492,170 @@ describe("structured output", () => {
         suggestedFunnelTransition: null,
       },
       "What do you mean 29 is perfect? You just said you're 29",
+      {
+        recentMessages: [
+          { authorType: "CREATOR", body: "29 is perfect" },
+          { authorType: "SUBSCRIBER", body: "What do you mean 29 is perfect? You just said you're 29" },
+        ],
+      },
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/my bad|mixed it up|that was about me|that was me/);
+    expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/loser|perfect/);
+  });
+
+  it("answers are-you-single about her instead of the mixup script", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CASUAL_CHAT",
+        funnelStage: "RAPPORT",
+        explicitnessLevel: "FLIRTY",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "lol my bad\ni was talking about me",
+            messages: ["lol my bad", "i was talking about me"],
+            tone: "PLAYFUL",
+            internalReason: "mixup",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "Im asking are you single?",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single|no bf|single on here/);
+    expect(blob).not.toMatch(/talking about me|that was about me|mixed it up/);
+  });
+
+  function guardDraft(text: string) {
+    const messages = text.split("\n").filter(Boolean);
+    return {
+      intent: "CASUAL_CHAT" as const,
+      funnelStage: "RAPPORT" as const,
+      explicitnessLevel: "FLIRTY" as const,
+      recommendedAction: "REPLY" as const,
+      replyOptions: [
+        {
+          text,
+          messages: messages.length ? messages : [text],
+          tone: "PLAYFUL" as const,
+          internalReason: "draft",
+        },
+      ],
+      recommendedProductId: null,
+      approvedPrice: null,
+      requiresHumanReview: true,
+      riskFlags: [] as string[],
+      memoryUpdates: [],
+      suggestedFunnelTransition: null,
+    };
+  }
+
+  const mixupLeak = /my bad|mixed it up|mixed that up|talking about me|that was about me/;
+
+  it.each([
+    "are you single?",
+    "Are you single??",
+    "are u single",
+    "r u single",
+    "you single?",
+    "you single rn?",
+    "are you taken?",
+    "u got a bf",
+    "got a bf?",
+  ])("answers %s with a direct relationship line, not a mixup", (ask) => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), ask);
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single|no bf|single on here|not taken/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("answers do you have a boyfriend with a relationship line", () => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "do you have a boyfriend?");
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single|no bf|single on here/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("keeps a valid model relationship answer instead of swapping canned text", () => {
+    const guarded = applyReplyGuards(guardDraft("yeah im single\nwhy u asking"), "are you single?");
+    expect(guarded.replyOptions[0]!.text.toLowerCase()).toContain("yeah im single");
+  });
+
+  it("does not let the invented-beach post-check overwrite a handled relationship answer", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("yeah im single\nyou're from the beach"),
+      "are you single?",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("answers how old are you with her age, not a mixup", () => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "how old are you?", {
+      creatorAge: 28,
+    });
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/\bim 28\b/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("keeps a valid model age answer", () => {
+    const guarded = applyReplyGuards(guardDraft("im 28\nnosey huh"), "how old are you?", { creatorAge: 28 });
+    expect(guarded.replyOptions[0]!.text.toLowerCase()).toMatch(/\bim 28\b/);
+  });
+
+  it("answers where are you from with her location, not a mixup", () => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "where are you from?", {
+      creatorCity: "coastal city",
+    });
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/coast|water|i live/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("answers where do you live with her location", () => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "where do you live?", {
+      creatorCity: "coastal city",
+    });
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/coast|water|i live/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("does not treat what-do-you-want-to-know as an invented-about-him mixup", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\ni was talking about me"),
+      "what do you want to know about me?",
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
+  it("uses a mixup fallback only after a confirmed incorrect attribution to him", () => {
+    const guarded = applyReplyGuards(guardDraft("placeholder"), "i never said i'm 29", {
+      recentMessages: [
+        { authorType: "CREATOR", body: "29 is perfect" },
+        { authorType: "SUBSCRIBER", body: "i never said i'm 29" },
+      ],
+    });
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
+    expect(blob).not.toMatch(/that was about me|talking about me/);
+  });
+
+  it("does not invent a that-was-about-me explanation without a prior incorrect creator claim", () => {
+    const guarded = applyReplyGuards(guardDraft("lol my bad\nthat was about me"), "i never said i'm 29");
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/wait what|what do u mean|dont think i said/);
+    expect(blob).not.toMatch(/that was about me|talking about me/);
   });
 
   it("answers her city instead of inventing that he is a beach fan", () => {
@@ -1062,6 +1228,48 @@ describe("mock provider", () => {
     expect(blob).toMatch(/im 28|old enough|send u something|hold on/);
     expect(blob).not.toMatch(/how old do u think i am/);
     expect(blob).not.toMatch(/you'?re a/);
+  });
+
+  it("answers are-you-single about her, not a mixup about him", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("Im asking are you single?"));
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single|no bf|single on here/);
+    expect(blob).not.toMatch(/talking about me|that was about me|mixed it up|my bad/);
+  });
+
+  it("answers shorthand relationship asks without a mixup script", async () => {
+    const mock = new MockLLMProvider();
+    for (const ask of ["are you single?", "r u single", "u got a bf", "you single rn?"]) {
+      const blob = (await mock.generateReplies(genInput(ask))).output.replyOptions
+        .map((o) => o.text)
+        .join("\n")
+        .toLowerCase();
+      expect(blob).toMatch(/im single|no bf|single on here/);
+      expect(blob).not.toMatch(/my bad|mixed it up|talking about me|that was about me/);
+    }
+  });
+
+  it("owns a confirmed mixup after she attributed his age incorrectly", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("i never said i'm 29"),
+      recentMessages: [
+        { authorType: "CREATOR", body: "29 is perfect" },
+        { authorType: "SUBSCRIBER", body: "i never said i'm 29" },
+      ],
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
+    expect(blob).not.toMatch(/that was about me|talking about me/);
+  });
+
+  it("asks for clarification when the mixup is not confirmed by prior creator text", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies(genInput("i never said i'm 29"));
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/wait what|what do u mean|dont think i said/);
+    expect(blob).not.toMatch(/that was about me|talking about me/);
   });
 
   it("flips are-you-real instead of dumping ofcourse", async () => {

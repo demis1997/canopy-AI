@@ -138,7 +138,13 @@ export async function POST(request: Request) {
     })),
     20,
     Boolean(body.concessionAllowed),
-    { creatorId: body.creatorId, purchasedProductIds: body.purchasedProductIds, subscriberText: body.subscriberMessage },
+    {
+      creatorId: body.creatorId,
+      purchasedProductIds: body.purchasedProductIds,
+      subscriberText: body.subscriberMessage,
+      recentMessages: body.recentMessages,
+      recentOutbound: body.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
+    },
   );
   const schemaCheck = generationOutputSchema.safeParse(validated.output);
   const product = eligible.find((p) => p.id === validated.output.recommendedProductId);

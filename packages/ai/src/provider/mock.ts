@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, ageReplyVariants } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeInventedAboutHimCallout, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, ageReplyVariants, threadIsOnOfflineAsk, pitchIsTooEarly } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -154,7 +154,7 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
         [
           "nahh i dont do irl babe its against tos 🤭",
           "i spent too long building this page to get banned",
-          "wanna unlock a ppv or keep talking here",
+          "lets keep it here tell me what u wanna chat about",
         ],
         "DIRECT",
         "TOS offline refusal without banned words",
@@ -197,18 +197,11 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     ];
   }
 
-  if (!pitching) {
-    return [
-      asOption(["mmm yeah keep talking", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
-      asOption(["heellooo", last.trim() ? ackFan(last) : "say that again", "im listening"], "TEASING", "Stay in the chat"),
-    ];
-  }
-
   if (input.activeSequence?.current) {
     const current = input.activeSequence.current;
     const beat = current.body;
     const closer =
-      current.mediaHint === "PPV" || input.activeSequence.kind === "PPV"
+      pitching && (current.mediaHint === "PPV" || input.activeSequence.kind === "PPV")
         ? pitch
         : current.mediaHint === "VOICE"
           ? "sending that voice"
@@ -220,6 +213,13 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
         "TEASING",
         "Shorter ack then the same beat",
       ),
+    ];
+  }
+
+  if (!pitching) {
+    return [
+      asOption(["mmm yeah keep talking", "i like this", "tell me more"], tone, "Rapport only — operator ban or no pitch"),
+      asOption(["heellooo", last.trim() ? ackFan(last) : "say that again", "im listening"], "TEASING", "Stay in the chat"),
     ];
   }
 
@@ -326,7 +326,13 @@ export class MockLLMProvider implements LLMProvider {
       wantsNoPitch(input.operatorRejections ?? []) ||
       intent === "COMPLAINT" ||
       intent === "REFUND" ||
-      intent === "UNSAFE";
+      intent === "UNSAFE" ||
+      pitchIsTooEarly({
+        funnelStage: input.funnelStage,
+        fanMessageCount: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").length,
+        subscriberText: last,
+        threadOnOffline: threadIsOnOfflineAsk(input.recentMessages),
+      });
     const product = skipPitch ? null : (pickProduct(input, intent) ?? null);
     const pitching = Boolean(product) && !skipPitch;
     const offer = product

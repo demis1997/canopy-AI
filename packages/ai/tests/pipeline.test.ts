@@ -434,6 +434,76 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/what do you wanna know/);
     expect(blob).toMatch(/lots|fun|told a girl|bored/);
   });
+
+  it("does not pitch a named ppv on an irl follow-up", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "PRICE_OBJECTION",
+        funnelStage: "INTEREST",
+        explicitnessLevel: "EXPLICIT",
+        recommendedAction: "PRESENT_OFFER",
+        replyOptions: [
+          {
+            text: "irl is too risky babe but i can make u forget that\nunlock the girlcock video for $28 and I'll show you what i mean",
+            messages: [
+              "irl is too risky babe but i can make u forget that",
+              "unlock the girlcock video for $28 and I'll show you what i mean",
+            ],
+            tone: "PLAYFUL",
+            internalReason: "too early",
+          },
+        ],
+        recommendedProductId: "prod_1",
+        approvedPrice: 28,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "How can you make me forget it?",
+      {
+        threadOnOffline: true,
+        funnelStage: "INTEREST",
+        fanMessageCount: 4,
+        catalog: [{ id: "prod_1", name: "Girlcock video" }],
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/unlock the/);
+    expect(blob).not.toMatch(/\$28/);
+    expect(blob).not.toMatch(/girlcock video/);
+    expect(guarded.recommendedProductId).toBeNull();
+  });
+
+  it("rewrites unlock-the-video commands even on a real offer", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "CONTENT_REQUEST",
+        funnelStage: "OFFER",
+        explicitnessLevel: "EXPLICIT",
+        recommendedAction: "PRESENT_OFFER",
+        replyOptions: [
+          {
+            text: "mmm yeah\nunlock the girlcock video for $28",
+            messages: ["mmm yeah", "unlock the girlcock video for $28"],
+            tone: "TEASING",
+            internalReason: "offer",
+          },
+        ],
+        recommendedProductId: "prod_1",
+        approvedPrice: 28,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "can you send the video",
+      { funnelStage: "OFFER", fanMessageCount: 8, catalog: [{ id: "prod_1", name: "Girlcock video" }] },
+    );
+    const blob = guarded.replyOptions[0]!.text.toLowerCase();
+    expect(blob).not.toMatch(/unlock the/);
+    expect(blob).toMatch(/shot something|filthy|wanna see/);
+  });
 });
 
 describe("product validation", () => {
@@ -516,7 +586,7 @@ describe("product validation", () => {
 });
 
 describe("mock provider", () => {
-  it("flirts and pitches a catalog item instead of dumping a catchphrase", async () => {
+  it("flirts without dumping a ppv on the first hello", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies({
       ...genInput("hey you looked so hot in that story"),
@@ -529,8 +599,8 @@ describe("mock provider", () => {
     });
     const text = result.output.replyOptions[0]!.text.toLowerCase();
     expect(text).not.toMatch(/^(good|ask nicely)\??$/);
-    expect(text).toMatch(/\$\d+/);
-    expect(result.output.recommendedProductId).toBe("prod_1");
+    expect(text).not.toMatch(/unlock the/);
+    expect(result.output.recommendedProductId).toBeNull();
   });
 
   it("pitches list price until a concession is earned", async () => {

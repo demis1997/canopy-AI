@@ -12,20 +12,25 @@ import {
   looksLikeAgeAsk,
   looksLikeAreYouReal,
   looksLikeInventedAboutHimCallout,
+  looksLikeSexualPivot,
   petNamesAllowed,
   stripUnauthorizedPetNames,
   wantsNoPitch,
   bannedCatalogNames,
   catalogDisplayName,
+  pitchIsTooEarly,
+  rewriteDirectUnlockPitch,
   stripCatalogMentions,
   ageReplyVariants,
   normalizeReplyBubbles,
   TOS_OFFLINE_VARIANTS,
+  TOS_OFFLINE_FOLLOWUP_VARIANTS,
   PET_NAME_PUSHBACK_FALLBACK,
   ABOUT_HIM_VARIANTS,
   RAPPORT_ONLY_VARIANTS,
   ARE_YOU_REAL_VARIANTS,
   INVENTED_ABOUT_HIM_VARIANTS,
+  SOFT_TEASE_VARIANTS,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -97,6 +102,9 @@ export type ReplyGuardExtras = {
   conversationId?: string;
   dominance?: string;
   creatorAge?: number | null;
+  funnelStage?: string;
+  fanMessageCount?: number;
+  threadOnOffline?: boolean;
 };
 
 export function applyReplyGuards(
@@ -107,6 +115,11 @@ export function applyReplyGuards(
   let next = scrubOfflineAsks(output);
   if (looksLikeOfflineAsk(subscriberText)) {
     next = replaceAllOptions(next, TOS_OFFLINE_VARIANTS);
+  } else if (extras?.threadOnOffline) {
+    next = replaceAllOptions(
+      next,
+      looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS,
+    );
   } else if (looksLikeAreYouReal(subscriberText)) {
     next = replaceAllOptions(next, ARE_YOU_REAL_VARIANTS);
   } else if (looksLikePetNamePushback(subscriberText)) {
@@ -158,7 +171,31 @@ export function applyReplyGuards(
     }
   }
 
-  return next;
+  const catalogNames = catalog.map((p) => catalogDisplayName(p.name ?? "")).filter((n) => n.length >= 3);
+  if (
+    pitchIsTooEarly({
+      funnelStage: extras?.funnelStage,
+      fanMessageCount: extras?.fanMessageCount,
+      subscriberText,
+      threadOnOffline: extras?.threadOnOffline,
+    })
+  ) {
+    next = mapOptionTexts(next, (text, i) => {
+      const stripped = stripCatalogMentions(text, catalogNames);
+      return stripped.trim() ? stripped : RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!;
+    });
+    next = {
+      ...next,
+      recommendedProductId: null,
+      approvedPrice: null,
+      recommendedAction:
+        next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+          ? "REPLY"
+          : next.recommendedAction,
+    };
+  }
+
+  return mapOptionTexts(next, (text) => rewriteDirectUnlockPitch(text));
 }
 
 export function validateProductsAndPrices(
@@ -185,6 +222,9 @@ export function validateProductsAndPrices(
     conversationId?: string;
     dominance?: string;
     creatorAge?: number | null;
+    funnelStage?: string;
+    fanMessageCount?: number;
+    threadOnOffline?: boolean;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -194,6 +234,9 @@ export function validateProductsAndPrices(
     conversationId: opts?.conversationId,
     dominance: opts?.dominance,
     creatorAge: opts?.creatorAge,
+    funnelStage: opts?.funnelStage,
+    fanMessageCount: opts?.fanMessageCount,
+    threadOnOffline: opts?.threadOnOffline,
   });
 
   if (next.recommendedProductId) {

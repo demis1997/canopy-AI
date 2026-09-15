@@ -5,7 +5,7 @@ import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
 import { parseProductCsv, eligibleProducts } from "../src/catalog.js";
 import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt } from "../src/crm.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, creatorAgeFromText, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
+import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeDirectUnlockPitch, pitchIsTooEarly, creatorAgeFromText, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -192,6 +192,22 @@ describe("operator reject reasons", () => {
     expect(looksLikeAreYouReal("Are you real?")).toBe(true);
     expect(looksLikeInventedAboutHimCallout("I'm a what? And I never said I'm 28")).toBe(true);
     expect(creatorAgeFromText("Fictional 28-year-old fitness creator")).toBe(28);
+    expect(looksLikeDirectUnlockPitch("unlock the girlcock video for $28 and I'll show you what i mean")).toBe(true);
+    expect(
+      pitchIsTooEarly({
+        funnelStage: "INTEREST",
+        fanMessageCount: 2,
+        subscriberText: "How can you make me forget it?",
+        threadOnOffline: true,
+      }),
+    ).toBe(true);
+    expect(
+      pitchIsTooEarly({
+        funnelStage: "OFFER",
+        fanMessageCount: 8,
+        subscriberText: "can you send the video",
+      }),
+    ).toBe(false);
   });
 });
 

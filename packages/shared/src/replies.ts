@@ -24,10 +24,17 @@ export const TOS_OFFLINE_VARIANTS = [
   ].join("\n"),
 ];
 
-export const PET_NAME_PUSHBACK_FALLBACK = [
-  "oops my bad wont do that",
-  "what do u wanna talk about",
-].join("\n");
+export const TOS_OFFLINE_FOLLOWUP_VARIANTS = [
+  ["its not about the money", "its against tos and i wont risk this page", "lets keep it here"].join("\n"),
+  ["irl gets accounts banned", "im not throwing this one away", "what do u wanna talk about on here"].join("\n"),
+  ["nahh still no", "tos is tos even if u pay", "keep it on here with me"].join("\n"),
+];
+
+export const SOFT_TEASE_VARIANTS = [
+  ["on here i can be worse than irl anyway", "tell me what u like"].join("\n"),
+  ["i can make that mood worse on here", "talk to me"].join("\n"),
+  ["stay with me on here", "i get filthier when its just us"].join("\n"),
+];
 
 function splitSentences(line: string): string[] {
   const words = line.split(/\s+/).filter(Boolean);
@@ -291,4 +298,62 @@ export function doubleOneTrailingEmoji(text: string): string {
     }
   }
   return text;
+}
+
+export function looksLikeDirectUnlockPitch(text: string): boolean {
+  return (
+    /\bunlock(?: the| this| that)?(?: \w+){0,5} (?:video|clip|set|ppv|pic|pics)\b/i.test(text) ||
+    /\bunlock .{0,48} for \$\s*\d+/i.test(text) ||
+    /\bunlock the video\b/i.test(text)
+  );
+}
+
+export function rewriteDirectUnlockPitch(text: string): string {
+  return text
+    .split("\n")
+    .map((line) =>
+      looksLikeDirectUnlockPitch(line) ? "i shot something filthy for that mood if u actually wanna see" : line,
+    )
+    .join("\n")
+    .trim();
+}
+
+export function looksLikeContentAsk(text: string): boolean {
+  return /\b(buy|ppv|send (it|me|the)|show me|the video|custom|dick rate|\bjoi\b|\bgfe\b|how much|price|pics? please)\b/i.test(
+    text,
+  );
+}
+
+export function looksLikeSextAsk(text: string): boolean {
+  return /\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick|girlcock)\b/i.test(text);
+}
+
+export function looksLikeSexualPivot(text: string): boolean {
+  return /\b(make me forget|how can you make|show me (then|how)|what would you do)\b/i.test(text);
+}
+
+export function threadIsOnOfflineAsk(messages: { body: string }[]): boolean {
+  return messages
+    .slice(-8)
+    .some(
+      (m) =>
+        looksLikeOfflineAsk(m.body) ||
+        /\b(against tos|dont do irl|too risky|get banned|wont risk this (page|account)|tos is tos)\b/i.test(m.body),
+    );
+}
+
+export function pitchIsTooEarly(opts: {
+  funnelStage?: string;
+  fanMessageCount?: number;
+  subscriberText: string;
+  threadOnOffline?: boolean;
+}): boolean {
+  if (opts.threadOnOffline) return true;
+  if (looksLikeOfflineAsk(opts.subscriberText)) return true;
+  if (looksLikeContentAsk(opts.subscriberText) || looksLikeSextAsk(opts.subscriberText)) return false;
+  if (/\b(too much|cheaper|discount|too expensive|how much)\b/i.test(opts.subscriberText)) return false;
+  const funnel = opts.funnelStage ?? "";
+  if (funnel === "NEW_FAN" || funnel === "RAPPORT") return true;
+  if ((opts.fanMessageCount ?? 99) < 4) return true;
+  return false;
 }

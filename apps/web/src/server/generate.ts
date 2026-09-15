@@ -29,6 +29,7 @@ import {
   playbookFor,
   readFeatureFlags,
   splitReplyBubbles,
+  threadIsOnOfflineAsk,
   type CatalogProduct,
 } from "@canopy/shared";
 import { enqueueJob } from "./queue";
@@ -266,6 +267,13 @@ export async function generateForConversation(input: {
     take: 20,
   });
   const recent = messages.reverse();
+  const fanMessageCount = await prisma.message.count({
+    where: {
+      conversationId: conversation.id,
+      organizationId: tenant.organizationId,
+      authorType: "SUBSCRIBER",
+    },
+  });
 
   const memories = await prisma.subscriberMemory.findMany({
     where: {
@@ -660,6 +668,9 @@ export async function generateForConversation(input: {
         conversationId: conversation.id,
         dominance: fanNote?.dominance,
         creatorAge: creatorAgeFromText(persona.biography, persona.authorisedBackstory),
+        funnelStage: conversation.funnelStage,
+        fanMessageCount,
+        threadOnOffline: threadIsOnOfflineAsk(recent),
       },
     );
 

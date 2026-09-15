@@ -3,7 +3,7 @@ import type { GenerationInput } from "../provider/types.js";
 import { AGENCY_SYSTEM_RULES } from "../training/corpus.js";
 import { FAN_INTAKE_PLAYBOOK } from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v25";
+export const PROMPT_VERSION = "canopy-copilot-v26";
 
 export function composeGenerationPrompt(
   input: GenerationInput,
@@ -121,6 +121,12 @@ export function composeGenerationPrompt(
     `<creator_notes>${JSON.stringify(input.fanNotes ?? null)}</creator_notes>`,
     `<active_sequence>${JSON.stringify(input.activeSequence ?? null)}</active_sequence>`,
     input.fanIntakeBeat ? `<fan_intake_beat>Stay on this beat. First bubble must answer HIS last line, then this:\n${input.fanIntakeBeat}</fan_intake_beat>` : "",
+    input.conversationFlow
+      ? `<conversation_flow>phase=${input.conversationFlow.phase} step=${input.conversationFlow.step} previous=${input.conversationFlow.previousStep ?? "none"} deviation=${input.conversationFlow.deviation ?? "none"} must_answer=${input.conversationFlow.mustAnswer ?? "none"}
+If must_answer is set, bubble 1 answers THAT about YOU (the creator). Never use mixup language (my bad / talking about me) for a direct question.
+Last bubble continues this next step if present:\n${input.conversationFlow.closer ?? "stay on the current sales beat"}
+Quoted lines you may send word-for-word:\n${(input.conversationFlow.quotedLines ?? []).join("\n") || "none"}</conversation_flow>`
+      : "",
     input.boughtWelcome ? "<welcome_bundle>He already bought the welcome bundle. Skip the how-are-you intake. Ask if he enjoyed it, then sub/dom, then the 5 warmup sends, then first sequence product $7-9.</welcome_bundle>" : "",
     input.existingFan ? "<existing_fan>This is an existing fan. Ask how he's been without too much excitement, then vibe check, then fill any missing age/city/job notes before selling.</existing_fan>" : "",
     input.sellTarget

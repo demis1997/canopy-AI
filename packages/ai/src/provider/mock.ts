@@ -201,12 +201,6 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     );
   }
 
-  if (looksLikeRelationshipAsk(last)) {
-    return rotateVariants(relationshipReplyVariants(), input.requestId).slice(0, 3).map((text, i) =>
-      asOption(text.split("\n"), i === 0 ? tone : "PLAYFUL", "Answer HER relationship status"),
-    );
-  }
-
   const mixup = looksLikeConfirmedInventedAboutHimCallout({
     subscriberText: last,
     recentMessages: input.recentMessages,
@@ -248,12 +242,21 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
       creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
       boughtWelcome: input.boughtWelcome,
       existingFan: input.existingFan,
+      productsPurchased: input.pricing?.purchasedPpvCount,
+      unpaidProductId: input.unpaidLockedCount ? "unpaid" : undefined,
+      allowedSkipToNextProduct: false,
     });
     if (intake) {
       return intake.variants.map((text, i) =>
         asOption(text.split("\n"), i === 0 ? tone : "TEASING", `Fan intake ${intake.id}`),
       );
     }
+  }
+
+  if (looksLikeRelationshipAsk(last)) {
+    return rotateVariants(relationshipReplyVariants(), input.requestId).slice(0, 3).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? tone : "PLAYFUL", "Answer HER relationship status"),
+    );
   }
 
   if (looksLikeAgeAsk(last)) {
@@ -404,16 +407,35 @@ export class MockLLMProvider implements LLMProvider {
       last,
       input.recentMessages.map((m) => m.body).join(" "),
     );
-    const intake = inferFanIntake({
+    const runIntake = shouldRunFanIntake({
+      funnelStage: input.funnelStage,
+      intent,
+      purchasedPpvCount: input.pricing?.purchasedPpvCount,
       subscriberText: last,
-      recentMessages: input.recentMessages,
-      fanNotes: input.fanNotes,
-      subscriberName: input.fanNotes?.realName,
-      creatorAge: creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory),
-      creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
-      boughtWelcome: input.boughtWelcome,
-      existingFan: input.existingFan,
+      sequenceKind: input.activeSequence?.kind,
+      intakeComplete: intakeComplete({
+        extra: input.fanNotes?.extra,
+        location: input.fanNotes?.location,
+        notes: input.fanNotes?.notes,
+        dominance: input.fanNotes?.dominance,
+        boughtWelcome: input.boughtWelcome,
+      }),
     });
+    const intake = runIntake
+      ? inferFanIntake({
+          subscriberText: last,
+          recentMessages: input.recentMessages,
+          fanNotes: input.fanNotes,
+          subscriberName: input.fanNotes?.realName,
+          creatorAge: creatorAgeFromText(input.persona.biography, input.persona.authorisedBackstory),
+          creatorCity: creatorCityFromText(input.persona.biography, input.persona.authorisedBackstory),
+          boughtWelcome: input.boughtWelcome,
+          existingFan: input.existingFan,
+          productsPurchased: input.pricing?.purchasedPpvCount,
+          unpaidProductId: input.unpaidLockedCount ? "unpaid" : undefined,
+          allowedSkipToNextProduct: false,
+        })
+      : null;
     const skipPitch =
       wantsNoPitch(input.operatorRejections ?? []) ||
       Boolean(intake?.skipPitch) ||

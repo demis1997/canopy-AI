@@ -484,6 +484,97 @@ describe("fan flow pdf", () => {
   });
 });
 
+describe("conversation flow state machine", () => {
+  it("answers are you single during vibe check, records both hands, and advances to age", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "both haha are you single?",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(flow.mustAnswer).toBe("relationship");
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.next.fanIsJerking).toBe(false);
+    expect(flow.deviation).toBe("ANSWERED_PLUS_EXTRA");
+    expect(flow.variants.join("\n")).toMatch(/im single|no bf|single on here/i);
+    expect(flow.variants.join("\n")).toMatch(/how old/i);
+    expect(flow.variants.join("\n")).not.toMatch(/my bad|talking about me|mixed it up/i);
+  });
+
+  it("stores fan age, answers her age, and advances to location", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "im 32 what about you?",
+      recentMessages: [{ authorType: "CHATTER", body: "mmm how old are you? feel curious idk why" }],
+      creatorAge: 28,
+    });
+    expect(flow.facts.extra.fan_age).toBe("32");
+    expect(flow.mustAnswer).toBe("creator-age");
+    expect(flow.next.step).toBe("ASK_LOCATION");
+    expect(flow.variants.join("\n")).toMatch(/\bim 28\b|old enough/);
+    expect(flow.variants.join("\n")).toMatch(/where are you from/i);
+  });
+
+  it("stores location, answers her city, and advances to job", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "miami, where do you live?",
+      recentMessages: [{ authorType: "CHATTER", body: "where are you from btw" }],
+      creatorCity: "coastal city",
+    });
+    expect(flow.facts.location ?? flow.facts.extra.fan_city).toMatch(/miami/i);
+    expect(flow.mustAnswer).toBe("creator-location");
+    expect(flow.next.step).toBe("ASK_JOB");
+    expect(flow.variants.join("\n")).toMatch(/coast|water|i live|not telling|secret/i);
+  });
+
+  it("skips age after a refusal and asks location instead", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "rather not say",
+      recentMessages: [{ authorType: "CHATTER", body: "how old are you?" }],
+    });
+    expect(flow.deviation).toBe("REFUSED");
+    expect(flow.next.skipped?.age).toBe(true);
+    expect(flow.next.step).toBe("ASK_LOCATION");
+    expect(flow.variants.join("\n")).toMatch(/no worries|no rush|fair/i);
+    expect(flow.variants.join("\n")).toMatch(/where are you from/i);
+  });
+
+  it("re-asks once then asks what he wants on a second ignore", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const first = advanceConversationFlow({
+      subscriberText: "anyway whats your favorite color lol",
+      recentMessages: [{ authorType: "CHATTER", body: "how old are you?" }],
+      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "1" } },
+    });
+    expect(first.next.askedCurrentQuestionCount).toBe(2);
+    expect(first.variants.join("\n")).toMatch(/how old are you/i);
+    const second = advanceConversationFlow({
+      subscriberText: "anyway whats your favorite color lol",
+      recentMessages: [
+        { authorType: "CHATTER", body: "how old are you?" },
+        { authorType: "CHATTER", body: "wait i still wanna know\nhow old are you?" },
+      ],
+      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "2" } },
+    });
+    expect(second.next.step).toBe("ASK_WHAT_HE_WANTS");
+    expect(second.variants.join("\n")).toMatch(/what do you actually want/i);
+  });
+
+  it("asks only the missing job for an existing fan who already has age and city", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "both free",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+      existingFan: true,
+      fanNotes: { extra: { fan_age: "34", fan_city: "dallas" }, location: "dallas" },
+    });
+    expect(flow.next.step).toBe("ASK_JOB");
+    expect(flow.variants.join("\n")).toMatch(/for a living/i);
+    expect(flow.variants.join("\n")).not.toMatch(/how old are you/i);
+  });
+});
+
 describe("confirmed mixup classifier", () => {
   it("requires a prior creator attribution before treating a callout as invented-about-him", () => {
     expect(
@@ -530,6 +621,18 @@ describe("sequence ladder", () => {
       sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 1, previousPrice: 8 }),
     ).toBe(15);
     expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6 })).toBeNull();
+    let previous = 0;
+    for (let i = 0; i < 6; i += 1) {
+      const price = sequenceDropPrice({
+        boughtWelcome: false,
+        spendTier: "LOW",
+        purchasedSequenceCount: i,
+        previousPrice: previous || null,
+      });
+      expect(price).toBeGreaterThan(previous);
+      previous = price!;
+    }
+    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6, previousPrice: previous })).toBeNull();
   });
 
   it("blocks a third locked drop while two sit unpaid", () => {

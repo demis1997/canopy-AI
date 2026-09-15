@@ -131,34 +131,26 @@ function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
 }
 
 export type AppliedGuard =
-  | "relationship"
-  | "age"
-  | "location"
-  | "about-him"
-  | "invented-about-him"
-  | "invented-about-him-clarify"
+  | "safety"
   | "offline"
   | "refund"
+  | "relationship"
+  | "creator-age"
+  | "creator-location"
+  | "confirmed-mixup"
   | "tease"
-  | "are-you-real"
-  | "pet-name"
-  | "intake"
-  | "pacing"
-  | "offline-followup"
+  | "fan-flow"
   | null;
 
 const LOCKED_GUARDS = new Set<AppliedGuard>([
-  "relationship",
-  "age",
-  "location",
-  "about-him",
-  "invented-about-him",
-  "invented-about-him-clarify",
+  "safety",
   "offline",
   "refund",
+  "relationship",
+  "creator-age",
+  "creator-location",
+  "confirmed-mixup",
   "tease",
-  "are-you-real",
-  "pet-name",
 ]);
 
 function envFlag(name: string): string | undefined {
@@ -185,6 +177,16 @@ export type ReplyGuardExtras = {
   fanMessageCount?: number;
   threadOnOffline?: boolean;
   fanIntake?: string[];
+  flowPlan?: {
+    mustAnswer?: "relationship" | "creator-age" | "creator-location" | "how-are-you" | "about-him" | "what-doing" | null;
+    closer?: string | null;
+    variants?: string[];
+    phase?: string;
+    step?: string;
+    previousStep?: string;
+    deviation?: string | null;
+    facts?: Record<string, string>;
+  };
   variantSeed?: string | null;
   creatorCity?: string | null;
   recentOutbound?: string[];
@@ -204,6 +206,18 @@ export type ReplyGuardExtras = {
 
 function firstText(output: GenerationOutput): string {
   return output.replyOptions[0]?.text ?? "";
+}
+
+function ensureFlowCloser(output: GenerationOutput, closer: string | null | undefined): GenerationOutput {
+  if (!closer) return output;
+  const needle = closer.split("\n").filter(Boolean).at(-1)?.toLowerCase() ?? "";
+  if (!needle) return output;
+  return mapOptionTexts(output, (text) => {
+    if (text.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length)))) return text;
+    const bubbles = text.split("\n").filter(Boolean);
+    const closerBubbles = closer.split("\n").filter(Boolean);
+    return [...bubbles.slice(0, Math.max(1, 3 - closerBubbles.length)), ...closerBubbles].slice(0, 3).join("\n");
+  });
 }
 
 export function applyReplyGuards(
@@ -247,41 +261,46 @@ export function applyReplyGuards(
     .filter(([, hit]) => hit)
     .map(([name]) => name);
 
+  const flow = extras?.flowPlan;
+  const repairPool = flow?.variants?.length ? flow.variants : extras?.fanIntake;
+
   if (hits.offline) {
     next = swap(next, TOS_OFFLINE_VARIANTS);
     applied = "offline";
     replaced = true;
     reason = "offline-tos";
-  } else if (hits["pet-name"]) {
-    next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
-    applied = "pet-name";
-    replaced = true;
-    reason = "pet-name-pushback";
-  } else if (hits["are-you-real"]) {
-    const weak = next.replyOptions.some((o) => looksLikeWeakAreYouReal(o.text) || o.messages.some(looksLikeWeakAreYouReal));
-    if (weak) {
-      next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
+  } else if (hits["pet-name"] || hits["are-you-real"]) {
+    if (hits["pet-name"]) {
+      next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
       replaced = true;
-      reason = "are-you-real-weak-draft";
+      reason = "pet-name-pushback";
     } else {
-      reason = "are-you-real-kept";
+      const weak = next.replyOptions.some((o) => looksLikeWeakAreYouReal(o.text) || o.messages.some(looksLikeWeakAreYouReal));
+      if (weak) {
+        next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
+        replaced = true;
+        reason = "are-you-real-weak-draft";
+      } else {
+        reason = "are-you-real-kept";
+      }
     }
-    applied = "are-you-real";
+    applied = "safety";
   } else if (hits.refund) {
     next = swap(next, REFUND_CALLOUT_VARIANTS);
     applied = "refund";
     replaced = true;
     reason = "refund-callout";
-  } else if (hits.relationship) {
+  } else if (hits.relationship || flow?.mustAnswer === "relationship") {
     const pool =
-      extras?.fanIntake?.[0] && answersRelationshipAsk(extras.fanIntake[0])
-        ? extras.fanIntake
-        : relationshipReplyVariants();
-    if (!answersRelationshipAsk(firstText(next))) {
+      repairPool?.[0] && answersRelationshipAsk(repairPool[0])
+        ? repairPool
+        : relationshipReplyVariants(flow?.closer);
+    if (!answersRelationshipAsk(firstText(next)) || looksLikeMixupApology(firstText(next))) {
       next = swap(next, pool);
       replaced = true;
       reason = "relationship-fallback";
     } else {
+      next = ensureFlowCloser(next, flow?.closer);
       reason = "relationship-kept";
     }
     applied = "relationship";
@@ -290,76 +309,82 @@ export function applyReplyGuards(
     applied = "tease";
     replaced = true;
     reason = "tease-ask";
-  } else if (hits.pacing) {
-    next = swap(next, extras!.fanIntake!);
-    applied = "pacing";
+  } else if (hits.pacing && extras?.fanIntake?.length) {
+    next = swap(next, extras.fanIntake);
+    applied = "fan-flow";
     replaced = true;
     reason = "pacing-intake";
-  } else if (hits.location) {
+  } else if (hits.location || flow?.mustAnswer === "creator-location") {
     const pool =
-      extras?.fanIntake?.[0] && answersLocationAsk(extras.fanIntake[0])
-        ? extras.fanIntake
+      repairPool?.[0] && answersLocationAsk(repairPool[0])
+        ? repairPool
         : locationReplyVariants(extras?.creatorCity ?? null);
-    if (!answersLocationAsk(firstText(next))) {
+    if (!answersLocationAsk(firstText(next)) || looksLikeMixupApology(firstText(next))) {
       next = swap(next, pool);
       replaced = true;
       reason = "location-fallback";
     } else {
+      next = ensureFlowCloser(next, flow?.closer);
       reason = "location-kept";
     }
-    applied = "location";
-  } else if (hits.age) {
+    applied = "creator-location";
+  } else if (hits.age || flow?.mustAnswer === "creator-age") {
     const pool =
-      extras?.fanIntake?.[0] && answersAgeAsk(extras.fanIntake[0], extras?.creatorAge ?? null)
-        ? extras.fanIntake
+      repairPool?.[0] && answersAgeAsk(repairPool[0], extras?.creatorAge ?? null)
+        ? repairPool
         : ageReplyVariants(extras?.creatorAge ?? null);
-    if (!answersAgeAsk(firstText(next), extras?.creatorAge ?? null)) {
+    if (!answersAgeAsk(firstText(next), extras?.creatorAge ?? null) || looksLikeMixupApology(firstText(next))) {
       next = swap(next, pool);
       replaced = true;
       reason = "age-fallback";
     } else {
+      next = ensureFlowCloser(next, flow?.closer);
       reason = "age-kept";
     }
-    applied = "age";
+    applied = "creator-age";
   } else if (
     hits["about-him"] &&
     (looksLikeMixupApology(firstText(next)) ||
       next.replyOptions.some((o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity)))
   ) {
     next = swap(next, ABOUT_HIM_VARIANTS);
-    applied = "about-him";
+    applied = "fan-flow";
     replaced = true;
     reason = "about-him-fallback";
   } else if (hits["about-him"]) {
-    applied = "about-him";
+    next = ensureFlowCloser(next, flow?.closer);
+    applied = "fan-flow";
     reason = "about-him-kept";
   } else if (hits["confirmed-mixup"]) {
     next = swap(next, inventedAboutHimReplyVariants(confirmMixup.aboutMe));
-    applied = "invented-about-him";
+    applied = "confirmed-mixup";
     replaced = true;
     reason = confirmMixup.aboutMe ? "confirmed-mixup-was-me" : "confirmed-mixup";
   } else if (hits["mixup-language"] && !hits["direct-creator-question"]) {
     next = swap(next, MIXUP_CLARIFY_VARIANTS);
-    applied = "invented-about-him-clarify";
+    applied = "confirmed-mixup";
     replaced = true;
     reason = "unconfirmed-mixup-clarify";
   } else if (
     extras?.fanIntake?.length &&
-    !looksLikeSextAsk(subscriberText) &&
-    !hits.tease &&
-    extras?.sellTarget?.reason !== "CONTEXT"
+    extras?.sellTarget?.reason !== "CONTEXT" &&
+    (looksLikeAimlessRapport(firstText(next)) || looksLikeMixupApology(firstText(next)))
   ) {
-    matched.push("intake");
+    matched.push("fan-flow-repair");
     next = swap(next, extras.fanIntake);
-    applied = "intake";
+    applied = "fan-flow";
     replaced = true;
-    reason = "fan-intake";
+    reason = "fan-flow-repair";
   } else if (extras?.threadOnOffline) {
     matched.push("offline-followup");
     next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
-    applied = "offline-followup";
+    applied = "offline";
     replaced = true;
     reason = "offline-followup";
+  } else if (flow?.closer) {
+    next = ensureFlowCloser(next, flow.closer);
+    applied = "fan-flow";
+    reason = "fan-flow-closer";
   }
 
   const sextNow =
@@ -412,7 +437,7 @@ export function applyReplyGuards(
     !locked &&
     next.replyOptions.some((o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach))
   ) {
-    next = swap(next, inventedAboutHimReplyVariants(false));
+    next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
     replaced = true;
     reason = "invented-beach-output";
   }
@@ -433,6 +458,11 @@ export function applyReplyGuards(
     selectedGuard: applied,
     replaced,
     reason,
+    phase: flow?.phase,
+    step: flow?.step,
+    previousStep: flow?.previousStep,
+    deviation: flow?.deviation,
+    facts: flow?.facts,
   });
 
   if (!petNamesAllowed({
@@ -498,6 +528,7 @@ export function applyReplyGuards(
   }
 
   if (
+    !locked &&
     !looksLikeAreYouReal(subscriberText) &&
     !looksLikeOfflineAsk(subscriberText) &&
     !looksLikeTeaseAsk(subscriberText) &&
@@ -558,6 +589,7 @@ export function validateProductsAndPrices(
     fanMessageCount?: number;
     threadOnOffline?: boolean;
     fanIntake?: string[];
+    flowPlan?: ReplyGuardExtras["flowPlan"];
     variantSeed?: string | null;
     creatorCity?: string | null;
     recentOutbound?: string[];
@@ -580,6 +612,7 @@ export function validateProductsAndPrices(
     fanMessageCount: opts?.fanMessageCount,
     threadOnOffline: opts?.threadOnOffline,
     fanIntake: opts?.fanIntake,
+    flowPlan: opts?.flowPlan,
     variantSeed: opts?.variantSeed,
     creatorCity: opts?.creatorCity,
     recentOutbound: opts?.recentOutbound,

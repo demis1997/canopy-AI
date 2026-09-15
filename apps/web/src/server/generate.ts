@@ -29,8 +29,9 @@ import {
   followUpPhase,
   assessSpendLikelihood,
   boughtWelcomeMessage,
-  extractFanFacts,
-  inferFanIntake,
+  advanceConversationFlow,
+  serializeFlowState,
+  logFlowDebug,
   inferThreadLessons,
   intakeComplete,
   isExistingFan,
@@ -540,14 +541,68 @@ export async function generateForConversation(input: {
       conversation.activeSequence?.steps.find((s) => s.productId)?.productId ??
       null;
     const extra = stringRecord(fanNote?.extra);
-    const facts = extractFanFacts({
+    const boughtWelcomeEarly = boughtWelcomeMessage({
+      extra,
+      products,
+      purchasedProductIds,
+    });
+    const unpaidOffer = [...conversation.offers]
+      .reverse()
+      .find((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId));
+    const unpaidLockedCount = new Set(
+      conversation.offers
+        .filter((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId))
+        .map((offer) => offer.productId),
+    ).size;
+    const lockPolicy = nextLockedDropPolicy({
+      unpaidLockedCount,
+      promisedNext: looksLikeWillBuyNext(subscriberText),
+      honoredPromise: extra.honored_next_promise === "true",
+    });
+    const flow = advanceConversationFlow({
       subscriberText,
       recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
+      fanNotes: fanNote
+        ? {
+            location: fanNote.location,
+            notes: fanNote.notes,
+            extra,
+            dominance: fanNote.dominance,
+          }
+        : null,
+      subscriberName: conversation.subscriber.displayName,
+      creatorAge,
       creatorCity,
+      boughtWelcome: boughtWelcomeEarly,
+      existingFan: isExistingFan({
+        funnelStage: conversation.funnelStage,
+        purchasedPpvCount: boughtWelcomeEarly ? Math.max(0, purchasedPpvCount - 1) : purchasedPpvCount,
+        priorCreatorMessages: recent.filter((m) => m.authorType !== "SUBSCRIBER").length,
+        extra,
+        ageKnown: Boolean(extra.fan_age),
+        cityKnown: Boolean(fanNote?.location || extra.fan_city),
+        jobKnown: Boolean(extra.fan_job),
+      }),
+      productsPurchased: purchasedPpvCount,
+      productsSent: conversation.offers.length,
+      unpaidProductId: unpaidOffer?.productId,
+      allowedSkipToNextProduct: lockPolicy === "ALLOW_NEXT",
     });
-    const mergedExtra = { ...extra, ...facts.extra };
+    const facts = flow.facts;
+    const mergedExtra = { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
     if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
-    if (Object.keys(facts.extra).length || facts.location || facts.dominance || facts.notesAppend) {
+    if (flow.next.fanIsJerking != null) mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
+    logFlowDebug({
+      phase: flow.next.phase,
+      step: flow.next.step,
+      previousStep: flow.previous.step,
+      intent: flow.mustAnswer ?? flow.intent,
+      deviation: flow.deviation,
+      facts: facts.extra,
+      appliedGuard: null,
+      replaced: false,
+    });
+    if (Object.keys(facts.extra).length || facts.location || facts.dominance || facts.notesAppend || extra.flow_step !== mergedExtra.flow_step) {
       const nextNotes = [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n").trim();
       await prisma.fanNote.upsert({
         where: {
@@ -604,21 +659,13 @@ export async function generateForConversation(input: {
       memories: memories.map((m) => m.value),
       sequenceProductId,
     });
-    const unpaidLockedCount = new Set(
-      conversation.offers
-        .filter((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId))
-        .map((offer) => offer.productId),
-    ).size;
-    const lockPolicy = nextLockedDropPolicy({
-      unpaidLockedCount,
-      promisedNext: looksLikeWillBuyNext(subscriberText),
-      honoredPromise: extra.honored_next_promise === "true",
-    });
-    const spendTier = assessSpendLikelihood({
-      age: mergedExtra.fan_age,
-      city: facts.location ?? fanNote?.location ?? mergedExtra.fan_city,
-      job: mergedExtra.fan_job,
-    });
+    const spendTier =
+      flow.next.spendingAssessment ??
+      assessSpendLikelihood({
+        age: mergedExtra.fan_age,
+        city: facts.location ?? fanNote?.location ?? mergedExtra.fan_city,
+        job: mergedExtra.fan_job,
+      });
     if (sellMatch?.reason !== "CONTEXT") {
       if (lockPolicy === "STOP") {
         sellMatch = null;
@@ -671,19 +718,13 @@ export async function generateForConversation(input: {
       }) || looksLikePacingPushback(subscriberText)) &&
       !looksLikeOfflineAsk(subscriberText) &&
       sellMatch?.reason !== "CONTEXT"
-        ? inferFanIntake({
-            subscriberText,
-            recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
-            fanNotes: notesForIntake,
-            subscriberName: conversation.subscriber.displayName,
-            creatorAge,
-            creatorCity,
-            boughtWelcome,
-            existingFan,
-          })
+        ? { id: flow.beatId, variants: flow.variants, skipPitch: flow.skipPitch }
         : null;
-    if (fanIntake?.id === "ignore" || fanIntake?.skipPitch) {
-      sellMatch = null;
+    if (fanIntake?.id === "ignore" || fanIntake?.skipPitch || flow.skipPitch) {
+      if (sellMatch?.reason !== "CONTEXT") sellMatch = null;
+    }
+    if (flow.sellContent && sellMatch?.reason !== "CONTEXT") {
+      /* keep sequence/default match for an explicit content request after intake is abandoned */
     }
 
     const result = await generateRepliesWithRetry(provider, {
@@ -755,6 +796,15 @@ export async function generateForConversation(input: {
       pricing,
       followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
       fanIntakeBeat: fanIntake?.variants[0],
+      conversationFlow: {
+        phase: flow.next.phase,
+        step: flow.next.step,
+        previousStep: flow.previous.step,
+        mustAnswer: flow.mustAnswer,
+        closer: flow.closer,
+        quotedLines: flow.quotedLines,
+        deviation: flow.deviation,
+      },
       boughtWelcome,
       existingFan,
       unpaidLockedCount,
@@ -893,6 +943,16 @@ export async function generateForConversation(input: {
         fanMessageCount,
         threadOnOffline,
         fanIntake: fanIntake?.variants,
+        flowPlan: {
+          mustAnswer: flow.mustAnswer,
+          closer: flow.closer,
+          variants: flow.variants,
+          phase: flow.next.phase,
+          step: flow.next.step,
+          previousStep: flow.previous.step,
+          deviation: flow.deviation,
+          facts: flow.facts.extra,
+        },
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
         recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),

@@ -658,6 +658,28 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
 
+  it("keeps a vibe-check relationship answer and does not overwrite it with mixup text", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("yeah im single\njust me and you on here rn 😏\nhow old are u btw?"),
+      "both haha are you single?",
+      {
+        flowPlan: {
+          mustAnswer: "relationship",
+          closer: "how old are u btw?",
+          phase: "NEW_FAN_INTAKE",
+          step: "ASK_AGE",
+          previousStep: "VIBE_CHECK",
+          deviation: "ANSWERED_PLUS_EXTRA",
+          facts: { fan_jerking: "false" },
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/im single/);
+    expect(blob).toMatch(/how old/);
+    expect(blob).not.toMatch(mixupLeak);
+  });
+
   it("answers her city instead of inventing that he is a beach fan", () => {
     const guarded = applyReplyGuards(
       {
@@ -1236,6 +1258,18 @@ describe("mock provider", () => {
     const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
     expect(blob).toMatch(/im single|no bf|single on here/);
     expect(blob).not.toMatch(/talking about me|that was about me|mixed it up|my bad/);
+  });
+
+  it("uses aftercare after three sequence products", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("that was so good"),
+      followUpPhase: "AFTERCARE",
+      playbook: "AFTERCARE",
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/cloud nine/);
+    expect(result.output.recommendedProductId).toBeNull();
   });
 
   it("answers shorthand relationship asks without a mixup script", async () => {

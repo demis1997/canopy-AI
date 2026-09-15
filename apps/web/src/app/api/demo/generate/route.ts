@@ -5,6 +5,7 @@ import {
   generationOutputSchema,
   matchSellTarget,
   validateRecommendedOffer,
+  advanceConversationFlow,
   type CatalogProduct,
 } from "@canopy/shared";
 import { MockLLMProvider, PROMPT_VERSION, validateProductsAndPrices } from "@canopy/ai";
@@ -125,6 +126,10 @@ export async function POST(request: Request) {
         }
       : null,
   });
+  const flow = advanceConversationFlow({
+    subscriberText: body.subscriberMessage,
+    recentMessages: body.recentMessages,
+  });
   const validated = validateProductsAndPrices(
     result.output,
     eligible.map((p) => ({
@@ -144,6 +149,17 @@ export async function POST(request: Request) {
       subscriberText: body.subscriberMessage,
       recentMessages: body.recentMessages,
       recentOutbound: body.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
+      fanIntake: flow.variants,
+      flowPlan: {
+        mustAnswer: flow.mustAnswer,
+        closer: flow.closer,
+        variants: flow.variants,
+        phase: flow.next.phase,
+        step: flow.next.step,
+        previousStep: flow.previous.step,
+        deviation: flow.deviation,
+        facts: flow.facts.extra,
+      },
     },
   );
   const schemaCheck = generationOutputSchema.safeParse(validated.output);

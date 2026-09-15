@@ -121,6 +121,7 @@ export type GenerationInput = {
   followUpPhase?: "NONE" | "FOLLOW_UP" | "AFTERCARE";
   operatorRejections?: { text: string; reason: string; conversationId?: string }[];
   fanIntakeBeat?: string;
+  threadLessons?: string[];
 };
 
 export type GenerationResult = {

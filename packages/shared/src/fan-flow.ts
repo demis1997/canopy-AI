@@ -1,4 +1,4 @@
-import { locationReplyVariants, looksLikeLocationAsk, looksLikeInventedAboutHimCallout, looksLikeTeaseAsk, looksLikeAreYouReal, looksLikePetNamePushback } from "./replies.js";
+import { locationReplyVariants, looksLikeLocationAsk, looksLikeInventedAboutHimCallout, looksLikeTeaseAsk, looksLikeAreYouReal, looksLikePetNamePushback, looksLikeSextAsk } from "./replies.js";
 
 export const FAN_INTAKE_PLAYBOOK = `NEW/EXISTING FAN FLOW — stay on ONE beat per send until notes have his age, city, and job. Never dump age+city+job together.
 1 Opener: oh heyy youre here {NAME}. hows it going? enjoying the view so far ;)
@@ -294,7 +294,7 @@ export function shouldRunFanIntake(opts: {
   subscriberText?: string;
 }): boolean {
   const last = opts.subscriberText ?? "";
-  if (looksLikeTeaseAsk(last) || looksLikeAreYouReal(last) || looksLikePetNamePushback(last)) return false;
+  if (looksLikeTeaseAsk(last) || looksLikeAreYouReal(last) || looksLikePetNamePushback(last) || looksLikeSextAsk(last)) return false;
   if ((opts.purchasedPpvCount ?? 0) >= 1) return false;
   if (opts.intent === "CONTENT_REQUEST" || opts.intent === "PURCHASE_INTEREST" || opts.intent === "SEXTING") {
     return false;

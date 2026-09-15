@@ -379,3 +379,16 @@ describe("price ladder and aftercare", () => {
     expect(shower.price).toBe(36);
   });
 });
+
+describe("thread lessons", () => {
+  it("remembers are-you-real was already answered so the next sext is not ofcourse", async () => {
+    const { inferThreadLessons } = await import("../src/thread-lessons.js");
+    const lessons = inferThreadLessons([
+      { authorType: "SUBSCRIBER", body: "Are you real?" },
+      { authorType: "CREATOR", body: "ofcourse im real\nnot a bot" },
+      { authorType: "SUBSCRIBER", body: "i'm so hard for you" },
+    ]);
+    expect(lessons.answeredAreYouReal).toBe(true);
+    expect(lessons.bans.join(" ")).toMatch(/sext back|ofcourse/i);
+  });
+});

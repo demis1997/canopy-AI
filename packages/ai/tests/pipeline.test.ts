@@ -637,6 +637,36 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/ofcourse i am babe|ready to tease you/);
   });
 
+  it("does not reuse ofcourse when he starts sexting after are-you-real", () => {
+    const guarded = applyReplyGuards(
+      {
+        intent: "SEXTING",
+        funnelStage: "OFFER",
+        explicitnessLevel: "EXPLICIT",
+        recommendedAction: "REPLY",
+        replyOptions: [
+          {
+            text: "ofcourse im real\nnot a bot",
+            messages: ["ofcourse im real", "not a bot"],
+            tone: "DIRECT",
+            internalReason: "stale",
+          },
+        ],
+        recommendedProductId: null,
+        approvedPrice: null,
+        requiresHumanReview: true,
+        riskFlags: [],
+        memoryUpdates: [],
+        suggestedFunnelTransition: null,
+      },
+      "i'm so hard for you",
+      { threadLessons: { answeredAreYouReal: true, heWantsTease: true } },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/ofcourse|not a bot/);
+    expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg|keep talking/);
+  });
+
   it("acks pacing pushback instead of inventing a hobby", () => {
     const beat = inferFanIntake({
       subscriberText: "Why? we just started talking",

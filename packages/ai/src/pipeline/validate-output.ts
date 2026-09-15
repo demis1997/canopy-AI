@@ -22,6 +22,8 @@ import {
   looksLikeRefundCallout,
   looksLikeInventedBeach,
   looksLikeWhatsWrongFollowup,
+  looksLikeSextAsk,
+  looksLikeStaleAreYouReal,
   petNamesAllowed,
   stripUnauthorizedPetNames,
   wantsNoPitch,
@@ -132,6 +134,13 @@ export type ReplyGuardExtras = {
   recentOutbound?: string[];
   transPersona?: boolean;
   threadBannedPetNames?: boolean;
+  threadLessons?: {
+    answeredAreYouReal?: boolean;
+    bannedPetNames?: boolean;
+    bannedRefunds?: boolean;
+    bannedBeach?: boolean;
+    heWantsTease?: boolean;
+  };
 };
 
 export function applyReplyGuards(
@@ -173,7 +182,7 @@ export function applyReplyGuards(
   } else if (looksLikeLocationAsk(subscriberText)) {
     next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : locationReplyVariants(extras?.creatorCity ?? null));
     guarded = true;
-  } else if (extras?.fanIntake?.length) {
+  } else if (extras?.fanIntake?.length && !looksLikeSextAsk(subscriberText) && !looksLikeTeaseAsk(subscriberText)) {
     next = swap(next, extras.fanIntake);
     guarded = true;
   } else if (looksLikeAgeAsk(subscriberText)) {
@@ -189,8 +198,22 @@ export function applyReplyGuards(
     guarded = true;
   }
 
+  const sextNow =
+    looksLikeTeaseAsk(subscriberText) ||
+    looksLikeSextAsk(subscriberText) ||
+    Boolean(extras?.threadLessons?.heWantsTease && !looksLikeAreYouReal(subscriberText));
+
   if (
-    looksLikeTeaseAsk(subscriberText) &&
+    !looksLikeAreYouReal(subscriberText) &&
+    !looksLikeWhatsWrongFollowup(subscriberText) &&
+    next.replyOptions.some((o) => looksLikeStaleAreYouReal(o.text) || o.messages.some(looksLikeStaleAreYouReal))
+  ) {
+    next = swap(next, sextNow ? teasePool : RAPPORT_ONLY_VARIANTS);
+    guarded = true;
+  }
+
+  if (
+    sextNow &&
     next.replyOptions.some((o) => looksLikeMetaTease(o.text) || o.messages.some(looksLikeMetaTease))
   ) {
     next = swap(next, teasePool);
@@ -223,7 +246,7 @@ export function applyReplyGuards(
   if (!petNamesAllowed({
     subscriberText,
     dominance: extras?.dominance,
-    threadBanned: extras?.threadBannedPetNames,
+    threadBanned: extras?.threadBannedPetNames || extras?.threadLessons?.bannedPetNames,
   })) {
     next = mapOptionTexts(next, (text) => stripUnauthorizedPetNames(text));
   }
@@ -318,6 +341,7 @@ export function validateProductsAndPrices(
     recentOutbound?: string[];
     transPersona?: boolean;
     threadBannedPetNames?: boolean;
+    threadLessons?: ReplyGuardExtras["threadLessons"];
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -336,6 +360,7 @@ export function validateProductsAndPrices(
     recentOutbound: opts?.recentOutbound,
     transPersona: opts?.transPersona,
     threadBannedPetNames: opts?.threadBannedPetNames,
+    threadLessons: opts?.threadLessons,
   });
 
   if (next.recommendedProductId) {

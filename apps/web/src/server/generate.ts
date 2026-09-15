@@ -28,6 +28,8 @@ import {
   creatorCityFromText,
   followUpPhase,
   inferFanIntake,
+  inferThreadLessons,
+  mergeThreadLessonMemory,
   looksLikePacingPushback,
   playbookFor,
   readFeatureFlags,
@@ -487,13 +489,24 @@ export async function generateForConversation(input: {
         generation: { select: { conversationId: true } },
       },
     });
-    const operatorRejections = collectOperatorRejections(
-      discardedRows.map((row) => ({
-        text: row.text,
-        internalReason: row.internalReason,
-        conversationId: row.generation.conversationId,
-      })),
+    const threadLessons = mergeThreadLessonMemory(
+      inferThreadLessons(recent.map((m) => ({ authorType: m.authorType, body: m.body }))),
+      memories.find((m) => m.key === "thread_lessons")?.value,
     );
+    const operatorRejections = [
+      ...collectOperatorRejections(
+        discardedRows.map((row) => ({
+          text: row.text,
+          internalReason: row.internalReason,
+          conversationId: row.generation.conversationId,
+        })),
+      ),
+      ...threadLessons.bans.map((reason) => ({
+        text: "",
+        reason,
+        conversationId: conversation.id,
+      })),
+    ];
 
     const creatorAge = creatorAgeFromText(persona.biography, persona.authorisedBackstory);
     const creatorCity = creatorCityFromText(persona.biography, persona.authorisedBackstory);
@@ -578,6 +591,7 @@ export async function generateForConversation(input: {
       ),
       retrievedExamples: examples,
       operatorRejections,
+      threadLessons: threadLessons.bans,
       toneOverride: input.toneOverride,
       rewriteStyle: input.rewriteStyle,
       pricing,
@@ -713,7 +727,8 @@ export async function generateForConversation(input: {
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
         transPersona,
-        threadBannedPetNames: threadBannedPetNames(recent),
+        threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
+        threadLessons,
       },
     );
 
@@ -766,6 +781,39 @@ export async function generateForConversation(input: {
         }),
       ),
     );
+
+    if (threadLessons.bans.length) {
+      const existing = await prisma.subscriberMemory.findFirst({
+        where: {
+          organizationId: tenant.organizationId,
+          subscriberId: conversation.subscriberId,
+          creatorId: conversation.creatorId,
+          key: "thread_lessons",
+          deletedAt: null,
+        },
+      });
+      const value = threadLessons.bans.join("\n").slice(0, 500);
+      if (existing) {
+        await prisma.subscriberMemory.update({
+          where: { id: existing.id },
+          data: { value, confidence: 1, verified: true, lastConfirmedAt: new Date() },
+        });
+      } else {
+        await prisma.subscriberMemory.create({
+          data: {
+            organizationId: tenant.organizationId,
+            subscriberId: conversation.subscriberId,
+            creatorId: conversation.creatorId,
+            category: "BOUNDARIES",
+            key: "thread_lessons",
+            value,
+            confidence: 1,
+            verified: true,
+            sensitivity: "INTERNAL",
+          },
+        });
+      }
+    }
 
     await recordAnalytics({
       organizationId: tenant.organizationId,

@@ -3,7 +3,7 @@ import type { GenerationInput } from "../provider/types.js";
 import { AGENCY_SYSTEM_RULES } from "../training/corpus.js";
 import { FAN_INTAKE_PLAYBOOK } from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v18";
+export const PROMPT_VERSION = "canopy-copilot-v19";
 
 export function composeGenerationPrompt(
   input: GenerationInput,
@@ -17,7 +17,7 @@ export function composeGenerationPrompt(
     FAN_INTAKE_PLAYBOOK,
     "If he asks are you real, are you a bot, or says he is talking to a robot, the first bubble is ofcourse im real. Never reply ofcourse i am — that agrees you are a bot. Never invent a refund.",
     "If he says tease me, then do it, how will you tease me, or combination of both: actually sext. Start the tease. Never write you want me to tease you / i can tease you / its what i do best / youre gonna love it. That is talking about teasing, not teasing.",
-    "Never repeat a line already in recent_messages from the creator. If a draft is the same as a sent bubble, write a new one.",
+    "Thread lessons are HARD. If this thread already answered are-you-real, do not say ofcourse again unless he asks again right now. If he sexts after that, sext back — do not reuse the last script.",
     "If he says stop calling me that / stop using it, drop the pet name for the rest of the thread. Him quoting loser is not permission to say it back.",
     "Do not echo his complaint back at him. If he says he never said something, own the mixup — do not repeat his words.",
     "Flirt back at his energy. If he is sexual, sext back using her vocabulary.",
@@ -118,6 +118,9 @@ export function composeGenerationPrompt(
     `<creator_notes>${JSON.stringify(input.fanNotes ?? null)}</creator_notes>`,
     `<active_sequence>${JSON.stringify(input.activeSequence ?? null)}</active_sequence>`,
     input.fanIntakeBeat ? `<fan_intake_beat>Stay on this beat. First bubble must answer HIS last line, then this:\n${input.fanIntakeBeat}</fan_intake_beat>` : "",
+    input.threadLessons?.length
+      ? `<thread_lessons>HARD bans from THIS thread. They override scripts. Never do them again:\n${input.threadLessons.join("\n")}</thread_lessons>`
+      : "",
     `<follow_up_phase>${input.followUpPhase ?? "NONE"}</follow_up_phase>`,
     `<subscriber_memory>${JSON.stringify(input.memories)}</subscriber_memory>`,
     `<rolling_summary>${input.summary ?? "none"}</rolling_summary>`,

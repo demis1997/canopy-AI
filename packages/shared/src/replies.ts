@@ -126,7 +126,7 @@ export function parseOperatorRejectReason(internalReason: string): string | null
 
 export function collectOperatorRejections(
   rows: { text: string; internalReason: string; conversationId?: string }[],
-  limit = 12,
+  limit = 20,
 ): OperatorRejection[] {
   const out: OperatorRejection[] = [];
   const seen = new Set<string>();
@@ -136,13 +136,50 @@ export function collectOperatorRejections(
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
-      text: row.text.slice(0, 180),
-      reason,
+      text: row.text.slice(0, 400),
+      reason: reason.slice(0, 2000),
       conversationId: row.conversationId,
     });
     if (out.length >= limit) break;
   }
   return out;
+}
+
+export function operatorRejectLesson(reason: string, rejectedText = ""): string {
+  const clean = reason.replace(/\s+/g, " ").trim() || "Not a fit";
+  const rule = /^(never |do not |don't |dont |stop |no )/i.test(clean)
+    ? clean
+    : `Never repeat this mistake: ${clean}`;
+  const snippet = rejectedText.replace(/\s+/g, " ").trim().slice(0, 160);
+  return snippet ? `${rule} Bad example: "${snippet}"` : rule;
+}
+
+export function operatorRejectLessons(rejections: OperatorRejection[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rejections) {
+    const lesson = operatorRejectLesson(row.reason, row.text);
+    const key = lesson.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(lesson);
+  }
+  return out;
+}
+
+export function formatOperatorRejectionPrompt(rejections: OperatorRejection[]): string {
+  if (!rejections.length) return "";
+  const rules = rejections.map((row, i) => {
+    const reason = row.reason.trim() || "Not a fit";
+    const draft = row.text.trim();
+    const example = draft ? `\n   Bad example (never send this or a close paraphrase): ${draft.slice(0, 400)}` : "";
+    return `${i + 1}. Never repeat this mistake: ${reason}${example}`;
+  });
+  return [
+    "OPERATOR CORRECTIONS — highest priority. These override playbooks, sequences, and training.",
+    "A human rejected a draft and told you why. Treat each reason as a permanent custom rule. Do not make the same mistake again, even rephrased.",
+    ...rules,
+  ].join("\n");
 }
 
 export function containsMeetSpeak(text: string): boolean {
@@ -176,7 +213,75 @@ export const RAPPORT_ONLY_VARIANTS = [
   ["anyway", "i was gonna tell u something"].join("\n"),
   ["wait", "i shot something earlier"].join("\n"),
   ["ok but", "i wanna show u a side of me"].join("\n"),
+  ["mmm", "i was thinking about showing u something"].join("\n"),
+  ["hold on", "i keep thinking about my mouth on u"].join("\n"),
+  ["ok wait", "id start slow then get mean"].join("\n"),
 ];
+
+export const FAN_DOMINANT_FOLLOW_VARIANTS = [
+  ["ok then", "show me", "how would u take control"].join("\n"),
+  ["alright", "your move", "tell me what u want me to do"].join("\n"),
+  ["mmm", "i can let u lead", "start"].join("\n"),
+];
+
+export const FAN_SUBMISSIVE_FOLLOW_VARIANTS = [
+  ["good", "then show me u mean it"].join("\n"),
+  ["finally", "dont make me wait"].join("\n"),
+  ["ok", "on your knees then"].join("\n"),
+];
+
+export function looksLikeTellHook(text: string): boolean {
+  return /\b((i was )?gonna tell (u|you) something|i was going to tell (u|you) something)\b/i.test(text);
+}
+
+export function looksLikeWaitingForReveal(text: string): boolean {
+  return /\b((i('m| am) )?waiting for (it|that)|what are you (going to|gonna) tell|what were you (gonna|going to) tell|tell me what (it|that) is)\b/i.test(
+    text,
+  );
+}
+
+export function looksLikeAffirm(text: string): boolean {
+  const t = text.trim();
+  if (/^(yes|yeah|yea|yep|yup|ok|okay|sure|alright|aite|i will|lets go|let's go|do it|show me|prove it)\.?$/i.test(t)) {
+    return true;
+  }
+  return t.split(/\s+/).length <= 6 && /\b(yes|yeah|i will|i can|lets go|do it)\b/i.test(t);
+}
+
+export function looksLikeProveYourselfAsk(text: string): boolean {
+  return /\b(prove yourself|properly do it)\b/i.test(text);
+}
+
+export function looksLikeSurrenderAsk(text: string): boolean {
+  return /\b(ready to finally surrender|surrender to me now)\b/i.test(text);
+}
+
+export function looksLikeWrongDominanceFlip(text: string, dominance?: string | null): boolean {
+  const role = (dominance ?? "").toUpperCase();
+  if (role === "DOMINANT") {
+    return /\b(i like being in charge|god knows i like being in charge|i'?m (usually )?in charge|showing you how to kneel|kneel (for me|like)|on your knees then|submit to me now)\b/i.test(
+      text,
+    );
+  }
+  if (role === "SUBMISSIVE") {
+    return /\b(you take control of me|i'?ll let you (lead|be in charge)|your move then)\b/i.test(text);
+  }
+  return false;
+}
+
+export function looksLikePrematureVideoPitch(text: string): boolean {
+  return /\b(it'?s a video|its a video|worth every penny|trust me it'?s worth|unlock .{0,40}for \$\s*\d+)\b/i.test(text);
+}
+
+export function repeatsRecentBubbles(text: string, recent: string[]): boolean {
+  const lines = text
+    .split("\n")
+    .map((line) => normalizeForDup(line))
+    .filter((line) => line.length >= 6);
+  if (!lines.length) return tooSimilar(text, recent.join("\n"));
+  const rec = recent.map((row) => normalizeForDup(row)).filter(Boolean);
+  return lines.some((line) => rec.includes(line) || rec.some((row) => tooSimilar(line, row)));
+}
 
 export function looksLikeAimlessRapport(text: string): boolean {
   const t = text.toLowerCase();

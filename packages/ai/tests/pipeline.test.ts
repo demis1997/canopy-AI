@@ -288,6 +288,14 @@ describe("structured output", () => {
     expect(guarded.recommendedAction).toBe("REPLY");
   });
 
+  it("replaces a draft that repeats a rejected suggestion", () => {
+    const guarded = applyReplyGuards(guardDraft("kneel loser\nsay thank you"), "hey", {
+      rejections: [{ text: "kneel loser\nsay thank you", reason: "dont call fans losers" }],
+    });
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/kneel loser/);
+  });
+
   it("strips good boy unless he is marked submissive", () => {
     const guarded = applyReplyGuards(
       {
@@ -680,6 +688,121 @@ describe("structured output", () => {
     expect(blob).not.toMatch(mixupLeak);
   });
 
+  it("does not re-ask an already sent vibe question after an unexpected sexual interruption", () => {
+    const recent = [
+      { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+    ];
+    const guarded = applyReplyGuards(
+      guardDraft("oh, you're not jerking off, huh?\nwait\nhow many hands are you typing with, haha?"),
+      "Well, I'm not jerking off now",
+      {
+        recentMessages: recent,
+        recentOutbound: recent.map((m) => m.body),
+        flowPlan: {
+          closer: null,
+          step: "ASK_AGE",
+          previousStep: "VIBE_CHECK",
+          deviation: "ANSWERED",
+          askedObjectives: ["VIBE"],
+          askPending: false,
+          pendingQuestion: "AGE",
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/not jerking/);
+    expect(blob).not.toMatch(/how old/);
+    expect(blob).not.toMatch(/how many hands|typing with/);
+    expect(blob.split("\n").some((line) => /^wait[.!?]*$/i.test(line.trim()))).toBe(false);
+  });
+
+  it("blocks a semantically repeated vibe question even when the wording changed", () => {
+    const recent = [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }];
+    const guarded = applyReplyGuards(
+      guardDraft("so both hands free or nah?"),
+      "lol maybe later",
+      {
+        recentMessages: recent,
+        recentOutbound: recent.map((m) => m.body),
+        flowPlan: {
+          closer: null,
+          step: "ASK_AGE",
+          previousStep: "VIBE_CHECK",
+          askedObjectives: ["VIBE"],
+          askPending: false,
+          pendingQuestion: "AGE",
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/both hands free|how many hands|typing with|how old/);
+  });
+
+  it("strips a standalone wait bubble unless it is part of a real sentence", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("wait\nhow old are u btw?"),
+      "haha",
+      {
+        recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+        flowPlan: {
+          closer: null,
+          step: "ASK_AGE",
+          previousStep: "VIBE_CHECK",
+          askedObjectives: ["VIBE"],
+          askPending: false,
+          pendingQuestion: "AGE",
+        },
+      },
+    );
+    const lines = guarded.replyOptions[0]!.text.split("\n").map((line) => line.trim());
+    expect(lines.some((line) => /^wait[.!?]*$/i.test(line))).toBe(false);
+    expect(guarded.replyOptions[0]!.text.toLowerCase()).not.toMatch(/how old/);
+  });
+
+  it("strips a sub/dom question that was drafted in the same turn as the personal-permission transition", () => {
+    const guarded = applyReplyGuards(
+      guardDraft(
+        "okayyy working with your hands i like that\nyou know, i cant quite read you yet\nare you usually the one taking control, or do you like being told what to do?",
+      ),
+      "I'm a carpenter",
+      {
+        recentMessages: [{ authorType: "CHATTER", body: "what do u do for a living? just curiouss" }],
+        flowPlan: {
+          closer: "mind if i ask you something a little personal?",
+          step: "ASK_PERSONAL_PERMISSION",
+          previousStep: "ASK_JOB",
+          askedObjectives: ["JOB"],
+          askPending: true,
+          pendingQuestion: "PERSONAL_PERMISSION",
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/personal|read you/i);
+    expect(blob).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+  });
+
+  it("does not let the closer guard append the sub/dom question after a permission transition", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("you know, i cant quite read you yet"),
+      "I'm a carpenter",
+      {
+        recentMessages: [{ authorType: "CHATTER", body: "what do u do for a living?" }],
+        flowPlan: {
+          closer: "are you usually the one taking control, or do you like being told what to do?",
+          step: "ASK_PERSONAL_PERMISSION",
+          previousStep: "ASK_JOB",
+          askedObjectives: ["JOB"],
+          askPending: true,
+          pendingQuestion: "PERSONAL_PERMISSION",
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).toMatch(/read you|personal/i);
+    expect(blob).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+  });
+
   it("answers her city instead of inventing that he is a beach fan", () => {
     const guarded = applyReplyGuards(
       {
@@ -986,6 +1109,46 @@ describe("structured output", () => {
     expect(guarded.recommendedProductId).toBeNull();
   });
 
+  it("does not recycle the tell-hook when the fan is waiting for the reveal", () => {
+    const guarded = applyReplyGuards(
+      guardDraft("anyway\ni was gonna tell u something"),
+      "What are you going to tell me?",
+      {
+        recentOutbound: ["anyway\ni was gonna tell u something"],
+        flowPlan: {
+          skipPitch: true,
+          variants: ["ok\ni keep thinking about my mouth on u\ni shot something filthy earlier"],
+        },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/gonna tell u something/);
+    expect(blob).toMatch(/mouth on u|shot something filthy|start slow/);
+  });
+
+  it("lets him stay in charge after he agrees to prove himself", () => {
+    const guarded = applyReplyGuards(
+      guardDraft(
+        "god knows i like being in charge, but you might just be worth my time, hmm?\nim thinking of showing you how to kneel, like the you are.\nwant to see it? it's a video, babe, and trust me, it's worth every penny.",
+      ),
+      "Yes.",
+      {
+        dominance: "DOMINANT",
+        recentMessages: [
+          { authorType: "SUBSCRIBER", body: "I prefer being in charge" },
+          { authorType: "CHATTER", body: "so are you going to prove yourself now?" },
+        ],
+        flowPlan: { skipPitch: true, facts: { fan_dominance: "DOMINANT" } },
+      },
+    );
+    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/i like being in charge/);
+    expect(blob).not.toMatch(/kneel/);
+    expect(blob).not.toMatch(/worth every penny|it's a video/);
+    expect(blob).toMatch(/your move|show me|let u lead/);
+    expect(guarded.recommendedProductId).toBeNull();
+  });
+
   it("rewrites unlock-the-video commands even on a real offer", () => {
     const guarded = applyReplyGuards(
       {
@@ -1168,6 +1331,23 @@ describe("mock provider", () => {
     expect(blob).toMatch(/car/);
     expect(blob).toMatch(/voice/);
     expect(blob).not.toMatch(/aftercare later|then the ppv/);
+  });
+
+  it("does not re-ask how many hands after the fan says he is not jerking off", async () => {
+    const mock = new MockLLMProvider();
+    const result = await mock.generateReplies({
+      ...genInput("Well, I'm not jerking off now"),
+      funnelStage: "RAPPORT",
+      existingFan: true,
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+        { authorType: "SUBSCRIBER", body: "Well, I'm not jerking off now" },
+      ],
+    });
+    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    expect(blob).not.toMatch(/how many hands|typing with/);
+    expect(blob.split("\n").some((line) => /^wait[.!?]*$/i.test(line.trim()))).toBe(false);
+    expect(blob).not.toMatch(/how old/);
   });
 
   it("sells the girlcock clip when he asks for it instead of the default lingerie drop", async () => {
@@ -1450,6 +1630,8 @@ describe("operator rejection prompt", () => {
     const system = String(messages[0]?.content ?? "");
     const user = String(messages[1]?.content ?? "");
     expect(system).toMatch(/dont call fans losers/);
+    expect(system).toMatch(/OPERATOR CORRECTIONS/);
+    expect(system).toMatch(/Never repeat this mistake/);
     expect(system).toMatch(/Do not invent HIS life/);
     expect(system).toMatch(/One hook max/);
     expect(system).toMatch(/Never write meet/);

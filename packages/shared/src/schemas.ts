@@ -168,7 +168,7 @@ export const selectReplySchema = z.object({
   editedText: z.string().max(2000).optional(),
   inserted: z.boolean().default(false),
   discard: z.boolean().optional(),
-  rejectReason: z.string().max(500).optional(),
+  rejectReason: z.string().max(2000).optional(),
 });
 
 export const generateRequestSchema = z.object({
@@ -220,4 +220,5 @@ export const conversationPatchSchema = z.object({
   insertSequenceStep: z.boolean().optional(),
   noReplyFollowUp: z.boolean().optional(),
   markPurchased: z.boolean().optional(),
+  clearChat: z.boolean().optional(),
 });

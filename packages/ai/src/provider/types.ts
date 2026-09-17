@@ -131,6 +131,10 @@ export type GenerationInput = {
     closer?: string | null;
     quotedLines?: string[];
     deviation?: string | null;
+    askPending?: boolean;
+    pendingQuestion?: string;
+    resumeHoldTurns?: number;
+    skipPitch?: boolean;
   };
   boughtWelcome?: boolean;
   existingFan?: boolean;

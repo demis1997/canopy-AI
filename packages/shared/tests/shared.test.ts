@@ -138,6 +138,24 @@ describe("operator reject reasons", () => {
     expect(parseOperatorRejectReason("Ack then sell · rejected: dont call fans losers")).toBe(
       "dont call fans losers",
     );
+    expect(
+      parseOperatorRejectReason("rapport · rejected: too abrupt\nwait for him to answer first"),
+    ).toBe("too abrupt\nwait for him to answer first");
+  });
+
+  it("turns a typed reject reason into a prompt rule with the bad example", async () => {
+    const { operatorRejectLesson, formatOperatorRejectionPrompt } = await import("../src/replies.js");
+    expect(operatorRejectLesson("dont ask the sub/dom question yet", "what turns you on being in charge")).toMatch(
+      /dont ask the sub\/dom question yet/i,
+    );
+    expect(operatorRejectLesson("too abrupt, wait for him")).toMatch(/Never repeat this mistake: too abrupt/i);
+    expect(operatorRejectLesson("stop mentioning the dick clip")).toMatch(/^stop mentioning the dick clip/i);
+    const prompt = formatOperatorRejectionPrompt([
+      { text: "kneel loser", reason: "dont call fans losers" },
+    ]);
+    expect(prompt).toMatch(/OPERATOR CORRECTIONS/i);
+    expect(prompt).toMatch(/dont call fans losers/);
+    expect(prompt).toMatch(/kneel loser/);
   });
 
   it("keeps unique discarded drafts even without a typed reason", () => {
@@ -440,8 +458,9 @@ describe("fan flow pdf", () => {
       recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
     });
     expect(beat?.id).toBe("vibe_yes");
-    expect(beat?.variants.join("\n")).toMatch(/dive deeper/i);
+    expect(beat?.variants.join("\n")).toMatch(/dive deeper|personal|read you/i);
     expect(beat?.variants.join("\n")).not.toMatch(/how old/i);
+    expect(beat?.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
   });
 
   it("uses the close vs far location lines", async () => {
@@ -469,7 +488,8 @@ describe("fan flow pdf", () => {
     });
     expect(beat?.id).toBe("welcome_bundle");
     expect(beat?.variants.join("\n")).toMatch(/bundle/i);
-    expect(beat?.variants.join("\n")).toMatch(/submitting like a good boy/i);
+    expect(beat?.variants.join("\n")).toMatch(/personal|read you|dive deeper/i);
+    expect(beat?.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
   });
 
   it("answers are-you-single about her instead of owning a mixup about him", async () => {
@@ -527,7 +547,7 @@ describe("conversation flow state machine", () => {
     expect(flow.variants.join("\n")).toMatch(/coast|water|i live|not telling|secret/i);
   });
 
-  it("skips age after a refusal and asks location instead", async () => {
+  it("skips age after a refusal and keeps location pending instead of asking it immediately", async () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "rather not say",
@@ -536,29 +556,37 @@ describe("conversation flow state machine", () => {
     expect(flow.deviation).toBe("REFUSED");
     expect(flow.next.skipped?.age).toBe(true);
     expect(flow.next.step).toBe("ASK_LOCATION");
+    expect(flow.askPending).toBe(false);
+    expect(flow.next.resumeHoldTurns).toBeGreaterThanOrEqual(1);
     expect(flow.variants.join("\n")).toMatch(/no worries|no rush|fair/i);
-    expect(flow.variants.join("\n")).toMatch(/where are you from/i);
+    expect(flow.variants.join("\n")).not.toMatch(/where are you from/i);
   });
 
-  it("re-asks once then asks what he wants on a second ignore", async () => {
-    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+  it("skips an already asked age question after a topic change and holds location for a later turn", async () => {
+    const { advanceConversationFlow, serializeFlowState } = await import("../src/conversation-flow.js");
     const first = advanceConversationFlow({
       subscriberText: "anyway whats your favorite color lol",
       recentMessages: [{ authorType: "CHATTER", body: "how old are you?" }],
-      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "1" } },
+      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "1", status_age: "asked" } },
     });
-    expect(first.next.askedCurrentQuestionCount).toBe(2);
-    expect(first.variants.join("\n")).toMatch(/how old are you/i);
+    expect(first.next.step).toBe("ASK_LOCATION");
+    expect(first.next.stepStatus?.AGE).toBe("skipped");
+    expect(first.askPending).toBe(false);
+    expect(first.variants.join("\n")).not.toMatch(/how old are you/i);
+    expect(first.variants.join("\n")).not.toMatch(/where are you from/i);
+    expect(first.variants.join("\n")).not.toMatch(/^wait$/im);
     const second = advanceConversationFlow({
-      subscriberText: "anyway whats your favorite color lol",
+      subscriberText: "yeah",
       recentMessages: [
         { authorType: "CHATTER", body: "how old are you?" },
-        { authorType: "CHATTER", body: "wait i still wanna know\nhow old are you?" },
+        { authorType: "CHATTER", body: "lol ok" },
       ],
-      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "2" } },
+      fanNotes: { extra: serializeFlowState(first.next) },
     });
-    expect(second.next.step).toBe("ASK_WHAT_HE_WANTS");
-    expect(second.variants.join("\n")).toMatch(/what do you actually want/i);
+    expect(second.next.step).toBe("ASK_LOCATION");
+    expect(second.askPending).toBe(true);
+    expect(second.variants.join("\n")).toMatch(/where are you from/i);
+    expect(second.variants.join("\n")).not.toMatch(/how old are you/i);
   });
 
   it("asks only the missing job for an existing fan who already has age and city", async () => {
@@ -572,6 +600,322 @@ describe("conversation flow state machine", () => {
     expect(flow.next.step).toBe("ASK_JOB");
     expect(flow.variants.join("\n")).toMatch(/for a living/i);
     expect(flow.variants.join("\n")).not.toMatch(/how old are you/i);
+  });
+
+  it("reacts to not jerking off now without forcing age, and keeps age as the next pending objective", async () => {
+    const { advanceConversationFlow, serializeFlowState } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "Well, I'm not jerking off now",
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+      ],
+      existingFan: true,
+    });
+    expect(flow.deviation).toBe("ANSWERED");
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.next.fanIsJerking).toBe(false);
+    expect(flow.next.stepStatus?.VIBE).toBe("completed");
+    expect(flow.next.stepStatus?.AGE).not.toBe("asked");
+    expect(flow.next.stepStatus?.AGE).not.toBe("completed");
+    expect(flow.next.resumeHoldTurns).toBeGreaterThanOrEqual(1);
+    expect(flow.askPending).toBe(false);
+    expect(flow.closer).toBeNull();
+    expect(flow.variants.join("\n")).not.toMatch(/how old/i);
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands|typing with/i);
+    expect(flow.variants.join("\n")).not.toMatch(/^wait$/im);
+
+    const resume = advanceConversationFlow({
+      subscriberText: "haha yeah",
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+        { authorType: "SUBSCRIBER", body: "Well, I'm not jerking off now" },
+        { authorType: "CHATTER", body: "haha i caught you at the wrong time then" },
+      ],
+      existingFan: true,
+      fanNotes: { extra: serializeFlowState(flow.next) },
+    });
+    expect(resume.next.step).toBe("ASK_AGE");
+    expect(resume.askPending).toBe(true);
+    expect(resume.next.resumeHoldTurns).toBe(0);
+    expect(resume.variants.join("\n")).toMatch(/how old/i);
+    expect(resume.variants.join("\n")).not.toMatch(/how many hands|typing with/i);
+  });
+
+  it("advances on a direct vibe answer", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "one hand busy yeah",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(flow.deviation).toBe("ANSWERED");
+    expect(flow.next.fanIsJerking).toBe(true);
+    expect(flow.next.step).toBe("ASK_PERSONAL_PERMISSION");
+    expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("asked");
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands/i);
+    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+  });
+
+  it("advances after a topic change instead of repeating the vibe question", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "anyway whats your favorite color lol",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+    });
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.askPending).toBe(false);
+    expect(flow.next.stepStatus?.VIBE).toMatch(/skipped|completed/);
+    expect(flow.next.resumeHoldTurns).toBeGreaterThanOrEqual(1);
+    expect(flow.variants.join("\n")).not.toMatch(/how old/i);
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands|typing with/i);
+  });
+
+  it("advances after a joke instead of repeating the vibe question", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "lol maybe i'm typing with my nose",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.askPending).toBe(false);
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands|typing with|how old/i);
+  });
+
+  it("advances after a sexual interruption instead of repeating the vibe question", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "i'm so hard for you rn",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+    });
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.askPending).toBe(false);
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands|typing with|how old/i);
+  });
+
+  it("advances after a short reply instead of repeating the vibe question", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "haha",
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+    });
+    expect(flow.next.step).toBe("ASK_AGE");
+    expect(flow.askPending).toBe(false);
+    expect(flow.variants.join("\n")).not.toMatch(/how many hands|typing with|how old/i);
+  });
+
+  it("stays in natural conversation when every intake objective is already asked", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "lol anyway",
+      recentMessages: [
+        { authorType: "CHATTER", body: "what turns you on, being in charge or submitting like a good boy?" },
+      ],
+      fanNotes: {
+        extra: {
+          flow_step: "ASK_SUB_DOM",
+          flow_phase: "SUB_DOM_TRANSITION",
+          current_question: "SUB_DOM",
+          asked_current_question_count: "1",
+          status_vibe: "completed",
+          status_age: "completed",
+          status_location: "completed",
+          status_job: "completed",
+          status_sub_dom: "asked",
+          fan_age: "32",
+          fan_city: "miami",
+          fan_job: "doctor",
+        },
+      },
+    });
+    expect(flow.next.step).toBe("SEND_PRODUCT");
+    expect(flow.closer).toBeNull();
+    expect(flow.variants.join("\n")).not.toMatch(/being in charge or submitting|how many hands|how old are you/i);
+  });
+
+  it("reacts to occupation then asks personal permission without the sub/dom question", async () => {
+    const { advanceConversationFlow, serializeFlowState, PERSONAL_PERMISSION_EXAMPLES } = await import(
+      "../src/conversation-flow.js"
+    );
+    expect(new Set(PERSONAL_PERMISSION_EXAMPLES).size).toBeGreaterThan(1);
+    const flow = advanceConversationFlow({
+      subscriberText: "I'm a carpenter",
+      recentMessages: [{ authorType: "CHATTER", body: "what do u do for a living? just curiouss" }],
+    });
+    expect(flow.facts.extra.fan_job).toMatch(/carpenter/i);
+    expect(flow.next.step).toBe("ASK_PERSONAL_PERMISSION");
+    expect(flow.next.currentQuestion).toBe("PERSONAL_PERMISSION");
+    expect(flow.next.stepStatus?.JOB).toBe("completed");
+    expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("asked");
+    expect(flow.askPending).toBe(true);
+    expect(flow.variants.join("\n")).toMatch(/personal|read you|dive deeper/i);
+    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+    expect(flow.closer).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+    for (const variant of flow.variants) {
+      expect(variant).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+    }
+
+    const granted = advanceConversationFlow({
+      subscriberText: "sure",
+      recentMessages: [
+        { authorType: "CHATTER", body: "what do u do for a living? just curiouss" },
+        { authorType: "SUBSCRIBER", body: "I'm a carpenter" },
+        { authorType: "CHATTER", body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?" },
+      ],
+      fanNotes: { extra: { ...serializeFlowState(flow.next), fan_job: "carpenter" } },
+    });
+    expect(granted.next.step).toBe("ASK_SUB_DOM");
+    expect(granted.next.stepStatus?.PERSONAL_PERMISSION).toBe("completed");
+    expect(granted.next.stepStatus?.SUB_DOM).toBe("asked");
+    expect(granted.variants.join("\n")).toMatch(/taking control|told what to do/i);
+    expect(granted.variants.join("\n")).not.toMatch(/submitting like a good boy/i);
+    expect(granted.variants.join("\n")).not.toMatch(/personal|read you|dive deeper/i);
+  });
+
+  it("treats what? as receptive and then asks the natural sub/dom question", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "what?",
+      recentMessages: [
+        { authorType: "CHATTER", body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?" },
+      ],
+      fanNotes: {
+        extra: {
+          flow_step: "ASK_PERSONAL_PERMISSION",
+          flow_phase: "SUB_DOM_TRANSITION",
+          current_question: "PERSONAL_PERMISSION",
+          asked_current_question_count: "1",
+          status_job: "completed",
+          status_personal_permission: "asked",
+          fan_job: "carpenter",
+        },
+      },
+    });
+    expect(flow.deviation).toBe("ANSWERED");
+    expect(flow.next.step).toBe("ASK_SUB_DOM");
+    expect(flow.variants.join("\n")).toMatch(/taking control|told what to do/i);
+    expect(flow.variants.join("\n")).not.toMatch(/submitting like a good boy/i);
+  });
+
+  it("does not force the sub/dom question when the fan refuses the personal ask", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "thats too personal",
+      recentMessages: [
+        { authorType: "CHATTER", body: "mind if i ask you something a little personal?" },
+      ],
+      fanNotes: {
+        extra: {
+          flow_step: "ASK_PERSONAL_PERMISSION",
+          flow_phase: "SUB_DOM_TRANSITION",
+          current_question: "PERSONAL_PERMISSION",
+          asked_current_question_count: "1",
+          status_personal_permission: "asked",
+        },
+      },
+    });
+    expect(flow.deviation).toBe("REFUSED");
+    expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("skipped");
+    expect(flow.next.stepStatus?.SUB_DOM).toBe("skipped");
+    expect(flow.askPending).toBe(false);
+    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+  });
+
+  it("holds the sub/dom question when the fan jokes or changes the subject after permission", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "lol wait are you a cop",
+      recentMessages: [
+        { authorType: "CHATTER", body: "mind if i ask you something a little personal?" },
+      ],
+      fanNotes: {
+        extra: {
+          flow_step: "ASK_PERSONAL_PERMISSION",
+          flow_phase: "SUB_DOM_TRANSITION",
+          current_question: "PERSONAL_PERMISSION",
+          asked_current_question_count: "1",
+          status_personal_permission: "asked",
+        },
+      },
+    });
+    expect(flow.askPending).toBe(false);
+    expect(flow.next.resumeHoldTurns).toBeGreaterThanOrEqual(1);
+    expect(flow.next.step).toBe("ASK_SUB_DOM");
+    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+  });
+
+  it("does not treat jerking off as a vibe hit when the fan says they are not doing that", async () => {
+    const { looksLikeJerking, looksLikeNotJerking, looksLikeStandaloneFiller, repeatsAskedSequenceObjective } =
+      await import("../src/conversation-flow.js");
+    expect(looksLikeNotJerking("Well, I'm not jerking off now", true)).toBe(true);
+    expect(looksLikeJerking("Well, I'm not jerking off now")).toBe(false);
+    expect(looksLikeJerking("yeah im jerking off")).toBe(true);
+    expect(looksLikeStandaloneFiller("wait")).toBe(true);
+    expect(looksLikeStandaloneFiller("wait let me send u something")).toBe(false);
+    expect(
+      repeatsAskedSequenceObjective("so both hands free or nah?", [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha?" },
+      ]),
+    ).toBe(true);
+  });
+
+  it("actually teases when the fan waits on a tell-hook instead of repeating it", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const { looksLikeWaitingForReveal, looksLikeTellHook } = await import("../src/replies.js");
+    expect(looksLikeWaitingForReveal("I am waiting for it")).toBe(true);
+    expect(looksLikeWaitingForReveal("What are you going to tell me?")).toBe(true);
+    const flow = advanceConversationFlow({
+      subscriberText: "What are you going to tell me?",
+      recentMessages: [
+        { authorType: "CHATTER", body: "anyway" },
+        { authorType: "CHATTER", body: "i was gonna tell u something" },
+        { authorType: "SUBSCRIBER", body: "I am waiting for it" },
+        { authorType: "CHATTER", body: "anyway" },
+        { authorType: "CHATTER", body: "i was gonna tell u something" },
+      ],
+      fanNotes: {
+        extra: {
+          flow_step: "SEND_PRODUCT",
+          flow_phase: "SELLING_SEQUENCE",
+        },
+      },
+    });
+    expect(flow.skipPitch).toBe(true);
+    expect(flow.beatId).toBe("tell_reveal");
+    expect(flow.variants.join("\n")).not.toMatch(/gonna tell u something/i);
+    expect(flow.variants.some(looksLikeTellHook)).toBe(false);
+    expect(flow.variants.join("\n")).toMatch(/mouth on u|start slow|shot something filthy/i);
+  });
+
+  it("lets a dominant fan lead after he says yes to proving himself", async () => {
+    const { advanceConversationFlow } = await import("../src/conversation-flow.js");
+    const { looksLikeWrongDominanceFlip, FAN_DOMINANT_FOLLOW_VARIANTS } = await import("../src/replies.js");
+    const flow = advanceConversationFlow({
+      subscriberText: "Yes.",
+      recentMessages: [
+        { authorType: "SUBSCRIBER", body: "I prefer being in charge" },
+        { authorType: "CHATTER", body: "well in that case i just want to see if you can properly do it hehe" },
+        { authorType: "CHATTER", body: "so are you going to prove yourself now?" },
+      ],
+      fanNotes: {
+        dominance: "DOMINANT",
+        extra: {
+          flow_step: "SEND_PRODUCT",
+          flow_phase: "SELLING_SEQUENCE",
+          fan_dominance: "DOMINANT",
+        },
+      },
+    });
+    expect(flow.skipPitch).toBe(true);
+    expect(flow.beatId).toBe("dom_prove_yes");
+    expect(flow.variants).toEqual(FAN_DOMINANT_FOLLOW_VARIANTS);
+    expect(flow.variants.join("\n")).toMatch(/your move|show me|let u lead/i);
+    expect(flow.variants.some((text) => looksLikeWrongDominanceFlip(text, "DOMINANT"))).toBe(false);
+  });
+});
+
+describe("conversation patch schema", () => {
+  it("accepts a per-chat clearChat flag", async () => {
+    const { conversationPatchSchema } = await import("../src/schemas.js");
+    expect(conversationPatchSchema.parse({ clearChat: true })).toEqual({ clearChat: true });
   });
 });
 

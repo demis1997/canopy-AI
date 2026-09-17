@@ -6,6 +6,7 @@ import {
   matchSellTarget,
   validateRecommendedOffer,
   advanceConversationFlow,
+  alreadySentObjectives,
   type CatalogProduct,
 } from "@canopy/shared";
 import { MockLLMProvider, PROMPT_VERSION, validateProductsAndPrices } from "@canopy/ai";
@@ -159,6 +160,9 @@ export async function POST(request: Request) {
         previousStep: flow.previous.step,
         deviation: flow.deviation,
         facts: flow.facts.extra,
+        askedObjectives: alreadySentObjectives(body.recentMessages, flow.previous),
+        askPending: flow.askPending,
+        pendingQuestion: flow.next.currentQuestion,
       },
     },
   );

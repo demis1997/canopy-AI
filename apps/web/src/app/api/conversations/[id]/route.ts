@@ -8,6 +8,7 @@ import {
 } from "@canopy/shared";
 import { jsonError, requireOrgUser, requirePerm } from "@/lib/session";
 import { assignedCreatorIds } from "@/lib/access";
+import { clearConversationThread } from "@/server/conversations";
 
 export async function PATCH(
   request: Request,
@@ -30,6 +31,15 @@ export async function PATCH(
     const allowed = await assignedCreatorIds(ctx);
     if (allowed && !allowed.includes(conversation.creatorId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (body.clearChat) {
+      const result = await clearConversationThread({
+        organizationId: ctx.tenant.organizationId,
+        conversationId: conversation.id,
+      });
+      if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(result);
     }
 
     const data: {

@@ -12,7 +12,7 @@ const TEMPLATES: {
   {
     name: "New / existing fan flow",
     kind: "STARTER",
-    description: "PDF intake: how is he, vibe (hands), age/location/job into notes, then sub/dom. Welcome-paid skips to the bundle + check.",
+    description: "PDF intake: how is he, vibe (hands), age/location/job into notes, personal permission, then sub/dom. Welcome-paid skips to the bundle + permission.",
     steps: [
       { body: "heyy NAME. how are you", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "im doing great actually was about to get ready to go to the gym and saw u here", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
@@ -20,7 +20,8 @@ const TEMPLATES: {
       { body: "mmm how old are you? feel curious idk why", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "where are you from btw? lets see how close or far we are", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
       { body: "soo last question then u always busy? what do u do for a living? just curiouss", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
-      { body: "let me ask you a naughty question now tho. what turns you on, being in charge or submitting like a good boy?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "you know, i cant quite read you yet. mind if i ask you something a little personal?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
+      { body: "are you usually the one taking control, or do you like being told what to do?", mediaHint: "TEXT", delayMinutes: 0, priceTier: 1 },
     ],
   },
   {

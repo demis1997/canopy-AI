@@ -53,12 +53,26 @@ import {
   PET_NAME_PUSHBACK_VARIANTS,
   ABOUT_HIM_VARIANTS,
   looksLikeAimlessRapport,
+  looksLikeTellHook,
+  looksLikeWaitingForReveal,
+  looksLikeWrongDominanceFlip,
+  looksLikePrematureVideoPitch,
+  looksLikeProveYourselfAsk,
+  looksLikeAffirm,
+  repeatsRecentBubbles,
   RAPPORT_ONLY_VARIANTS,
+  FAN_DOMINANT_FOLLOW_VARIANTS,
+  FAN_SUBMISSIVE_FOLLOW_VARIANTS,
   areYouRealReplyVariants,
   looksLikeWeakAreYouReal,
   SOFT_TEASE_VARIANTS,
   REFUND_CALLOUT_VARIANTS,
   relationshipReplyVariants,
+  alreadySentObjectives,
+  looksLikeStandaloneFiller,
+  sequenceObjectiveOf,
+  stripRepeatedObjectivesAndFiller,
+  type FlowQuestion,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -186,6 +200,10 @@ export type ReplyGuardExtras = {
     previousStep?: string;
     deviation?: string | null;
     facts?: Record<string, string>;
+    askedObjectives?: FlowQuestion[];
+    askPending?: boolean;
+    pendingQuestion?: FlowQuestion;
+    skipPitch?: boolean;
   };
   variantSeed?: string | null;
   creatorCity?: string | null;
@@ -208,15 +226,68 @@ function firstText(output: GenerationOutput): string {
   return output.replyOptions[0]?.text ?? "";
 }
 
-function ensureFlowCloser(output: GenerationOutput, closer: string | null | undefined): GenerationOutput {
+function ensureFlowCloser(
+  output: GenerationOutput,
+  closer: string | null | undefined,
+  alreadySent: FlowQuestion[] = [],
+): GenerationOutput {
   if (!closer) return output;
+  const closerObjective = sequenceObjectiveOf(closer);
+  if (closerObjective && alreadySent.includes(closerObjective)) return output;
   const needle = closer.split("\n").filter(Boolean).at(-1)?.toLowerCase() ?? "";
   if (!needle) return output;
   return mapOptionTexts(output, (text) => {
     if (text.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length)))) return text;
+    if (closerObjective && text.split("\n").some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)) {
+      return text;
+    }
     const bubbles = text.split("\n").filter(Boolean);
     const closerBubbles = closer.split("\n").filter(Boolean);
     return [...bubbles.slice(0, Math.max(1, 3 - closerBubbles.length)), ...closerBubbles].slice(0, 3).join("\n");
+  });
+}
+
+function sentObjectives(extras?: ReplyGuardExtras): FlowQuestion[] {
+  if (extras?.flowPlan?.askedObjectives?.length) return extras.flowPlan.askedObjectives;
+  return alreadySentObjectives(extras?.recentMessages ?? []);
+}
+
+function flowStripObjectives(extras?: ReplyGuardExtras): FlowQuestion[] {
+  const asked = sentObjectives(extras);
+  const askPending = extras?.flowPlan?.askPending !== false;
+  const pending = extras?.flowPlan?.pendingQuestion;
+  const step = extras?.flowPlan?.step;
+  const extraStrip: FlowQuestion[] =
+    step === "ASK_PERSONAL_PERMISSION" || pending === "PERSONAL_PERMISSION" ? ["SUB_DOM"] : [];
+  return [
+    ...asked,
+    ...(!askPending && pending ? [pending] : []),
+    ...extraStrip,
+  ];
+}
+
+function pendingCloser(extras?: ReplyGuardExtras): string | null | undefined {
+  if (extras?.flowPlan?.askPending === false) return null;
+  const closer = extras?.flowPlan?.closer;
+  if (!closer) return closer;
+  return stripRepeatedObjectivesAndFiller(closer, flowStripObjectives(extras)) || null;
+}
+
+function applySequenceRecovery(output: GenerationOutput, extras?: ReplyGuardExtras): GenerationOutput {
+  const askPending = extras?.flowPlan?.askPending !== false;
+  const strip = flowStripObjectives(extras);
+  const rawCloser = askPending ? extras?.flowPlan?.closer ?? null : null;
+  const safeCloser = rawCloser ? stripRepeatedObjectivesAndFiller(rawCloser, strip) || null : null;
+  const closerObjective = safeCloser ? sequenceObjectiveOf(safeCloser) : null;
+  return mapOptionTexts(output, (text) => {
+    const cleaned = stripRepeatedObjectivesAndFiller(text, strip);
+    const bubbles = cleaned.split("\n").filter(Boolean);
+    if (!safeCloser) return cleaned;
+    if (closerObjective && bubbles.some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)) return cleaned;
+    const needle = safeCloser.split("\n").filter(Boolean).at(-1)?.toLowerCase() ?? "";
+    if (needle && cleaned.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length)))) return cleaned;
+    const closerBubbles = safeCloser.split("\n").filter((line) => !looksLikeStandaloneFiller(line));
+    return [...bubbles.slice(0, Math.max(0, 3 - closerBubbles.length)), ...closerBubbles].slice(0, 3).join("\n");
   });
 }
 
@@ -227,6 +298,8 @@ export function applyReplyGuards(
 ): GenerationOutput {
   const seed = extras?.variantSeed;
   const recent = extras?.recentOutbound ?? [];
+  const rejectedDrafts = (extras?.rejections ?? []).map((row) => row.text).filter(Boolean);
+  const bannedRepeats = [...recent, ...rejectedDrafts];
   const recentMessages =
     extras?.recentMessages ??
     recent.map((body) => ({ authorType: "CREATOR", body }));
@@ -256,6 +329,7 @@ export function applyReplyGuards(
     "direct-creator-question": looksLikeDirectCreatorQuestion(subscriberText),
     "confirmed-mixup": confirmMixup.matched,
     "mixup-language": looksLikeMixupCalloutLanguage(subscriberText),
+    "waiting-reveal": looksLikeWaitingForReveal(subscriberText),
   };
   const matched = Object.entries(hits)
     .filter(([, hit]) => hit)
@@ -300,7 +374,7 @@ export function applyReplyGuards(
       replaced = true;
       reason = "relationship-fallback";
     } else {
-      next = ensureFlowCloser(next, flow?.closer);
+      next = ensureFlowCloser(next, pendingCloser(extras), flowStripObjectives(extras));
       reason = "relationship-kept";
     }
     applied = "relationship";
@@ -324,7 +398,7 @@ export function applyReplyGuards(
       replaced = true;
       reason = "location-fallback";
     } else {
-      next = ensureFlowCloser(next, flow?.closer);
+      next = ensureFlowCloser(next, pendingCloser(extras), flowStripObjectives(extras));
       reason = "location-kept";
     }
     applied = "creator-location";
@@ -338,7 +412,7 @@ export function applyReplyGuards(
       replaced = true;
       reason = "age-fallback";
     } else {
-      next = ensureFlowCloser(next, flow?.closer);
+      next = ensureFlowCloser(next, pendingCloser(extras), flowStripObjectives(extras));
       reason = "age-kept";
     }
     applied = "creator-age";
@@ -352,7 +426,7 @@ export function applyReplyGuards(
     replaced = true;
     reason = "about-him-fallback";
   } else if (hits["about-him"]) {
-    next = ensureFlowCloser(next, flow?.closer);
+    next = ensureFlowCloser(next, pendingCloser(extras), flowStripObjectives(extras));
     applied = "fan-flow";
     reason = "about-him-kept";
   } else if (hits["confirmed-mixup"]) {
@@ -365,6 +439,12 @@ export function applyReplyGuards(
     applied = "confirmed-mixup";
     replaced = true;
     reason = "unconfirmed-mixup-clarify";
+  } else if (hits["waiting-reveal"] && (looksLikeTellHook(firstText(next)) || !repairPool?.length)) {
+    const pool = (repairPool ?? []).filter((text) => !looksLikeTellHook(text));
+    next = swap(next, pool.length ? pool : teasePool);
+    applied = "fan-flow";
+    replaced = true;
+    reason = "waiting-for-reveal";
   } else if (
     extras?.fanIntake?.length &&
     extras?.sellTarget?.reason !== "CONTEXT" &&
@@ -382,7 +462,7 @@ export function applyReplyGuards(
     replaced = true;
     reason = "offline-followup";
   } else if (flow?.closer) {
-    next = ensureFlowCloser(next, flow.closer);
+    next = ensureFlowCloser(next, pendingCloser(extras), flowStripObjectives(extras));
     applied = "fan-flow";
     reason = "fan-flow-closer";
   }
@@ -442,13 +522,76 @@ export function applyReplyGuards(
     reason = "invented-beach-output";
   }
 
-  if (
-    !applied &&
-    next.replyOptions.some((o) => recent.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))))
-  ) {
-    next = swap(next, looksLikeTeaseAsk(subscriberText) ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
+  next = applySequenceRecovery(next, extras);
+
+  const draftRepeats =
+    next.replyOptions.some((o) => bannedRepeats.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r)))) ||
+    next.replyOptions.some((o) => repeatsRecentBubbles(o.text, bannedRepeats));
+  if (!applied && draftRepeats) {
+    const repeatedRejected = next.replyOptions.some(
+      (o) => rejectedDrafts.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))),
+    );
+    const tellLoop = next.replyOptions.some((o) => looksLikeTellHook(o.text)) || looksLikeWaitingForReveal(subscriberText);
+    const fresh = pickFreshVariants(
+      extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      bannedRepeats,
+      extras?.variantSeed,
+    ).filter((text) => !looksLikeTellHook(text) || !tellLoop);
+    const pool = looksLikeTeaseAsk(subscriberText) || tellLoop ? teasePool : fresh.length ? fresh : teasePool;
+    next = swap(next, pool);
     replaced = true;
-    reason = "duplicate-outbound";
+    reason = repeatedRejected ? "rejected-draft-repeat" : "duplicate-outbound";
+    next = applySequenceRecovery(next, extras);
+  }
+
+  if (rejectedDrafts.length) {
+    next = mapOptionTexts(next, (text, i) =>
+      rejectedDrafts.some((draft) => tooSimilar(text, draft))
+        ? RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!
+        : text,
+    );
+  }
+
+  const lastUs =
+    [...recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")?.body ?? "";
+  const dominance = extras?.dominance ?? extras?.flowPlan?.facts?.fan_dominance;
+  const inferredDominant = (dominance ?? "").toUpperCase() === "DOMINANT" || (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(subscriberText));
+  if (
+    !locked &&
+    next.replyOptions.some(
+      (o) =>
+        looksLikeWrongDominanceFlip(o.text, inferredDominant ? "DOMINANT" : dominance) ||
+        o.messages.some((m) => looksLikeWrongDominanceFlip(m, inferredDominant ? "DOMINANT" : dominance)),
+    )
+  ) {
+    const pool =
+      inferredDominant || (dominance ?? "").toUpperCase() === "DOMINANT"
+        ? FAN_DOMINANT_FOLLOW_VARIANTS
+        : FAN_SUBMISSIVE_FOLLOW_VARIANTS;
+    next = swap(next, pool);
+    replaced = true;
+    reason = "dominance-flip";
+  }
+
+  if (extras?.flowPlan?.skipPitch) {
+    const pitched = next.replyOptions.some(
+      (o) => looksLikePrematureVideoPitch(o.text) || o.messages.some(looksLikePrematureVideoPitch),
+    );
+    if (pitched) {
+      const pool = (repairPool ?? []).filter((text) => !looksLikeTellHook(text) && !looksLikePrematureVideoPitch(text));
+      next = swap(next, pool.length ? pool : inferredDominant ? FAN_DOMINANT_FOLLOW_VARIANTS : teasePool);
+      replaced = true;
+      reason = "skip-pitch";
+    }
+    next = {
+      ...next,
+      recommendedProductId: null,
+      approvedPrice: null,
+      recommendedAction:
+        next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+          ? "REPLY"
+          : next.recommendedAction,
+    };
   }
 
   logGuardDebug({

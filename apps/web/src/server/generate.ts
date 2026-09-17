@@ -24,6 +24,8 @@ import {
 import {
   eligibleProducts,
   collectOperatorRejections,
+  operatorRejectLesson,
+  operatorRejectLessons,
   creatorAgeFromText,
   creatorCityFromText,
   followUpPhase,
@@ -31,6 +33,7 @@ import {
   boughtWelcomeMessage,
   advanceConversationFlow,
   serializeFlowState,
+  alreadySentObjectives,
   logFlowDebug,
   inferThreadLessons,
   intakeComplete,
@@ -518,20 +521,29 @@ export async function generateForConversation(input: {
     const fanHasSentPics = fanSentMedia(
       recent.map((m) => ({ authorType: m.authorType, body: m.body, attachments: m.attachments })),
     );
+    const discarded = collectOperatorRejections(
+      discardedRows.map((row) => ({
+        text: row.text,
+        internalReason: row.internalReason,
+        conversationId: row.generation.conversationId,
+      })),
+      20,
+    );
+    const threadFirst = [
+      ...discarded.filter((row) => row.conversationId === conversation.id),
+      ...discarded.filter((row) => row.conversationId !== conversation.id),
+    ];
     const operatorRejections = [
-      ...collectOperatorRejections(
-        discardedRows.map((row) => ({
-          text: row.text,
-          internalReason: row.internalReason,
-          conversationId: row.generation.conversationId,
-        })),
-      ),
+      ...threadFirst,
       ...threadLessons.bans.map((reason) => ({
         text: "",
         reason,
         conversationId: conversation.id,
       })),
     ];
+    for (const lesson of operatorRejectLessons(threadFirst)) {
+      if (!threadLessons.bans.includes(lesson)) threadLessons.bans.push(lesson);
+    }
 
     const creatorAge = creatorAgeFromText(persona.biography, persona.authorisedBackstory);
     const creatorCity = creatorCityFromText(persona.biography, persona.authorisedBackstory);
@@ -804,6 +816,10 @@ export async function generateForConversation(input: {
         closer: flow.closer,
         quotedLines: flow.quotedLines,
         deviation: flow.deviation,
+        askPending: flow.askPending,
+        pendingQuestion: flow.next.currentQuestion,
+        resumeHoldTurns: flow.next.resumeHoldTurns,
+        skipPitch: flow.skipPitch,
       },
       boughtWelcome,
       existingFan,
@@ -952,6 +968,10 @@ export async function generateForConversation(input: {
           previousStep: flow.previous.step,
           deviation: flow.deviation,
           facts: flow.facts.extra,
+          askedObjectives: alreadySentObjectives(recent.map((m) => ({ authorType: m.authorType, body: m.body })), flow.previous),
+          askPending: flow.askPending,
+          pendingQuestion: flow.next.currentQuestion,
+          skipPitch: flow.skipPitch,
         },
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
@@ -1031,7 +1051,7 @@ export async function generateForConversation(input: {
           deletedAt: null,
         },
       });
-      const value = threadLessons.bans.join("\n").slice(0, 500);
+      const value = threadLessons.bans.join("\n").slice(0, 4000);
       if (existing) {
         await prisma.subscriberMemory.update({
           where: { id: existing.id },
@@ -1141,6 +1161,55 @@ function levenshtein(a: string, b: string): number {
   return m[a.length]![b.length]!;
 }
 
+async function persistThreadLesson(opts: {
+  organizationId: string;
+  conversationId: string;
+  lesson: string;
+}) {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: opts.conversationId, organizationId: opts.organizationId },
+    select: { subscriberId: true, creatorId: true },
+  });
+  if (!conversation || !opts.lesson.trim()) return;
+  const existing = await prisma.subscriberMemory.findFirst({
+    where: {
+      organizationId: opts.organizationId,
+      subscriberId: conversation.subscriberId,
+      creatorId: conversation.creatorId,
+      key: "thread_lessons",
+      deletedAt: null,
+    },
+  });
+  const lines = (existing?.value ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.some((line) => line.toLowerCase() === opts.lesson.toLowerCase())) {
+    lines.push(opts.lesson.trim());
+  }
+  const value = lines.join("\n").slice(0, 4000);
+  if (existing) {
+    await prisma.subscriberMemory.update({
+      where: { id: existing.id },
+      data: { value, confidence: 1, verified: true, lastConfirmedAt: new Date() },
+    });
+    return;
+  }
+  await prisma.subscriberMemory.create({
+    data: {
+      organizationId: opts.organizationId,
+      subscriberId: conversation.subscriberId,
+      creatorId: conversation.creatorId,
+      category: "BOUNDARIES",
+      key: "thread_lessons",
+      value,
+      confidence: 1,
+      verified: true,
+      sensitivity: "INTERNAL",
+    },
+  });
+}
+
 export async function selectReply(input: {
   organizationId: string;
   userId: string;
@@ -1166,20 +1235,26 @@ export async function selectReply(input: {
   }
 
   if (input.discard) {
+    const reason = input.rejectReason?.trim() || "Not a fit";
     await prisma.replyOption.update({
       where: { id: option.id },
       data: {
         outcome: "DISCARDED",
         selectedById: input.userId,
-        internalReason: `${option.internalReason} · rejected: ${input.rejectReason?.trim() || "Not a fit"}`,
+        internalReason: `${option.internalReason} · rejected: ${reason}`,
       },
+    });
+    await persistThreadLesson({
+      organizationId: tenant.organizationId,
+      conversationId: input.conversationId,
+      lesson: operatorRejectLesson(reason, option.text),
     });
     await recordAnalytics({
       organizationId: tenant.organizationId,
       type: "OVERRIDE",
       conversationId: input.conversationId,
       chatterId: input.userId,
-      metadata: { reason: input.rejectReason ?? "discarded" },
+      metadata: { reason },
     });
     return { discarded: true as const };
   }

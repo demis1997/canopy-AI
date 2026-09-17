@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { FanNotesCard, type FanNoteValue } from "@/components/fan-notes-card";
+import { ClearChatButton } from "@/components/clear-chat-button";
 import { splitReplyBubbles } from "@canopy/shared";
 
 type Reply = { id: string; text: string; tone: string; internalReason: string; messages?: string[] };
@@ -122,6 +123,17 @@ export function CopilotWorkspace(props: {
   const [sequenceStep, setSequenceStep] = useState(props.conversation.activeSequenceStep);
   const [followUps, setFollowUps] = useState(props.conversation.unansweredFollowUps);
   const [purchasedPpvCount, setPurchasedPpvCount] = useState(props.conversation.purchasedPpvCount);
+  const [threadCleared, setThreadCleared] = useState(false);
+
+  useEffect(() => {
+    setThreadCleared(false);
+  }, [props.conversation.id]);
+
+  useEffect(() => {
+    if (!props.messages.length) setThreadCleared(false);
+  }, [props.messages.length]);
+
+  const visibleMessages = threadCleared ? [] : props.messages;
 
   const activeSequence = props.sequences.find((s) => s.id === sequenceId);
   const currentStep = activeSequence?.steps[sequenceStep];
@@ -301,25 +313,41 @@ export function CopilotWorkspace(props: {
         />
         <div className="space-y-1">
           {inbox.map((item) => (
-            <Link
+            <div
               key={item.id}
-              href={`/conversations/${item.id}`}
               className={cn(
-                "block rounded-[10px] border border-transparent px-3 py-2 text-sm hover:bg-white/[0.04]",
+                "flex items-start gap-1 rounded-[10px] border border-transparent hover:bg-white/[0.04]",
                 item.id === props.conversation.id && "border-leaf/30 bg-pine/40",
               )}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium">{item.fanName}</span>
-                {item.unreadCount ? <Badge tone="accent">{item.unreadCount}</Badge> : null}
+              <Link href={`/conversations/${item.id}`} className="min-w-0 flex-1 px-3 py-2 text-sm">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{item.fanName}</span>
+                  {item.unreadCount ? <Badge tone="accent">{item.unreadCount}</Badge> : null}
+                </span>
+                <span className="block truncate text-[11px] text-white/40">
+                  {item.creatorName} · {item.spendTier}
+                </span>
+                <span className="block truncate text-[11px] text-white/35">
+                  {item.intent ?? item.funnelStage} · {new Date(item.lastActivity).toLocaleTimeString()}
+                </span>
+              </Link>
+              <div className="px-1 py-2">
+                <ClearChatButton
+                  conversationId={item.id}
+                  size="sm"
+                  onCleared={() => {
+                    if (item.id === props.conversation.id) {
+                      setThreadCleared(true);
+                      setGeneration(null);
+                      setDrafts({});
+                      setNotice("Chat cleared. Send a fan message to start again.");
+                    }
+                  }}
+                  onError={setNotice}
+                />
               </div>
-              <div className="truncate text-[11px] text-white/40">
-                {item.creatorName} · {item.spendTier}
-              </div>
-              <div className="truncate text-[11px] text-white/35">
-                {item.intent ?? item.funnelStage} · {new Date(item.lastActivity).toLocaleTimeString()}
-              </div>
-            </Link>
+            </div>
           ))}
         </div>
       </aside>
@@ -351,7 +379,7 @@ export function CopilotWorkspace(props: {
         </div>
 
         <Card className="max-h-[560px] space-y-3 overflow-y-auto">
-          {props.messages.map((m) => {
+          {visibleMessages.map((m) => {
             const fan = m.authorType === "SUBSCRIBER";
             return (
               <div key={m.id} className={fan ? "text-right" : "text-left"}>
@@ -418,6 +446,16 @@ export function CopilotWorkspace(props: {
             >
               {mutedAi ? "Resume this chat" : "Pause this chat"}
             </Button>
+            <ClearChatButton
+              conversationId={props.conversation.id}
+              onCleared={() => {
+                setThreadCleared(true);
+                setGeneration(null);
+                setDrafts({});
+                setNotice("Chat cleared. Send a fan message to start again.");
+              }}
+              onError={setNotice}
+            />
             <Button
               variant="outline"
               disabled={busy}
@@ -454,13 +492,14 @@ export function CopilotWorkspace(props: {
           </div>
           <label className="block space-y-1">
             <span className="text-[11px] text-white/40">
-              Reject reason — saved and applied when you reject, then we regenerate
+              Reject reason — this becomes a hard prompt rule so the AI does not repeat the mistake
             </span>
-            <input
+            <Textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="e.g. stop mentioning the dick clip he just wants to talk"
-              className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-3 text-sm"
+              placeholder="What was wrong? e.g. stop mentioning the dick clip, he just wants to talk. Next generate follows this."
+              className="min-h-[180px] resize-y whitespace-pre-wrap leading-relaxed"
+              rows={8}
             />
           </label>
           {generation?.blocked ? (

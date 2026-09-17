@@ -3,6 +3,7 @@ import { prisma } from "@canopy/database";
 import { assignedCreatorIds } from "@/lib/access";
 import { Badge, Card } from "@/components/ui/card";
 import { NewConversationForm } from "@/components/new-conversation-form";
+import { ClearChatButton } from "@/components/clear-chat-button";
 import { guardOrgPage } from "@/lib/page-guard";
 import { AccessDenied, EmptyState, PageHeader } from "@/components/page-chrome";
 import { loadInbox } from "@/lib/inbox";
@@ -55,6 +56,7 @@ export default async function ConversationsPage({
                 <th>Spend</th>
                 <th>Unread</th>
                 <th>Updated</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -72,6 +74,9 @@ export default async function ConversationsPage({
                   <td>{c.spendTier}</td>
                   <td>{c.unreadCount}</td>
                   <td className="text-white/50">{new Date(c.lastActivity).toLocaleString()}</td>
+                  <td className="px-5 py-3 text-right">
+                    <ClearChatButton conversationId={c.id} />
+                  </td>
                 </tr>
               ))}
             </tbody>

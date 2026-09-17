@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeConfirmedInventedAboutHimCallout, looksLikeMixupCalloutLanguage, looksLikeDirectCreatorQuestion, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, looksLikeRelationshipAsk, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, relationshipReplyVariants, inventedAboutHimReplyVariants, MIXUP_CLARIFY_VARIANTS, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeConfirmedInventedAboutHimCallout, looksLikeMixupCalloutLanguage, looksLikeDirectCreatorQuestion, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, looksLikeRelationshipAsk, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, relationshipReplyVariants, inventedAboutHimReplyVariants, MIXUP_CLARIFY_VARIANTS, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS, tooSimilar, pickFreshVariants, RAPPORT_ONLY_VARIANTS, looksLikeWaitingForReveal, looksLikeProveYourselfAsk, looksLikeAffirm, FAN_DOMINANT_FOLLOW_VARIANTS, looksLikeTellHook } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -282,6 +282,19 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     ];
   }
 
+  if (looksLikeWaitingForReveal(last)) {
+    return teaseReplyVariants(Boolean(input.persona.preferredExplicitVocabulary.length)).slice(0, 2).map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? tone : "TEASING", "He asked what you were going to tell him — actually tease"),
+    );
+  }
+
+  const lastUs = [...input.recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")?.body ?? "";
+  if (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(last)) {
+    return FAN_DOMINANT_FOLLOW_VARIANTS.map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? "TEASING" : tone, "He is in charge — let him lead"),
+    );
+  }
+
   if (input.activeSequence?.current) {
     const current = input.activeSequence.current;
     const beat = current.body;
@@ -302,10 +315,14 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   }
 
   if (!pitching) {
-    return [
-      asOption(["anyway", "i was gonna tell u something"], tone, "Ack then advance the sales sequence"),
-      asOption(["wait", last.trim() ? ackFan(last) : "ok", "i shot something earlier"], "TEASING", "Off-script then back to the drop"),
-    ];
+    const recentUs = input.recentMessages.filter((message) => message.authorType !== "SUBSCRIBER").map((message) => message.body);
+    const pool = recentUs.some(looksLikeTellHook) || looksLikeWaitingForReveal(last)
+      ? teaseReplyVariants(Boolean(input.persona.preferredExplicitVocabulary.length))
+      : pickFreshVariants(RAPPORT_ONLY_VARIANTS, recentUs, input.requestId).filter((text) => !looksLikeTellHook(text) || !recentUs.some(looksLikeTellHook));
+    const lines = (pool.length ? pool : RAPPORT_ONLY_VARIANTS.slice(1)).slice(0, 2);
+    return lines.map((text, i) =>
+      asOption(text.split("\n"), i === 0 ? tone : "TEASING", "Ack then advance without recycling the same hook"),
+    );
   }
 
   if (intent === "PRICE_OBJECTION") {
@@ -362,6 +379,19 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     ),
     asOption(explicit ? voice.sext : voice.chat, "DIRECT", "Escalate or stay flirty"),
   ];
+}
+
+function withoutRejectedDrafts(
+  options: ReturnType<typeof asOption>[],
+  input: GenerationInput,
+  last: string,
+): ReturnType<typeof asOption>[] {
+  const banned = (input.operatorRejections ?? []).map((row) => row.text).filter((text) => text.trim().length > 8);
+  if (!banned.length) return options;
+  return options.map((option, i) => {
+    if (!banned.some((draft) => tooSimilar(option.text, draft))) return option;
+    return asOption([ackFan(last), "got it i wont do that again"], i === 0 ? "PLAYFUL" : "DIRECT", "Avoided a rejected draft");
+  });
 }
 
 export class MockLLMProvider implements LLMProvider {
@@ -490,7 +520,7 @@ export class MockLLMProvider implements LLMProvider {
           : pitching
             ? "PRESENT_OFFER"
             : "REPLY",
-      replyOptions: repliesFor(input, intent, pitching),
+      replyOptions: withoutRejectedDrafts(repliesFor(input, intent, pitching), input, last),
       recommendedProductId: pitching ? (product?.id ?? null) : null,
       approvedPrice: pitching ? (offer?.price ?? product?.standardPrice ?? null) : null,
       requiresHumanReview: true,

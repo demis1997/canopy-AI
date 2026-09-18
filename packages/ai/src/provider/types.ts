@@ -147,6 +147,11 @@ export type GenerationInput = {
     price: number;
     reason: "CONTEXT" | "DEFAULT" | "SEQUENCE";
   } | null;
+  responseMode?: "OPERATIONAL" | "SUPPORT" | "NATURAL" | "FLIRTY" | "EXPLICIT" | "SALES";
+  operationalIntent?: string;
+  latestFanTurn?: string;
+  inputMessageIds?: string[];
+  correctiveRetry?: boolean;
 };
 
 export type GenerationResult = {

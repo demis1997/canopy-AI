@@ -16,7 +16,7 @@ import {
   PROMPT_VERSION,
   ProviderError,
   personaLooksTrans,
-  retrieveTraining,
+  retrieveTrainingMeta,
   pricingContextFrom,
   type LLMProvider,
   type GenerationInput,
@@ -52,9 +52,15 @@ import {
   splitReplyBubbles,
   threadBannedPetNames,
   threadIsOnOfflineAsk,
+  collectPendingFanTurn,
+  detectOperationalIntent,
+  determineResponseMode,
+  operationalGenerationPlan,
+  validateReplyGrounding,
   type CatalogProduct,
 } from "@canopy/shared";
 import { enqueueJob } from "./queue";
+import { persistOperationalSkip } from "./operational-handoff";
 
 const TOKEN_USD_PER_MILLION = 0.5;
 
@@ -189,6 +195,8 @@ export async function generateForConversation(input: {
   conversationId: string;
   toneOverride?: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "SUBMISSIVE" | "DIRECT";
   rewriteStyle?: "SHORTER" | "WARMER" | "PLAYFUL" | "SALES";
+  triggerMessageId?: string;
+  staleRetry?: boolean;
 }) {
   const requestId = randomUUID();
   const tenant = requireTenant(input.organizationId);
@@ -214,16 +222,18 @@ export async function generateForConversation(input: {
     throw new Error("Organization is suspended");
   }
 
-  const latestFan = await prisma.message.findFirst({
-    where: {
-      conversationId: conversation.id,
-      organizationId: tenant.organizationId,
-      authorType: "SUBSCRIBER",
-    },
+  const history = await prisma.message.findMany({
+    where: { conversationId: conversation.id, organizationId: tenant.organizationId },
     orderBy: { createdAt: "desc" },
+    take: 40,
   });
-  // Latest subscriber message only — never rolling summary, last creator line, or combined history.
-  const subscriberText = latestFan?.body ?? "";
+  const recent = history.reverse();
+  const pendingTurn = collectPendingFanTurn({
+    messages: recent,
+    triggerMessageId: input.triggerMessageId,
+  });
+  const subscriberText = pendingTurn.combinedText;
+  const inputMessageIds = pendingTurn.messageIds;
 
   await recordAnalytics({
     organizationId: tenant.organizationId,
@@ -231,6 +241,7 @@ export async function generateForConversation(input: {
     creatorId: conversation.creatorId,
     chatterId: input.userId,
     conversationId: conversation.id,
+    metadata: { requestId, inputMessageIds },
   });
 
   const pre = evaluateSafety({
@@ -255,6 +266,19 @@ export async function generateForConversation(input: {
         requiresHumanReview: true,
         riskFlags: pre.flags,
         requestId,
+        inputMessageIds,
+        operationalIntent: detectOperationalIntent(subscriberText).intent,
+        responseMode: determineResponseMode({
+          operational: detectOperationalIntent(subscriberText),
+          subscriberText,
+        }),
+        diagnostics: {
+          inputMessageIds,
+          operationalIntent: detectOperationalIntent(subscriberText).intent,
+          generationSkipped: true,
+          stale: false,
+          requestId,
+        } as Prisma.InputJsonValue,
       },
     });
     const escalation = await prisma.escalation.create({
@@ -291,12 +315,44 @@ export async function generateForConversation(input: {
     };
   }
 
-  const messages = await prisma.message.findMany({
-    where: { conversationId: conversation.id, organizationId: tenant.organizationId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-  const recent = messages.reverse();
+  const operational = detectOperationalIntent(subscriberText);
+  let plan = operationalGenerationPlan(operational);
+  if (conversation.mutedAi) {
+    plan = {
+      ...plan,
+      skipClassify: true,
+      skipGenerate: true,
+      skipTraining: true,
+      pauseAutomation: true,
+      requireHumanReview: true,
+      allowSexual: false,
+      chatterMessage: plan.chatterMessage || "Fan requested a human. AI paused.",
+    };
+  }
+  const responseMode = determineResponseMode({ operational, subscriberText });
+  if (plan.skipGenerate) {
+    const platform = await prisma.platformConversation.findFirst({
+      where: { canopyConversationId: conversation.id, organizationId: tenant.organizationId },
+      include: { platformAccount: { include: { policy: true } } },
+    });
+    return persistOperationalSkip({
+      organizationId: tenant.organizationId,
+      conversationId: conversation.id,
+      creatorId: conversation.creatorId,
+      userId: input.userId,
+      requestId,
+      provider: process.env.AI_PROVIDER ?? process.env.LLM_PROVIDER ?? "venice",
+      model: process.env.AI_MODEL || process.env.LLM_MODEL || "skipped",
+      mockMode: !process.env.LLM_API_KEY,
+      route: operational,
+      plan,
+      responseMode,
+      inputMessageIds,
+      flags: [...pre.flags, operational.intent],
+      takeoverMinutes: platform?.platformAccount.policy?.humanTakeoverMinutes,
+    });
+  }
+
   const fanMessageCount = await prisma.message.count({
     where: {
       conversationId: conversation.id,
@@ -481,11 +537,13 @@ export async function generateForConversation(input: {
       suggested: conversation.funnelStage,
     });
 
-    const examples = retrieveTraining({
+    const allowSexting = responseMode === "EXPLICIT" || responseMode === "SALES";
+    const retrieved = retrieveTrainingMeta({
       message: subscriberText,
       intent: classified.intent,
       funnelStage: conversation.funnelStage,
       transPersona,
+      allowSexting,
       extraChunks: [
         ...persona.approvedExampleMessages.map((content) => ({
           content,
@@ -502,6 +560,7 @@ export async function generateForConversation(input: {
         })),
       ],
     });
+    const examples = retrieved.examples;
 
     const discardedRows = await prisma.replyOption.findMany({
       where: { organizationId: tenant.organizationId, outcome: "DISCARDED" },
@@ -600,7 +659,10 @@ export async function generateForConversation(input: {
       allowedSkipToNextProduct: lockPolicy === "ALLOW_NEXT",
     });
     const facts = flow.facts;
-    const mergedExtra = { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
+    const mergedExtra =
+      responseMode === "SUPPORT"
+        ? { ...extra, ...facts.extra }
+        : { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
     if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
     if (flow.next.fanIsJerking != null) mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
     logFlowDebug({
@@ -712,7 +774,7 @@ export async function generateForConversation(input: {
       extra: mergedExtra,
       dominance: facts.dominance ?? fanNote?.dominance,
     };
-    const fanIntake =
+    let fanIntake =
       (shouldRunFanIntake({
         funnelStage: conversation.funnelStage,
         intent: classified.intent,
@@ -737,8 +799,12 @@ export async function generateForConversation(input: {
     if (flow.sellContent && sellMatch?.reason !== "CONTEXT") {
       /* keep sequence/default match for an explicit content request after intake is abandoned */
     }
+    if (responseMode === "OPERATIONAL" || responseMode === "SUPPORT" || responseMode === "NATURAL") {
+      sellMatch = null;
+      fanIntake = null;
+    }
 
-    const result = await generateRepliesWithRetry(provider, {
+    const generationInput: GenerationInput = {
       requestId,
       model: model || "mock-qwen3-32b-uncensored",
       promptVersionId: PROMPT_VERSION,
@@ -818,7 +884,7 @@ export async function generateForConversation(input: {
         askPending: flow.askPending,
         pendingQuestion: flow.next.currentQuestion,
         resumeHoldTurns: flow.next.resumeHoldTurns,
-        skipPitch: flow.skipPitch,
+        skipPitch: flow.skipPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
       },
       boughtWelcome,
       existingFan,
@@ -878,7 +944,16 @@ export async function generateForConversation(input: {
               remaining: [],
             }
           : null,
-    });
+      responseMode,
+      operationalIntent: operational.intent,
+      latestFanTurn: pendingTurn.messages.map((row) => `${row.id}: ${row.body}`).join("\n"),
+      inputMessageIds,
+    };
+
+    const generateOnce = (correctiveRetry = false) =>
+      generateRepliesWithRetry(provider, { ...generationInput, correctiveRetry });
+
+    let result = await generateOnce(false);
 
     const post = evaluateSafety({
       adultStatus: conversation.adultStatus as AdultStatus,
@@ -929,23 +1004,7 @@ export async function generateForConversation(input: {
       };
     }
 
-    const validated = validateProductsAndPrices(
-      result.output,
-      products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        standardPrice: p.standardPrice,
-        minimumPrice: p.minimumPrice,
-        secondPrice: p.secondPrice,
-        discountLimitPercent: p.discountLimitPercent,
-        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
-        available: p.available,
-        creatorId: p.creatorId,
-        resaleAllowed: p.resaleAllowed,
-      })),
-      10,
-      pricing.concessionAllowed,
-      {
+    const validateOpts = {
         creatorId: conversation.creatorId,
         purchasedProductIds,
         subscriberText,
@@ -970,7 +1029,7 @@ export async function generateForConversation(input: {
           askedObjectives: alreadySentObjectives(recent.map((m) => ({ authorType: m.authorType, body: m.body })), flow.previous),
           askPending: flow.askPending,
           pendingQuestion: flow.next.currentQuestion,
-          skipPitch: flow.skipPitch,
+          skipPitch: flow.skipPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
         },
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
@@ -987,8 +1046,138 @@ export async function generateForConversation(input: {
               reason: sellMatch.reason,
             }
           : undefined,
-      },
+        operationalIntent: operational.intent,
+        responseMode,
+    };
+
+    const catalogForValidate = products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        standardPrice: p.standardPrice,
+        minimumPrice: p.minimumPrice,
+        secondPrice: p.secondPrice,
+        discountLimitPercent: p.discountLimitPercent,
+        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
+        available: p.available,
+        creatorId: p.creatorId,
+        resaleAllowed: p.resaleAllowed,
+    }));
+
+    const groundingCodesFor = (output: typeof result.output) =>
+      output.replyOptions.flatMap((opt) => {
+        const check = validateReplyGrounding({
+          reply: opt.text,
+          turn: subscriberText,
+          operational,
+          mode: responseMode,
+          recommendedProductId: output.recommendedProductId,
+        });
+        return check.ok ? [] : [check.code];
+      });
+
+    let validated = validateProductsAndPrices(
+      result.output,
+      catalogForValidate,
+      10,
+      pricing.concessionAllowed,
+      validateOpts,
     );
+    let groundingCodes = groundingCodesFor(validated.output);
+    if (groundingCodes.length || !validated.output.replyOptions.length) {
+      result = await generateOnce(true);
+      const postRetry = evaluateSafety({
+        adultStatus: conversation.adultStatus as AdultStatus,
+        subscriberText,
+        generatedTexts: result.output.replyOptions.map((o) => o.text),
+      });
+      if (!postRetry.allowed) {
+        groundingCodes = ["SAFETY_POST_CHECK"];
+        validated = {
+          ok: false,
+          errors: ["SAFETY_POST_CHECK"],
+          output: {
+            ...validated.output,
+            replyOptions: [],
+            recommendedProductId: null,
+            approvedPrice: null,
+            recommendedAction: "REQUEST_HUMAN_REVIEW",
+            requiresHumanReview: true,
+            riskFlags: [...validated.output.riskFlags, ...postRetry.flags],
+          },
+        };
+      } else {
+        validated = validateProductsAndPrices(
+          result.output,
+          catalogForValidate,
+          10,
+          pricing.concessionAllowed,
+          validateOpts,
+        );
+        groundingCodes = groundingCodesFor(validated.output);
+        if (groundingCodes.length) {
+          validated = {
+            ok: false,
+            errors: [...validated.errors, ...groundingCodes],
+            output: {
+              ...validated.output,
+              replyOptions: [],
+              recommendedProductId: null,
+              approvedPrice: null,
+              recommendedAction: "REQUEST_HUMAN_REVIEW",
+              requiresHumanReview: true,
+              riskFlags: [...validated.output.riskFlags, ...groundingCodes],
+            },
+          };
+        }
+      }
+    }
+
+    const newestInput = pendingTurn.newestMessageId
+      ? recent.find((row) => row.id === pendingTurn.newestMessageId)
+      : null;
+    const newerSubscriber = newestInput
+      ? await prisma.message.findFirst({
+          where: {
+            conversationId: conversation.id,
+            organizationId: tenant.organizationId,
+            authorType: "SUBSCRIBER",
+            createdAt: { gt: newestInput.createdAt },
+            id: { notIn: inputMessageIds },
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
+    if (newerSubscriber && !input.staleRetry) {
+      await prisma.generation.create({
+        data: {
+          organizationId: tenant.organizationId,
+          conversationId: conversation.id,
+          requestedById: input.userId,
+          provider: mode,
+          model: result.model,
+          status: "STALE",
+          recommendedAction: "REQUEST_HUMAN_REVIEW",
+          requiresHumanReview: true,
+          requestId,
+          inputMessageIds,
+          operationalIntent: operational.intent,
+          responseMode,
+          diagnostics: {
+            inputMessageIds,
+            operationalIntent: operational.intent,
+            responseMode,
+            generationSkipped: false,
+            stale: true,
+            requestId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      return generateForConversation({
+        ...input,
+        triggerMessageId: newerSubscriber.id,
+        staleRetry: true,
+      });
+    }
 
     const nextFunnel = resolveFunnel({
       state: funnelState,
@@ -996,7 +1185,20 @@ export async function generateForConversation(input: {
       suggested: validated.output.suggestedFunnelTransition,
     });
 
-    const status = validated.ok ? "COMPLETED" : "INVALID";
+    const status = newerSubscriber ? "STALE" : validated.ok ? "COMPLETED" : "INVALID";
+    const diagnostics: Prisma.InputJsonValue = {
+      inputMessageIds,
+      operationalIntent: operational.intent,
+      responseMode,
+      classifierIntent: classified.intent,
+      classifierConfidence: classified.confidence,
+      trainingChunks: retrieved.chunks,
+      guardsApplied: validated.output.riskFlags.filter((flag) => flag.startsWith("GUARD:")),
+      validationFailureCodes: [...validated.errors, ...groundingCodes],
+      generationSkipped: false,
+      stale: Boolean(newerSubscriber),
+      requestId,
+    };
     const generation = await prisma.generation.create({
       data: {
         organizationId: tenant.organizationId,
@@ -1022,10 +1224,17 @@ export async function generateForConversation(input: {
           ((result.promptTokens + result.completionTokens) / 1_000_000) * TOKEN_USD_PER_MILLION,
         requestId,
         validationErrors: validated.errors,
+        inputMessageIds,
+        operationalIntent: operational.intent,
+        responseMode,
+        diagnostics,
       },
     });
 
-    const replyOptions = await Promise.all(
+    const replyOptions =
+      status === "STALE"
+        ? []
+        : await Promise.all(
       validated.output.replyOptions.map((opt) =>
         prisma.replyOption.create({
           data: {
@@ -1090,6 +1299,7 @@ export async function generateForConversation(input: {
 
     return {
       blocked: false as const,
+      escalated: validated.output.recommendedAction === "REQUEST_HUMAN_REVIEW",
       mockMode: mode === "mock",
       generationId: generation.id,
       status,
@@ -1101,7 +1311,7 @@ export async function generateForConversation(input: {
       approvedPrice: validated.output.approvedPrice,
       requiresHumanReview: true,
       riskFlags: validated.output.riskFlags,
-      validationErrors: validated.errors,
+      validationErrors: [...validated.errors, ...groundingCodes],
       latencyMs: result.latencyMs,
       tokenUsage: {
         prompt: result.promptTokens,
@@ -1114,9 +1324,14 @@ export async function generateForConversation(input: {
         tone: o.tone,
         internalReason: o.internalReason,
       })),
-      chatterMessage: validated.ok
-        ? ""
-        : "Model suggested an invalid product or price. Offer removed. Human review required.",
+      chatterMessage: validated.output.recommendedAction === "REQUEST_HUMAN_REVIEW"
+        ? plan.chatterMessage || "Human review required."
+        : validated.ok
+          ? ""
+          : "Model suggested an invalid product or price. Offer removed. Human review required.",
+      operationalIntent: operational.intent,
+      responseMode,
+      skippedGeneration: false,
     };
   } catch (error) {
     const code = error instanceof ProviderError ? error.code : "UNKNOWN";
@@ -1407,15 +1622,21 @@ export async function handleFanTurn(input: {
     userId: input.userId,
     conversationId: input.conversationId,
     toneOverride: input.toneOverride,
+    triggerMessageId: message.id,
   });
 
   const option = generation.replyOptions[0];
   const failed = "failed" in generation && generation.failed === true;
   const action = "recommendedAction" in generation ? generation.recommendedAction : undefined;
+  const escalated = "escalated" in generation && generation.escalated === true;
+  const skipped = "skippedGeneration" in generation && generation.skippedGeneration === true;
   const canSend =
     !generation.blocked &&
     !failed &&
+    !escalated &&
+    !skipped &&
     action !== "BLOCK" &&
+    action !== "REQUEST_HUMAN_REVIEW" &&
     Boolean(option);
 
   if (!canSend || !option || !generation.generationId) {

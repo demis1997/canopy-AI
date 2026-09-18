@@ -138,6 +138,7 @@ export const ESCALATION_REASONS = [
   "BROWSER_CHALLENGE",
   "LOW_CONFIDENCE",
   "HUMAN_TAKEOVER",
+  "FAN_REQUESTED_HUMAN",
   "UNMAPPED_VAULT",
   "LANGUAGE_MISMATCH",
   "SELECTOR_FAILURE",
@@ -242,6 +243,7 @@ export const GENERATION_STATUSES = [
   "INVALID",
   "FAILED",
   "MANUAL_REVIEW",
+  "STALE",
 ] as const;
 export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
 

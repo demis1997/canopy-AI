@@ -56,13 +56,20 @@ export async function syncInbox(input: {
       });
       if (result.created && message.direction === "INBOUND") {
         processed += 1;
-        await processIncoming({
-          organizationId: input.organizationId,
-          platformAccountId: input.platformAccountId,
-          platformConversationId: result.platformConversation.id,
-          triggerExternalMessageId: message.externalMessageId,
-          adapter: input.adapter,
-        });
+        const { enqueueJob } = await import("../server/queue");
+        await enqueueJob(
+          "generate-automation-decision",
+          {
+            organizationId: input.organizationId,
+            platformAccountId: input.platformAccountId,
+            platformConversationId: result.platformConversation.id,
+            triggerExternalMessageId: message.externalMessageId,
+          },
+          {
+            delayMs: 3000,
+            debounceKey: `generate-automation-decision-${result.platformConversation.id}`,
+          },
+        );
       }
     }
   }

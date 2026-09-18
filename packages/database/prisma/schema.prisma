@@ -177,6 +177,7 @@ enum EscalationReason {
   BROWSER_CHALLENGE
   LOW_CONFIDENCE
   HUMAN_TAKEOVER
+  FAN_REQUESTED_HUMAN
   UNMAPPED_VAULT
   LANGUAGE_MISMATCH
   SELECTOR_FAILURE
@@ -212,6 +213,7 @@ enum GenerationStatus {
   INVALID
   FAILED
   MANUAL_REVIEW
+  STALE
 }
 
 enum ReplyOutcome {
@@ -775,6 +777,10 @@ model Generation {
   estimatedCostUsd     Decimal?          @db.Decimal(10, 6)
   requestId            String?
   validationErrors     String[]          @default([])
+  inputMessageIds      String[]          @default([])
+  operationalIntent    String?
+  responseMode         String?
+  diagnostics          Json?
   createdAt            DateTime          @default(now())
 
   organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)

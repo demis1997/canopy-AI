@@ -170,7 +170,7 @@ export async function markHumanTakeover(input: {
       where: {
         organizationId: input.organizationId,
         platformConversationId: input.platformConversationId,
-        status: { in: ["PENDING", "GENERATING", "SCHEDULED"] },
+        status: { in: ["PENDING", "GENERATING", "SCHEDULED", "APPROVAL_REQUIRED"] },
       },
       data: { status: "CANCELLED", lastError: "Human takeover" },
     }),
@@ -444,9 +444,12 @@ export async function generateAutomationDecision(input: {
       organizationId: tenant.organizationId,
       userId,
       conversationId: conversation.id,
+      triggerMessageId: trigger.canopyMessageId ?? undefined,
     });
     const option = generation.replyOptions[0];
     const failed = "failed" in generation && generation.failed;
+    const escalated = "escalated" in generation && generation.escalated;
+    const skipped = "skippedGeneration" in generation && generation.skippedGeneration;
     const confidence = confidenceFromGeneration({
       blocked: generation.blocked,
       failed,
@@ -461,13 +464,18 @@ export async function generateAutomationDecision(input: {
       allowedLanguages: policy.allowedLanguages,
       prohibitedWords: persona?.prohibitedWords,
     });
-    if (generation.blocked || failed || !option || !post.allowed) {
+    if (generation.blocked || failed || escalated || skipped || !option || !post.allowed) {
       decision = {
         ...decision,
         action: "ESCALATE",
         confidence,
         reason: post.reason ?? "GENERATION_BLOCKED",
-        safetyFlags: post.flags,
+        safetyFlags: [
+          ...post.flags,
+          ...("operationalIntent" in generation && generation.operationalIntent
+            ? [String(generation.operationalIntent)]
+            : []),
+        ],
       };
     } else {
       const wantsPpv =
@@ -503,6 +511,33 @@ export async function generateAutomationDecision(input: {
       sentAt: { gt: trigger.sentAt },
     },
   });
+  const canopyNewer =
+    trigger.canopyMessageId
+      ? await prisma.message.findFirst({
+          where: {
+            conversationId: conversation.id,
+            authorType: "SUBSCRIBER",
+            id: { not: trigger.canopyMessageId },
+            createdAt: {
+              gt:
+                (
+                  await prisma.message.findUnique({
+                    where: { id: trigger.canopyMessageId },
+                    select: { createdAt: true },
+                  })
+                )?.createdAt ?? trigger.sentAt,
+            },
+          },
+        })
+      : null;
+  const refreshedConversation = await prisma.conversation.findFirst({
+    where: { id: conversation.id },
+    select: { mutedAi: true, funnelStage: true },
+  });
+  const refreshedPlatform = await prisma.platformConversation.findFirst({
+    where: { id: platformConversation.id },
+    select: { humanTakeover: true, automationLockedUntil: true },
+  });
   const alreadySent = await prisma.automationAction.findFirst({
     where: {
       organizationId: tenant.organizationId,
@@ -533,9 +568,9 @@ export async function generateAutomationDecision(input: {
     actualFanId: platformConversation.externalFanId,
     autonomyMode: account.autonomyMode,
     flags,
-    humanTakeover: platformConversation.humanTakeover || conversation.mutedAi,
-    lockedUntil: platformConversation.automationLockedUntil,
-    newerMessageAfterTrigger: Boolean(newer),
+    humanTakeover: Boolean(refreshedPlatform?.humanTakeover || refreshedConversation?.mutedAi),
+    lockedUntil: refreshedPlatform?.automationLockedUntil ?? platformConversation.automationLockedUntil,
+    newerMessageAfterTrigger: Boolean(newer || canopyNewer),
     alreadySentForTrigger: Boolean(alreadySent),
     messagesSentLastHour: sentLastHour,
     policy,
@@ -559,7 +594,7 @@ export async function generateAutomationDecision(input: {
     flags,
     decision,
     policy,
-    humanTakeover: platformConversation.humanTakeover || conversation.mutedAi,
+    humanTakeover: Boolean(refreshedPlatform?.humanTakeover || refreshedConversation?.mutedAi),
     gate,
   });
 
@@ -634,6 +669,22 @@ export async function preflightDelivery(input: {
         where: { platformConversationId: action.platformConversationId, sentAt: { gt: trigger.sentAt } },
       })
     : null;
+  const canopyTrigger = trigger?.canopyMessageId
+    ? await prisma.message.findUnique({
+        where: { id: trigger.canopyMessageId },
+        select: { id: true, createdAt: true, conversationId: true },
+      })
+    : null;
+  const canopyNewer = canopyTrigger
+    ? await prisma.message.findFirst({
+        where: {
+          conversationId: canopyTrigger.conversationId,
+          authorType: "SUBSCRIBER",
+          createdAt: { gt: canopyTrigger.createdAt },
+          id: { not: canopyTrigger.id },
+        },
+      })
+    : null;
   const alreadySent = await prisma.automationAction.findFirst({
     where: {
       organizationId: tenant.organizationId,
@@ -705,7 +756,7 @@ export async function preflightDelivery(input: {
     flags,
     humanTakeover: action.platformConversation.humanTakeover,
     lockedUntil: action.platformConversation.automationLockedUntil,
-    newerMessageAfterTrigger: Boolean(newer),
+    newerMessageAfterTrigger: Boolean(newer || canopyNewer),
     alreadySentForTrigger: Boolean(alreadySent),
     messagesSentLastHour: sentLastHour,
     policy,

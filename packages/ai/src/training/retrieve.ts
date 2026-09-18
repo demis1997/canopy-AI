@@ -11,6 +11,7 @@ export type RetrievalQuery = {
   funnelStage: FunnelStage;
   transPersona: boolean;
   extraChunks?: { content: string; tags?: string[]; intent?: string | null; funnelStage?: string | null }[];
+  allowSexting?: boolean;
 };
 
 const STOP = new Set(["the", "a", "an", "and", "or", "to", "of", "you", "i", "it", "is", "for", "in"]);
@@ -24,6 +25,7 @@ function tokens(text: string): string[] {
 
 function scoreChunk(query: RetrievalQuery, chunk: TrainingChunkSeed): number {
   if (chunk.tags.includes("trans") && !query.transPersona) return -100;
+  if (query.allowSexting === false && (chunk.tags.includes("sexting") || chunk.intent === "SEXTING")) return -100;
   let score = 0;
   if (chunk.intent && chunk.intent === query.intent) score += 6;
   if (chunk.funnelStage && chunk.funnelStage === query.funnelStage) score += 4;
@@ -38,7 +40,10 @@ function scoreChunk(query: RetrievalQuery, chunk: TrainingChunkSeed): number {
   return score;
 }
 
-export function retrieveTraining(query: RetrievalQuery, limit = 8): string[] {
+export function retrieveTrainingMeta(query: RetrievalQuery, limit = 8): {
+  examples: string[];
+  chunks: { title: string; tags: string[] }[];
+} {
   const extra: TrainingChunkSeed[] = (query.extraChunks ?? []).map((c, i) => ({
     title: `db-${i}`,
     documentType: "APPROVED_EXAMPLE",
@@ -53,9 +58,19 @@ export function retrieveTraining(query: RetrievalQuery, limit = 8): string[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
   const always = AGENCY_TRAINING_CHUNKS.find((c) => c.tags.includes("hard-rules") && c.tags.includes("style"));
-  const out = ranked.map((r) => r.chunk.content);
-  if (always && !out.includes(always.content)) out.unshift(always.content);
-  return out.slice(0, limit);
+  const selected = ranked.map((r) => r.chunk);
+  if (always && !selected.some((c) => c.content === always.content) && query.allowSexting !== false) {
+    selected.unshift(always);
+  }
+  const sliced = selected.slice(0, limit);
+  return {
+    examples: sliced.map((c) => c.content),
+    chunks: sliced.map((c) => ({ title: c.title, tags: c.tags })),
+  };
+}
+
+export function retrieveTraining(query: RetrievalQuery, limit = 8): string[] {
+  return retrieveTrainingMeta(query, limit).examples;
 }
 
 export { personaLooksTrans, AGENCY_TRAINING_CHUNKS };

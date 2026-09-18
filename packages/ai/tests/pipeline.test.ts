@@ -355,7 +355,7 @@ describe("structured output", () => {
     expect(blob).not.toMatch(/you'?re a/);
   });
 
-  it("flips are-you-real instead of dumping ofcourse", () => {
+  it("clears are-you-real drafts for human review instead of guilt-tripping", () => {
     const guarded = applyReplyGuards(
       {
         intent: "CASUAL_CHAT",
@@ -370,8 +370,8 @@ describe("structured output", () => {
             internalReason: "stale",
           },
         ],
-        recommendedProductId: null,
-        approvedPrice: null,
+        recommendedProductId: "prod_1",
+        approvedPrice: 9,
         requiresHumanReview: true,
         riskFlags: [],
         memoryUpdates: [],
@@ -379,13 +379,15 @@ describe("structured output", () => {
       },
       "Are you real?",
     );
-    const blob = guarded.replyOptions[0]!.text.toLowerCase();
-    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
-    expect(blob).not.toMatch(/you'?re a what|never said/);
-    expect(blob).not.toMatch(/^ofcourse/);
+    expect(guarded.replyOptions).toEqual([]);
+    expect(guarded.recommendedAction).toBe("REQUEST_HUMAN_REVIEW");
+    expect(guarded.recommendedProductId).toBeNull();
+    expect(guarded.approvedPrice).toBeNull();
+    expect(guarded.riskFlags).toContain("AI_SUSPICION");
+    expect(guarded.replyOptions.join(" ")).not.toMatch(/prove|stranger|leave|believe/);
   });
 
-  it("leaves a strong are-you-real guilt trip alone", () => {
+  it("does not keep a guilt-trip are-you-real draft", () => {
     const guarded = applyReplyGuards(
       {
         intent: "CASUAL_CHAT",
@@ -409,7 +411,8 @@ describe("structured output", () => {
       },
       "Are you real?",
     );
-    expect(guarded.replyOptions[0]!.text.toLowerCase()).toMatch(/seen me online/);
+    expect(guarded.replyOptions).toEqual([]);
+    expect(guarded.recommendedAction).toBe("REQUEST_HUMAN_REVIEW");
   });
 
   it("owns the mixup when he calls out an invented fact about him", () => {
@@ -943,7 +946,8 @@ describe("structured output", () => {
     );
     const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
     expect(blob).not.toMatch(/refund/);
-    expect(blob).toMatch(/prove|stranger|seen me|believe|verification|real/);
+    expect(guarded.recommendedAction).toBe("REQUEST_HUMAN_REVIEW");
+    expect(guarded.replyOptions).toEqual([]);
   });
 
   it("does not confirm she is a bot", () => {
@@ -970,9 +974,9 @@ describe("structured output", () => {
       },
       "What do you mean of course? So you are a bot?",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
-    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
-    expect(blob).not.toMatch(/ofcourse i am babe|ready to tease you/);
+    expect(guarded.replyOptions).toEqual([]);
+    expect(guarded.recommendedAction).toBe("REQUEST_HUMAN_REVIEW");
+    expect(guarded.riskFlags).toContain("AI_SUSPICION");
   });
 
   it("does not reuse ofcourse when he starts sexting after are-you-real", () => {
@@ -1486,11 +1490,11 @@ describe("mock provider", () => {
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
 
-  it("flips are-you-real instead of dumping ofcourse", async () => {
+  it("does not guilt-trip are-you-real asks", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("Are you real?"));
     const blob = result.output.replyOptions[0]!.text.toLowerCase();
-    expect(blob).toMatch(/prove|stranger|seen me|believe|verification/);
+    expect(blob).not.toMatch(/prove myself|guilt|leave|plenty of fans/);
     expect(blob).not.toMatch(/^ofcourse/);
   });
 });

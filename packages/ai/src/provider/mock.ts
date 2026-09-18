@@ -26,9 +26,7 @@ function classify(text: string, context = ""): Intent {
   if (/\b(tease me|then do it|combination of both)\b/.test(t)) return "SEXTING";
   if (/\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick)\b/.test(t)) return "SEXTING";
   if (/\b(sexy|hot|cute|beautiful|gorgeous|pretty|damn|story)\b/.test(t)) return "FLIRT";
-  const blob = `${t} ${context.toLowerCase()}`;
-  if (/\b(cock|pussy|fuck|hard|wet|horny)\b/.test(blob)) return "SEXTING";
-  if (/\b(sexy|hot|cute|beautiful|hey|hi)\b/.test(blob)) return "FLIRT";
+  void context;
   return "CASUAL_CHAT";
 }
 
@@ -432,7 +430,41 @@ export class MockLLMProvider implements LLMProvider {
     if (input.model === "force-invalid-json") {
       throw new ProviderError("Invalid JSON from provider", "INVALID_JSON", 502, input.requestId);
     }
-    const last = input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "";
+    const last =
+      input.latestFanTurn?.split("\n").filter(Boolean).at(-1)?.replace(/^[^:]+:\s*/, "") ??
+      input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ??
+      "";
+    if (input.responseMode === "OPERATIONAL" || input.responseMode === "SUPPORT") {
+      return {
+        output: generationOutputSchema.parse({
+          intent: "UNCERTAIN",
+          funnelStage: input.funnelStage,
+          explicitnessLevel: "SUGGESTIVE",
+          recommendedAction: "REQUEST_HUMAN_REVIEW",
+          replyOptions: [
+            {
+              text: "a human needs to take this from here",
+              messages: ["a human needs to take this from here"],
+              tone: "DIRECT",
+              internalReason: "operational review",
+            },
+          ],
+          recommendedProductId: null,
+          approvedPrice: null,
+          requiresHumanReview: true,
+          riskFlags: [input.operationalIntent ?? "OPERATIONAL"],
+          memoryUpdates: [],
+          suggestedFunnelTransition: null,
+        }),
+        rawText: "",
+        latencyMs: 5,
+        promptTokens: 0,
+        completionTokens: 0,
+        model: "mock",
+        requestId: input.requestId,
+        repaired: false,
+      };
+    }
     const intent = classify(
       last,
       input.recentMessages.map((m) => m.body).join(" "),
@@ -474,6 +506,7 @@ export class MockLLMProvider implements LLMProvider {
       intent === "COMPLAINT" ||
       intent === "REFUND" ||
       intent === "UNSAFE" ||
+      input.responseMode === "NATURAL" ||
       pitchIsTooEarly({
         funnelStage: input.funnelStage,
         fanMessageCount: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").length,

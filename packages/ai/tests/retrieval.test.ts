@@ -54,4 +54,15 @@ describe("agency training retrieval", () => {
     });
     expect(hits.join(" ").toLowerCase()).toMatch(/girlcock|tgirl|trans/);
   });
+
+  it("does not retrieve sexting chunks for a natural turn", () => {
+    const hits = retrieveTraining({
+      message: "how old are you?",
+      intent: "CASUAL_CHAT",
+      funnelStage: "RAPPORT",
+      transPersona: false,
+      allowSexting: false,
+    });
+    expect(hits.join(" ").toLowerCase()).not.toMatch(/sexting master|girlcock|stroke/);
+  });
 });

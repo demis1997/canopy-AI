@@ -63,8 +63,6 @@ import {
   RAPPORT_ONLY_VARIANTS,
   FAN_DOMINANT_FOLLOW_VARIANTS,
   FAN_SUBMISSIVE_FOLLOW_VARIANTS,
-  areYouRealReplyVariants,
-  looksLikeWeakAreYouReal,
   SOFT_TEASE_VARIANTS,
   REFUND_CALLOUT_VARIANTS,
   relationshipReplyVariants,
@@ -72,7 +70,11 @@ import {
   looksLikeStandaloneFiller,
   sequenceObjectiveOf,
   stripRepeatedObjectivesAndFiller,
+  detectOperationalIntent,
+  containsSexualLanguage,
   type FlowQuestion,
+  type OperationalIntent,
+  type ResponseMode,
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
@@ -220,6 +222,8 @@ export type ReplyGuardExtras = {
   };
   fanSentPics?: boolean;
   sellTarget?: { productId: string; name: string; price: number; reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE" };
+  operationalIntent?: OperationalIntent;
+  responseMode?: ResponseMode;
 };
 
 function firstText(output: GenerationOutput): string {
@@ -291,6 +295,18 @@ function applySequenceRecovery(output: GenerationOutput, extras?: ReplyGuardExtr
   });
 }
 
+function operationalReviewOutput(output: GenerationOutput, flag: string): GenerationOutput {
+  return {
+    ...output,
+    replyOptions: [],
+    recommendedAction: "REQUEST_HUMAN_REVIEW",
+    recommendedProductId: null,
+    approvedPrice: null,
+    requiresHumanReview: true,
+    riskFlags: Array.from(new Set([...output.riskFlags, flag, `GUARD:${flag}`])),
+  };
+}
+
 export function applyReplyGuards(
   output: GenerationOutput,
   subscriberText = "",
@@ -306,6 +322,16 @@ export function applyReplyGuards(
   const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
   const swap = (current: GenerationOutput, pool: string[]) => replaceAllOptions(current, pool, seed, recent);
 
+  const route = extras?.operationalIntent
+    ? { intent: extras.operationalIntent }
+    : detectOperationalIntent(subscriberText);
+  if (route.intent === "HUMAN_REQUEST" || route.intent === "STOP_AUTOMATION") {
+    return operationalReviewOutput(output, route.intent);
+  }
+  if (route.intent === "AI_SUSPICION") {
+    return operationalReviewOutput(output, "AI_SUSPICION");
+  }
+
   let next = scrubOfflineAsks(output);
   let applied: AppliedGuard = null;
   let replaced = false;
@@ -318,7 +344,6 @@ export function applyReplyGuards(
   const hits: Record<string, boolean> = {
     offline: looksLikeOfflineAsk(subscriberText),
     "pet-name": looksLikePetNamePushback(subscriberText),
-    "are-you-real": looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText),
     refund: looksLikeRefundCallout(subscriberText),
     relationship: looksLikeRelationshipAsk(subscriberText),
     tease: looksLikeTeaseAsk(subscriberText),
@@ -337,27 +362,23 @@ export function applyReplyGuards(
 
   const flow = extras?.flowPlan;
   const repairPool = flow?.variants?.length ? flow.variants : extras?.fanIntake;
+  const mode = extras?.responseMode;
+  const noSexual =
+    mode === "OPERATIONAL" ||
+    mode === "SUPPORT" ||
+    mode === "NATURAL" ||
+    route.intent === "COMPLAINT" ||
+    route.intent === "SUPPORT_REQUEST";
 
   if (hits.offline) {
     next = swap(next, TOS_OFFLINE_VARIANTS);
     applied = "offline";
     replaced = true;
     reason = "offline-tos";
-  } else if (hits["pet-name"] || hits["are-you-real"]) {
-    if (hits["pet-name"]) {
-      next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
-      replaced = true;
-      reason = "pet-name-pushback";
-    } else {
-      const weak = next.replyOptions.some((o) => looksLikeWeakAreYouReal(o.text) || o.messages.some(looksLikeWeakAreYouReal));
-      if (weak) {
-        next = swap(next, areYouRealReplyVariants(Boolean(extras?.fanSentPics)));
-        replaced = true;
-        reason = "are-you-real-weak-draft";
-      } else {
-        reason = "are-you-real-kept";
-      }
-    }
+  } else if (hits["pet-name"]) {
+    next = swap(next, PET_NAME_PUSHBACK_VARIANTS);
+    replaced = true;
+    reason = "pet-name-pushback";
     applied = "safety";
   } else if (hits.refund) {
     next = swap(next, REFUND_CALLOUT_VARIANTS);
@@ -378,7 +399,7 @@ export function applyReplyGuards(
       reason = "relationship-kept";
     }
     applied = "relationship";
-  } else if (hits.tease) {
+  } else if (hits.tease && !noSexual) {
     next = swap(next, teasePool);
     applied = "tease";
     replaced = true;
@@ -505,9 +526,7 @@ export function applyReplyGuards(
   ) {
     next = swap(
       next,
-      looksLikeAreYouReal(subscriberText) || looksLikeWhatsWrongFollowup(subscriberText)
-        ? areYouRealReplyVariants(Boolean(extras?.fanSentPics))
-        : REFUND_CALLOUT_VARIANTS,
+      REFUND_CALLOUT_VARIANTS,
     );
     replaced = true;
     reason = "refund-leak";
@@ -683,7 +702,21 @@ export function applyReplyGuards(
     );
   }
 
-  if (
+  if (noSexual) {
+    if (next.replyOptions.some((o) => containsSexualLanguage(o.text))) {
+      return operationalReviewOutput(next, "SEXUAL_NOT_ALLOWED");
+    }
+    if (next.recommendedProductId || next.recommendedAction === "PRESENT_OFFER") {
+      next = {
+        ...next,
+        recommendedProductId: null,
+        approvedPrice: null,
+        recommendedAction: "REQUEST_HUMAN_REVIEW",
+        requiresHumanReview: true,
+        riskFlags: Array.from(new Set([...next.riskFlags, "PITCH_DISABLED"])),
+      };
+    }
+  } else if (
     extras?.sellTarget &&
     next.recommendedProductId &&
     next.recommendedProductId !== extras.sellTarget.productId &&
@@ -701,6 +734,13 @@ export function applyReplyGuards(
     };
   }
 
+  if (!next.replyOptions.length) return next;
+  if (applied) {
+    next = {
+      ...next,
+      riskFlags: Array.from(new Set([...next.riskFlags, `GUARD:${applied}`])),
+    };
+  }
   return mapOptionTexts(next, (text) => rewriteDirectUnlockPitch(text));
 }
 
@@ -742,6 +782,8 @@ export function validateProductsAndPrices(
     threadLessons?: ReplyGuardExtras["threadLessons"];
     fanSentPics?: boolean;
     sellTarget?: ReplyGuardExtras["sellTarget"];
+    operationalIntent?: OperationalIntent;
+    responseMode?: ResponseMode;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -765,6 +807,8 @@ export function validateProductsAndPrices(
     threadLessons: opts?.threadLessons,
     fanSentPics: opts?.fanSentPics,
     sellTarget: opts?.sellTarget,
+    operationalIntent: opts?.operationalIntent,
+    responseMode: opts?.responseMode,
   });
 
   if (next.recommendedProductId) {

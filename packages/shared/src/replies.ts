@@ -292,15 +292,13 @@ export function looksLikeAimlessRapport(text: string): boolean {
 }
 
 export const ARE_YOU_REAL_VARIANTS = [
-  ["i could prove it rn", "i just dont see why i would for a stranger", "enough ppl already believe me"].join("\n"),
-  ["if u dont wanna keep talking thats fine", "im not doing a verification for someone i dont know", "plenty of fans know im real"].join("\n"),
-  ["thats a weird ask", "im not proving myself lol", "stay or dont"].join("\n"),
+  "a human needs to take this from here",
+  "pausing so someone can jump in",
 ];
 
 export const ARE_YOU_REAL_NO_PIC_VARIANTS = [
-  ["u have seen me online tho", "i havent even seen u", "why would i prove myself to a stranger"].join("\n"),
-  ["funny", "youve been looking at me and i got nothing from u", "im not proving myself"].join("\n"),
-  ["youve seen me", "i havent seen you", "i dont owe a stranger a verification"].join("\n"),
+  "a human needs to take this from here",
+  "pausing so someone can jump in",
 ];
 
 export function areYouRealReplyVariants(fanSentPics = false): string[] {
@@ -408,7 +406,7 @@ export function fanSentMedia(
 }
 
 export function looksLikeAreYouReal(text: string): boolean {
-  return /\b(are you real|are u real|r u real|you real\??|are you even real|are u even real|are you a bot|are u a bot|are you (?:fake|ai)|are u (?:fake|ai)|talking to a (?:robot|bot)|speak with the actual|you(?:'re| are) a bot|so you are a bot)\b/i.test(
+  return /\b(are you real|are u real|r u real|you real\??|are you even real|are u even real|are you a bot|are u a bot|are you (?:fake|ai)|are u (?:fake|ai)|talking to an? (?:ai|robot|bot)|speak with the actual|you(?:'re| are) a bot|so you are a bot)\b/i.test(
     text,
   );
 }

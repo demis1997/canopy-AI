@@ -56,22 +56,37 @@ export function getQueue() {
   return queue;
 }
 
-export async function enqueueJob(name: JobName, payload: JobPayload) {
+export async function enqueueJob(
+  name: JobName,
+  payload: JobPayload,
+  opts?: { delayMs?: number; debounceKey?: string },
+) {
   const q = getQueue();
   if (!q) {
     await processJob(name, payload);
     return;
   }
   const jobId =
-    name === "generate-automation-decision" && payload.triggerExternalMessageId
+    opts?.debounceKey ??
+    (name === "generate-automation-decision" && payload.triggerExternalMessageId
       ? `${name}-${payload.platformAccountId}-${payload.platformConversationId}-${payload.triggerExternalMessageId}`
       : name === "deliver-automation-action" && payload.actionId
         ? `${name}-${payload.actionId}`
         : name === "process-incoming-message" && payload.triggerExternalMessageId
           ? `${name}-${payload.platformConversationId}-${payload.triggerExternalMessageId}`
-          : `${name}-${randomUUID()}`;
+          : `${name}-${randomUUID()}`);
+  if (opts?.debounceKey) {
+    const existing = await q.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "delayed" || state === "waiting") {
+        await existing.remove();
+      }
+    }
+  }
   await q.add(name, payload, {
     jobId,
+    delay: opts?.delayMs,
     attempts: 3,
     backoff: { type: "exponential", delay: 2000 },
     removeOnComplete: 1000,

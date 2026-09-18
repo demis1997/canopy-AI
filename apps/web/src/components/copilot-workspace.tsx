@@ -168,16 +168,23 @@ export function CopilotWorkspace(props: {
     const json = await res.json();
     setFanText("");
     setFollowUps(0);
-    if (json.error) setNotice(json.error);
-    else if (json.autoSent) {
-      const gen = (json.generation ?? json) as Generation;
+    const gen = (json.generation ?? null) as Generation | null;
+    if (gen) {
       setGeneration(gen);
       setDrafts(Object.fromEntries((gen.replyOptions ?? []).map((o) => [o.id, o.text])));
-      setNotice("Autonomous reply sent in this chat.");
-    } else if (json.muted || mutedAi) {
+    }
+    if (json.error) setNotice(json.error);
+    else if (json.autoSent) setNotice("Model replied in this chat.");
+    else if (json.muted || mutedAi) {
       setNotice("This chat is paused. Generate a suggestion, then insert if you want to reply.");
+    } else if (gen?.failed) {
+      setNotice(gen.chatterMessage || "The model missed that send. Hit Generate.");
+    } else if (gen?.blocked) {
+      setNotice(gen.chatterMessage || "Reply blocked.");
+    } else if (gen?.replyOptions?.length) {
+      setNotice("Suggestions ready. Approve one to put it in the thread.");
     } else {
-      setNotice("Fan message saved. Generate suggestions in the copilot panel.");
+      setNotice("Fan message saved. Hit Generate in the copilot panel.");
     }
     setBusy(false);
     router.refresh();

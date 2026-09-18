@@ -47,7 +47,6 @@ import {
   nextLockedDropPolicy,
   pickSequenceDropProduct,
   playbookFor,
-  readFeatureFlags,
   sequenceDropPrice,
   shouldRunFanIntake,
   splitReplyBubbles,
@@ -1398,10 +1397,9 @@ export async function handleFanTurn(input: {
     where: { id: input.conversationId },
     data: { unansweredFollowUps: 0 },
   });
-  const flags = readFeatureFlags();
-  const autoReply = input.autoReply !== false && !conversation?.mutedAi && flags.autonomousText;
-  if (!autoReply) {
-    return { subscriberMessageId: message.id, autoSent: false as const, muted: Boolean(conversation?.mutedAi) };
+  const muted = Boolean(conversation?.mutedAi);
+  if (muted || input.autoReply === false) {
+    return { subscriberMessageId: message.id, autoSent: false as const, muted };
   }
 
   const generation = await generateForConversation({

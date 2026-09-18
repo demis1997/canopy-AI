@@ -218,6 +218,15 @@ export const RAPPORT_ONLY_VARIANTS = [
   ["ok wait", "id start slow then get mean"].join("\n"),
 ];
 
+export const NATURAL_CHAT_VARIANTS = [
+  "heyy im good just relaxing a little",
+  "im good actually just taking it easy for a bit",
+  "heyy im doing pretty good",
+  "yeah i hear u",
+  "makes sense",
+  "lol true",
+];
+
 export const FAN_DOMINANT_FOLLOW_VARIANTS = [
   ["ok then", "show me", "how would u take control"].join("\n"),
   ["alright", "your move", "tell me what u want me to do"].join("\n"),

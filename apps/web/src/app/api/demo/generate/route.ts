@@ -7,6 +7,7 @@ import {
   validateRecommendedOffer,
   advanceConversationFlow,
   alreadySentObjectives,
+  decideConversationTurn,
   type CatalogProduct,
 } from "@canopy/shared";
 import { MockLLMProvider, PROMPT_VERSION, validateProductsAndPrices } from "@canopy/ai";
@@ -67,13 +68,19 @@ export async function POST(request: Request) {
     funnelStage: body.funnelStage,
     requestId: "demo",
   });
-  const sellMatch = matchSellTarget({
-    products: eligible,
-    subscriberTexts: [
-      ...body.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
-      body.subscriberMessage,
-    ],
+  const decision = decideConversationTurn({
+    subscriberText: body.subscriberMessage,
+    recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
   });
+  const sellMatch = decision.allowPitch
+    ? matchSellTarget({
+        products: eligible,
+        subscriberTexts: [
+          ...body.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => m.body),
+          body.subscriberMessage,
+        ],
+      })
+    : null;
   const result = await mock.generateReplies({
     requestId: "demo-gen",
     model: "demo-model",
@@ -100,7 +107,7 @@ export async function POST(request: Request) {
       discountLimitPercent: 20,
       approvedExampleMessages: [],
     },
-    recentMessages: body.recentMessages,
+    recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
     memories: [],
     products: eligible.map((p) => ({
       id: p.id,
@@ -114,8 +121,10 @@ export async function POST(request: Request) {
       explicitnessCategory: "SUGGESTIVE",
     })),
     funnelStage: body.funnelStage,
-    playbook: "PRESENTING_PPV",
-    retrievedExamples: ["Tease then name a real catalog item at list price."],
+    playbook: decision.allowPitch ? "PRESENTING_PPV" : "BUILDING_RAPPORT",
+    retrievedExamples: decision.responseMode === "NATURAL"
+      ? ["Answer the latest turn. At most one question. No sex or PPV."]
+      : ["Tease then name a real catalog item at list price."],
     toneOverride: body.toneOverride,
     pricing: { concessionAllowed: Boolean(body.concessionAllowed), lastOffer: null, ladder: [] },
     sellTarget: sellMatch
@@ -126,6 +135,13 @@ export async function POST(request: Request) {
           reason: sellMatch.reason,
         }
       : null,
+    responseMode: decision.responseMode,
+    salesReadiness: decision.salesReadiness,
+    latestTurnIntensity: decision.latestTurnIntensity,
+    intakeOpportunity: decision.intakeOpportunity,
+    allowPitch: decision.allowPitch,
+    buyingSignals: decision.buyingSignals,
+    latestFanTurn: body.subscriberMessage,
   });
   const flow = advanceConversationFlow({
     subscriberText: body.subscriberMessage,
@@ -148,9 +164,9 @@ export async function POST(request: Request) {
       creatorId: body.creatorId,
       purchasedProductIds: body.purchasedProductIds,
       subscriberText: body.subscriberMessage,
-      recentMessages: body.recentMessages,
+      recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
       recentOutbound: body.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
-      fanIntake: flow.variants,
+      fanIntake: decision.intakeOpportunity ? flow.variants : undefined,
       flowPlan: {
         mustAnswer: flow.mustAnswer,
         closer: flow.closer,
@@ -161,9 +177,13 @@ export async function POST(request: Request) {
         deviation: flow.deviation,
         facts: flow.facts.extra,
         askedObjectives: alreadySentObjectives(body.recentMessages, flow.previous),
-        askPending: flow.askPending,
+        askPending: Boolean(flow.askPending && decision.intakeOpportunity),
         pendingQuestion: flow.next.currentQuestion,
+        skipPitch: !decision.allowPitch,
       },
+      responseMode: decision.responseMode,
+      salesReadiness: decision.salesReadiness,
+      intakeOpportunity: decision.intakeOpportunity,
     },
   );
   const schemaCheck = generationOutputSchema.safeParse(validated.output);

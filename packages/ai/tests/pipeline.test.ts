@@ -1637,20 +1637,21 @@ describe("operator rejection prompt", () => {
     expect(system).toMatch(/OPERATOR CORRECTIONS/);
     expect(system).toMatch(/Never repeat this mistake/);
     expect(system).toMatch(/Do not invent HIS life/);
-    expect(system).toMatch(/One hook max/);
     expect(system).toMatch(/Never write meet/);
     expect(system).toMatch(/against TOS/);
     expect(system).toMatch(/do not invert who is asking/);
-    expect(system).toMatch(/FAN_INTAKE_FLOW|new\/existing fan/i);
+    expect(system).not.toMatch(/Every send has a job on the sales sequence/);
     expect(system).toMatch(/recommendedProductId null/);
     expect(user).toMatch(/operator_rejections/);
     expect(user).toMatch(/kneel loser/);
-    expect(system).toMatch(/sell_target|specific video|valid_products/i);
   });
 
   it("pins the sell_target in the prompt", () => {
     const messages = composeGenerationPrompt({
       ...genInput("got anything from the gym?"),
+      responseMode: "SALES",
+      salesReadiness: "BUYING_SIGNAL",
+      allowPitch: true,
       sellTarget: { productId: "dick", name: "Dick — playing with girlcock", price: 19, reason: "CONTEXT" },
     });
     const user = String(messages[1]?.content ?? "");

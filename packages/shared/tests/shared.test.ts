@@ -584,8 +584,8 @@ describe("conversation flow state machine", () => {
       fanNotes: { extra: serializeFlowState(first.next) },
     });
     expect(second.next.step).toBe("ASK_LOCATION");
-    expect(second.askPending).toBe(true);
-    expect(second.variants.join("\n")).toMatch(/where are you from/i);
+    expect(second.askPending).toBe(false);
+    expect(second.variants.join("\n")).not.toMatch(/where are you from/i);
     expect(second.variants.join("\n")).not.toMatch(/how old are you/i);
   });
 
@@ -635,9 +635,8 @@ describe("conversation flow state machine", () => {
       fanNotes: { extra: serializeFlowState(flow.next) },
     });
     expect(resume.next.step).toBe("ASK_AGE");
-    expect(resume.askPending).toBe(true);
-    expect(resume.next.resumeHoldTurns).toBe(0);
-    expect(resume.variants.join("\n")).toMatch(/how old/i);
+    expect(resume.askPending).toBe(false);
+    expect(resume.variants.join("\n")).not.toMatch(/how old/i);
     expect(resume.variants.join("\n")).not.toMatch(/how many hands|typing with/i);
   });
 

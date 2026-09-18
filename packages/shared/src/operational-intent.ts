@@ -280,7 +280,12 @@ export function collectPendingFanTurn(opts: {
 }
 
 export function looksLikeFlirtyTurn(text: string): boolean {
-  return /\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm|heyy+)\b/i.test(text) && !containsSexualLanguage(text);
+  const t = text.trim();
+  if (!t || containsSexualLanguage(t)) return false;
+  if (/^(hey+|hi+|hello|heya|yo|sup)(\s|$|[!?.])/i.test(t) && !/\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t)) {
+    return false;
+  }
+  return /\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t);
 }
 
 export function looksLikePurchaseSignal(text: string): boolean {

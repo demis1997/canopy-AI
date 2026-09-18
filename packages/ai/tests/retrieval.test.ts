@@ -28,10 +28,13 @@ describe("agency training retrieval", () => {
       intent: "CASUAL_CHAT",
       funnelStage: "NEW_FAN",
       transPersona: false,
+      allowSexting: false,
+      responseMode: "NATURAL",
     });
     const blob = hits.join(" ").toLowerCase();
     expect(blob).toMatch(/at most one question/);
     expect(blob).not.toMatch(/weave one question at a time: age/);
+    expect(blob).not.toMatch(/sexting master|how many hands/);
   });
 
   it("hides trans vocabulary from cis personas", () => {

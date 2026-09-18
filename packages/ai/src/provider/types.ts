@@ -152,6 +152,12 @@ export type GenerationInput = {
   latestFanTurn?: string;
   inputMessageIds?: string[];
   correctiveRetry?: boolean;
+  correctiveCodes?: string[];
+  salesReadiness?: "CONNECTING" | "WARMING" | "FLIRTING" | "SEXUAL_MOMENTUM" | "BUYING_SIGNAL" | "ACTIVE_SALE" | "AFTERCARE";
+  latestTurnIntensity?: "NEUTRAL" | "WARM" | "FLIRTY" | "SUGGESTIVE" | "EXPLICIT" | "OFFER";
+  intakeOpportunity?: boolean;
+  allowPitch?: boolean;
+  buyingSignals?: string[];
 };
 
 export type GenerationResult = {

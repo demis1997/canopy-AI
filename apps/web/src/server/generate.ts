@@ -57,6 +57,9 @@ import {
   determineResponseMode,
   operationalGenerationPlan,
   validateReplyGrounding,
+  decideConversationTurn,
+  validateQualityGrounding,
+  analyzePacing,
   type CatalogProduct,
 } from "@canopy/shared";
 import { enqueueJob } from "./queue";
@@ -316,6 +319,11 @@ export async function generateForConversation(input: {
   }
 
   const operational = detectOperationalIntent(subscriberText);
+  let decision = decideConversationTurn({
+    subscriberText,
+    operational,
+    recentMessages: recent,
+  });
   let plan = operationalGenerationPlan(operational);
   if (conversation.mutedAi) {
     plan = {
@@ -329,7 +337,7 @@ export async function generateForConversation(input: {
       chatterMessage: plan.chatterMessage || "Fan requested a human. AI paused.",
     };
   }
-  const responseMode = determineResponseMode({ operational, subscriberText });
+  let responseMode = decision.responseMode;
   if (plan.skipGenerate) {
     const platform = await prisma.platformConversation.findFirst({
       where: { canopyConversationId: conversation.id, organizationId: tenant.organizationId },
@@ -409,6 +417,18 @@ export async function generateForConversation(input: {
   const purchasedProductIds = purchases.map((p) => p.productId);
   const purchasedPpvCount = purchases.length;
   const previousPurchasePrice = Math.max(0, ...purchases.map((p) => p.amountCents / 100));
+  const earlyUnpaid = conversation.offers.some(
+    (offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId),
+  );
+  decision = decideConversationTurn({
+    subscriberText,
+    operational,
+    recentMessages: recent,
+    purchasedPpvCount,
+    unpaidOffer: earlyUnpaid,
+    followUpPhase: followUpPhase(conversation.unansweredFollowUps, purchasedPpvCount),
+  });
+  responseMode = decision.responseMode;
   const catalog: CatalogProduct[] = productRows.map((p) => ({
     id: p.id,
     creatorId: p.creatorId,
@@ -537,13 +557,17 @@ export async function generateForConversation(input: {
       suggested: conversation.funnelStage,
     });
 
-    const allowSexting = responseMode === "EXPLICIT" || responseMode === "SALES";
+    const allowSexting =
+      decision.allowExplicit && (responseMode === "EXPLICIT" || responseMode === "SALES");
     const retrieved = retrieveTrainingMeta({
       message: subscriberText,
       intent: classified.intent,
       funnelStage: conversation.funnelStage,
       transPersona,
       allowSexting,
+      allowPricing: decision.allowPrice || decision.buyingSignals.includes("price"),
+      responseMode,
+      salesReadiness: decision.salesReadiness,
       extraChunks: [
         ...persona.approvedExampleMessages.map((content) => ({
           content,
@@ -559,7 +583,7 @@ export async function generateForConversation(input: {
           ],
         })),
       ],
-    });
+    }, responseMode === "NATURAL" || responseMode === "OPERATIONAL" || responseMode === "SUPPORT" ? 4 : 6);
     const examples = retrieved.examples;
 
     const discardedRows = await prisma.replyOption.findMany({
@@ -803,6 +827,9 @@ export async function generateForConversation(input: {
       sellMatch = null;
       fanIntake = null;
     }
+    if (!decision.allowPitch && sellMatch?.reason !== "CONTEXT") sellMatch = null;
+    if (!decision.allowPitch) sellMatch = null;
+    if (!decision.intakeOpportunity) fanIntake = null;
 
     const generationInput: GenerationInput = {
       requestId,
@@ -881,10 +908,16 @@ export async function generateForConversation(input: {
         closer: flow.closer,
         quotedLines: flow.quotedLines,
         deviation: flow.deviation,
-        askPending: flow.askPending,
+        askPending: Boolean(
+          flow.askPending &&
+            decision.intakeOpportunity &&
+            responseMode !== "NATURAL" &&
+            responseMode !== "SUPPORT" &&
+            responseMode !== "OPERATIONAL",
+        ),
         pendingQuestion: flow.next.currentQuestion,
         resumeHoldTurns: flow.next.resumeHoldTurns,
-        skipPitch: flow.skipPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
+        skipPitch: flow.skipPitch || !decision.allowPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
       },
       boughtWelcome,
       existingFan,
@@ -948,10 +981,19 @@ export async function generateForConversation(input: {
       operationalIntent: operational.intent,
       latestFanTurn: pendingTurn.messages.map((row) => `${row.id}: ${row.body}`).join("\n"),
       inputMessageIds,
+      salesReadiness: decision.salesReadiness,
+      latestTurnIntensity: decision.latestTurnIntensity,
+      intakeOpportunity: decision.intakeOpportunity,
+      allowPitch: decision.allowPitch,
+      buyingSignals: decision.buyingSignals,
     };
 
-    const generateOnce = (correctiveRetry = false) =>
-      generateRepliesWithRetry(provider, { ...generationInput, correctiveRetry });
+    const generateOnce = (correctiveRetry = false, codes: string[] = []) =>
+      generateRepliesWithRetry(provider, {
+        ...generationInput,
+        correctiveRetry,
+        correctiveCodes: codes,
+      });
 
     let result = await generateOnce(false);
 
@@ -1027,9 +1069,15 @@ export async function generateForConversation(input: {
           deviation: flow.deviation,
           facts: flow.facts.extra,
           askedObjectives: alreadySentObjectives(recent.map((m) => ({ authorType: m.authorType, body: m.body })), flow.previous),
-          askPending: flow.askPending,
+          askPending: Boolean(
+            flow.askPending &&
+              decision.intakeOpportunity &&
+              responseMode !== "NATURAL" &&
+              responseMode !== "SUPPORT" &&
+              responseMode !== "OPERATIONAL",
+          ),
           pendingQuestion: flow.next.currentQuestion,
-          skipPitch: flow.skipPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
+          skipPitch: flow.skipPitch || !decision.allowPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
         },
         variantSeed: requestId,
         recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
@@ -1048,6 +1096,8 @@ export async function generateForConversation(input: {
           : undefined,
         operationalIntent: operational.intent,
         responseMode,
+        salesReadiness: decision.salesReadiness,
+        intakeOpportunity: decision.intakeOpportunity,
     };
 
     const catalogForValidate = products.map((p) => ({
@@ -1072,7 +1122,14 @@ export async function generateForConversation(input: {
           mode: responseMode,
           recommendedProductId: output.recommendedProductId,
         });
-        return check.ok ? [] : [check.code];
+        const quality = validateQualityGrounding({
+          reply: opt.text,
+          turn: subscriberText,
+          decision,
+          recommendedProductId: output.recommendedProductId,
+          pacing: analyzePacing(recent),
+        });
+        return [...(check.ok ? [] : [check.code]), ...(quality.ok ? [] : [quality.code])];
       });
 
     let validated = validateProductsAndPrices(
@@ -1084,7 +1141,7 @@ export async function generateForConversation(input: {
     );
     let groundingCodes = groundingCodesFor(validated.output);
     if (groundingCodes.length || !validated.output.replyOptions.length) {
-      result = await generateOnce(true);
+      result = await generateOnce(true, groundingCodes);
       const postRetry = evaluateSafety({
         adultStatus: conversation.adultStatus as AdultStatus,
         subscriberText,
@@ -1190,6 +1247,12 @@ export async function generateForConversation(input: {
       inputMessageIds,
       operationalIntent: operational.intent,
       responseMode,
+      salesReadiness: decision.salesReadiness,
+      latestTurnIntensity: decision.latestTurnIntensity,
+      intakeOpportunity: decision.intakeOpportunity,
+      buyingSignals: decision.buyingSignals,
+      retrievedTrainingTags: retrieved.chunks.flatMap((chunk) => chunk.tags),
+      guardFailureCodes: [...validated.errors, ...groundingCodes],
       classifierIntent: classified.intent,
       classifierConfidence: classified.confidence,
       trainingChunks: retrieved.chunks,
@@ -1198,6 +1261,7 @@ export async function generateForConversation(input: {
       generationSkipped: false,
       stale: Boolean(newerSubscriber),
       requestId,
+      ...(process.env.NODE_ENV === "development" ? { debugExplanation: decision.debugExplanation } : {}),
     };
     const generation = await prisma.generation.create({
       data: {

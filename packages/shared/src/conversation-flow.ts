@@ -402,14 +402,12 @@ export function shouldResumePendingObjective(opts: {
   subscriberText: string;
   mustAnswer: FlowMustAnswer;
 }): boolean {
-  if (opts.holdTurns <= 0) return true;
   if (opts.mustAnswer) return false;
-  const last = opts.subscriberText.trim();
-  if (looksLikeSextAsk(last) || looksLikeTeaseAsk(last) || looksLikeContentAsk(last)) {
-    return opts.holdTurns >= 2;
+  if (opts.holdTurns <= 0) return false;
+  if (looksLikeSextAsk(opts.subscriberText) || looksLikeTeaseAsk(opts.subscriberText) || looksLikeContentAsk(opts.subscriberText)) {
+    return false;
   }
-  if (looksLikeWontAnswer(last) || looksLikePacingPushback(last)) return opts.holdTurns >= 2;
-  return opts.holdTurns >= 1;
+  return false;
 }
 
 function holdPending(state: ConversationFlowState): ConversationFlowState {
@@ -418,7 +416,7 @@ function holdPending(state: ConversationFlowState): ConversationFlowState {
   if (question) stepStatus[question] = "not_started";
   return {
     ...state,
-    resumeHoldTurns: Math.min(2, (state.resumeHoldTurns ?? 0) + 1),
+    resumeHoldTurns: (state.resumeHoldTurns ?? 0) + 1,
     askedCurrentQuestionCount: 0,
     stepStatus,
   };
@@ -1216,37 +1214,21 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
 
   if (previous.step === "ASK_HOW_ARE_YOU" || previous.step === "ANSWER_HOW_ARE_YOU") {
     const askBack = looksLikeHowAreAsk(last);
-    const next = goTo(nextBase, "VIBE_CHECK", {
-      phase: nextBase.fanType === "EXISTING" ? "EXISTING_FAN_INTAKE" : "NEW_FAN_INTAKE",
-    });
-    const closer = vibeLine(next);
-    const quoted = [closer];
-    const variants = askBack
-      ? leadForMustAnswer(nextBase.fanType === "EXISTING" ? "how-are-you" : "how-are-you", input, "VIBE_CHECK", next)
-      : nextBase.fanType === "EXISTING"
-        ? [
-            ["hey", "how have you been"].join("\n"),
-            ["hey", "how u been"].join("\n"),
-          ]
-        : [
-            [`heyy ${firstName(input.subscriberName)}`, "how are you"].join("\n"),
-            [`heyy ${firstName(input.subscriberName)}`, "hows it going"].join("\n"),
-          ];
     if (previous.step === "ASK_HOW_ARE_YOU" && input.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").length === 0) {
       if (mustAnswer) {
         return finish(
           previous,
-          goTo(nextBase, "ASK_HOW_ARE_YOU"),
+          holdPending(goTo(nextBase, "ANSWER_HOW_ARE_YOU")),
           "IGNORED",
           mustAnswer,
           facts,
           input,
-          nextBase.fanType === "EXISTING" ? "how have you been" : "how are you",
+          null,
           [],
-          beatIdFor("ASK_HOW_ARE_YOU", mustAnswer),
+          beatIdFor("ANSWER_HOW_ARE_YOU", mustAnswer),
           true,
           false,
-          leadForMustAnswer(mustAnswer, input, "ASK_HOW_ARE_YOU", nextBase),
+          leadForMustAnswer(mustAnswer, input, "ANSWER_HOW_ARE_YOU", nextBase, false),
         );
       }
       return finish(
@@ -1272,19 +1254,28 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
             ],
       );
     }
+    const answered = holdPending(goTo(nextBase, "ANSWER_HOW_ARE_YOU", {
+      phase: nextBase.fanType === "EXISTING" ? "EXISTING_FAN_INTAKE" : "NEW_FAN_INTAKE",
+    }));
+    const answerVariants = askBack
+      ? leadForMustAnswer("how-are-you", input, "ANSWER_HOW_ARE_YOU", answered, false)
+      : [
+          "heyy im good just relaxing a little",
+          "im good actually just taking it easy for a bit",
+        ];
     return finish(
       previous,
-      next,
+      answered,
       askBack ? "ANSWERED_PLUS_EXTRA" : "ANSWERED",
       askBack ? "how-are-you" : mustAnswer,
       facts,
       input,
-      closer,
-      quoted,
-      askBack ? (nextBase.fanType === "EXISTING" ? "existing_askback" : "gym") : "vibe",
+      null,
+      [],
+      askBack ? (nextBase.fanType === "EXISTING" ? "existing_askback" : "gym") : "how_are_reply",
       true,
       false,
-      askBack ? undefined : withCloser(["ok"], closer),
+      answerVariants,
     );
   }
 

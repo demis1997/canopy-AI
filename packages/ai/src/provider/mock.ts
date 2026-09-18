@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FunnelStage, Intent } from "@canopy/shared";
-import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeConfirmedInventedAboutHimCallout, looksLikeMixupCalloutLanguage, looksLikeDirectCreatorQuestion, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, looksLikeRelationshipAsk, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, relationshipReplyVariants, inventedAboutHimReplyVariants, MIXUP_CLARIFY_VARIANTS, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS, tooSimilar, pickFreshVariants, RAPPORT_ONLY_VARIANTS, looksLikeWaitingForReveal, looksLikeProveYourselfAsk, looksLikeAffirm, FAN_DOMINANT_FOLLOW_VARIANTS, looksLikeTellHook } from "@canopy/shared";
+import { generationOutputSchema, looksLikeOfflineAsk, looksLikeFanInvitesQuestions, looksLikeAreYouReal, looksLikeAgeAsk, looksLikeConfirmedInventedAboutHimCallout, looksLikeMixupCalloutLanguage, looksLikeDirectCreatorQuestion, looksLikeLocationAsk, looksLikePetNamePushback, looksLikeTeaseAsk, looksLikeRefundCallout, looksLikeWhatsWrongFollowup, looksLikeRelationshipAsk, wantsNoPitch, bannedCatalogNames, creatorAgeFromText, creatorCityFromText, ageReplyVariants, locationReplyVariants, teaseReplyVariants, areYouRealReplyVariants, relationshipReplyVariants, inventedAboutHimReplyVariants, MIXUP_CLARIFY_VARIANTS, threadIsOnOfflineAsk, pitchIsTooEarly, inferFanIntake, shouldRunFanIntake, intakeComplete, rotateVariants, matchSellTarget, extractFanFacts, AFTERCARE_QUOTES, TOS_OFFLINE_VARIANTS, PET_NAME_PUSHBACK_VARIANTS, REFUND_CALLOUT_VARIANTS, tooSimilar, pickFreshVariants, RAPPORT_ONLY_VARIANTS, looksLikeWaitingForReveal, looksLikeProveYourselfAsk, looksLikeAffirm, FAN_DOMINANT_FOLLOW_VARIANTS, looksLikeTellHook, analyzePacing, looksLikeGreeting, looksLikeWellbeingAsk, looksLikeEmotionalStatement } from "@canopy/shared";
 import { ProviderError } from "./errors.js";
 import { resolveOfferPrice } from "../pricing/concession.js";
 import type {
@@ -55,12 +55,91 @@ function asOption(
   bubbles: string[],
   tone: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "DIRECT",
   reason: string,
+  opts?: { hook?: boolean },
 ) {
   const messages = bubbles.map((s) => humanize(clampBubble(s))).filter(Boolean).slice(0, 3);
-  if (messages.length) {
+  if (messages.length && opts?.hook !== false) {
     messages[messages.length - 1] = withHook(messages[messages.length - 1]!, reason.length);
   }
   return { text: messages.join("\n"), tone, internalReason: reason };
+}
+
+function asNaturalOption(
+  bubbles: string[],
+  tone: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "DIRECT",
+  reason: string,
+) {
+  return asOption(bubbles, tone, reason, { hook: false });
+}
+
+function naturalRepliesFor(input: GenerationInput, last: string) {
+  const pacing = analyzePacing(input.recentMessages);
+  const noQuestion = pacing.consecutiveQuestionTurns >= 2;
+  const personaBlob = [
+    input.persona.authorisedBackstory,
+    input.persona.biography,
+    input.persona.interests.join(" "),
+  ].join(" ");
+  if (looksLikeWellbeingAsk(last) || looksLikeGreeting(last)) {
+    const withAsk = [
+      ["heyy im good just relaxing a little", "how are u?"],
+      ["im good actually just taking it easy for a bit, you?"],
+      ["pretty good just winding down a bit", "how about you"],
+    ];
+    const noAsk = [
+      ["heyy im doing pretty good today"],
+      ["im good just chilling a little"],
+      ["doing alright actually"],
+    ];
+    const pool = noQuestion || !looksLikeWellbeingAsk(last) ? [...noAsk, ...withAsk] : [...withAsk, ...noAsk];
+    const picked = rotateVariants(pool.map((row) => row.join("\n")), input.requestId).slice(0, 3);
+    return picked.map((text, i) => asNaturalOption(text.split("\n"), i === 0 ? "PLAYFUL" : "DIRECT", "Natural greeting"));
+  }
+  if (looksLikeEmotionalStatement(last)) {
+    return [
+      asNaturalOption(["aww that sounds rough", "days like that are the worst"], "PLAYFUL", "Acknowledge emotion first"),
+      asNaturalOption(["sorry that was a rough one"], "DIRECT", "Shorter emotion ack"),
+    ];
+  }
+  if (/\bmusic\b/i.test(last)) {
+    const music =
+      input.persona.interests.find((item) => /music|song|indie|pop|rock|hip/i.test(item)) ??
+      personaBlob.match(/\b(indie(?:\s+pop)?|pop|rock|hip ?hop|r&b|jazz)\b/i)?.[0] ??
+      "indie pop";
+    return [
+      asNaturalOption([`i listen to a lot of ${music.toLowerCase()}`, "it depends on the mood"], "PLAYFUL", "Answer music from persona"),
+      asNaturalOption([`music wise im into ${music.toLowerCase()}`], "DIRECT", "Short music answer"),
+    ];
+  }
+  if (input.intakeOpportunity && /\b(work|job|shift)\b/i.test(last) && !looksLikeEmotionalStatement(last)) {
+    return [
+      asNaturalOption(["ohh work huh", "what do you do"], "PLAYFUL", "Opportunistic job intake"),
+      asNaturalOption(["work days like that", "what kind of job is it"], "DIRECT", "Job follow-up"),
+    ];
+  }
+  if (input.salesReadiness === "AFTERCARE") {
+    return [
+      asNaturalOption(["that was fun", "im just taking it easy now"], "PLAYFUL", "Aftercare without a new pitch"),
+      asNaturalOption(["glad we did that", "im good hanging for a bit"], "DIRECT", "Warm aftercare"),
+    ];
+  }
+  if (noQuestion) {
+    return [
+      asNaturalOption(["yeah that tracks"], "PLAYFUL", "Statement after two questions"),
+      asNaturalOption(["lol fair"], "DIRECT", "Short reaction"),
+    ];
+  }
+  const words = last.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 2) {
+    return [
+      asNaturalOption(["yeah i hear u"], "PLAYFUL", "Short fan answer stays grounded"),
+      asNaturalOption(["lol ok"], "DIRECT", "Short ack"),
+    ];
+  }
+  return [
+    asNaturalOption([`yeah ${last.replace(/[?!.,]/g, "").split(/\s+/).slice(0, 6).join(" ").toLowerCase()}`, "im with u on that"], "PLAYFUL", "Stay on his topic"),
+    asNaturalOption(["makes sense"], "DIRECT", "Simple continuity"),
+  ];
 }
 
 function ackFan(last: string): string {
@@ -108,6 +187,9 @@ function emojiOf(input: GenerationInput): string {
 function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   const last =
     input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "";
+  if (input.responseMode === "NATURAL" || input.responseMode === "SUPPORT" || input.salesReadiness === "AFTERCARE") {
+    return naturalRepliesFor(input, last);
+  }
   if (input.followUpPhase === "AFTERCARE" || input.playbook === "AFTERCARE") {
     return [
       asOption(AFTERCARE_QUOTES, "ROMANTIC", "Aftercare after three sequence products"),
@@ -190,13 +272,19 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
     );
   }
 
-  if (looksLikeTeaseAsk(last)) {
+  if (looksLikeTeaseAsk(last) || input.responseMode === "EXPLICIT") {
     const trans = /\b(girlcock|tgirl|trans girl)\b/i.test(
       `${input.persona.biography} ${input.persona.authorisedBackstory} ${input.persona.preferredExplicitVocabulary.join(" ")}`,
     );
-    return rotateVariants(teaseReplyVariants(trans), input.requestId).slice(0, 3).map((text, i) =>
-      asOption(text.split("\n"), "TEASING", "Actually tease, do not talk about teasing"),
-    );
+    if (looksLikeTeaseAsk(last)) {
+      return rotateVariants(teaseReplyVariants(trans), input.requestId).slice(0, 3).map((text, i) =>
+        asOption(text.split("\n"), "TEASING", "Actually tease, do not talk about teasing"),
+      );
+    }
+    return [
+      asNaturalOption(["yeah keep talking like that", `tell me what you'd do with this ${body}`], "TEASING", "Follow his explicit energy"),
+      asNaturalOption(["fuck", "dont stop"], "DIRECT", "Match explicit energy"),
+    ];
   }
 
   const mixup = looksLikeConfirmedInventedAboutHimCallout({
@@ -215,6 +303,8 @@ function repliesFor(input: GenerationInput, intent: Intent, pitching: boolean) {
   }
 
   if (
+    input.intakeOpportunity !== false &&
+    input.responseMode !== "SALES" &&
     shouldRunFanIntake({
       funnelStage: input.funnelStage,
       intent,
@@ -469,7 +559,12 @@ export class MockLLMProvider implements LLMProvider {
       last,
       input.recentMessages.map((m) => m.body).join(" "),
     );
-    const runIntake = shouldRunFanIntake({
+    const runIntake =
+      input.intakeOpportunity !== false &&
+      input.responseMode !== "NATURAL" &&
+      input.responseMode !== "EXPLICIT" &&
+      input.responseMode !== "SALES" &&
+      shouldRunFanIntake({
       funnelStage: input.funnelStage,
       intent,
       purchasedPpvCount: input.pricing?.purchasedPpvCount,
@@ -507,6 +602,8 @@ export class MockLLMProvider implements LLMProvider {
       intent === "REFUND" ||
       intent === "UNSAFE" ||
       input.responseMode === "NATURAL" ||
+      input.allowPitch === false ||
+      (input.salesReadiness != null && input.salesReadiness !== "BUYING_SIGNAL" && input.salesReadiness !== "ACTIVE_SALE") ||
       pitchIsTooEarly({
         funnelStage: input.funnelStage,
         fanMessageCount: input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").length,

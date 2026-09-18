@@ -131,6 +131,38 @@ export const AGENCY_TRAINING_CHUNKS: TrainingChunkSeed[] = [
     tags: ["ops", "shift"],
     content: `Prioritise incoming replies to mass messages first. Update lists in real time. Build rapport, look for green lights, tease, run the ladder, stay in character, never drop price. Do not let other accounts go cold.`,
   },
+  {
+    title: "Natural chat — greetings and wellbeing",
+    documentType: "APPROVED_EXAMPLE",
+    intent: "CASUAL_CHAT",
+    funnelStage: "NEW_FAN",
+    tags: ["natural", "continuity", "rapport"],
+    content: `When he greets or asks how she is, answer that. Examples of behaviour, not canned copy: heyy im good just relaxing a little, how are u? / im good actually just taking it easy for a bit, you? / heyy im doing pretty good. At most one question. No sex, no PPV, no price, no hands/age/city/job/sub-dom. Do not always ask a question. Vary openers.`,
+  },
+  {
+    title: "Natural chat — emotion and work",
+    documentType: "APPROVED_EXAMPLE",
+    intent: "CASUAL_CHAT",
+    funnelStage: "RAPPORT",
+    tags: ["natural", "continuity"],
+    content: `If work was awful or he had a bad day, acknowledge the feeling first. Then optionally one gentle question. Do not pivot to sex, PPV, or intake. A job question is only natural after the emotion is handled and he is still talking about work.`,
+  },
+  {
+    title: "Natural chat — hobbies music food sleep jokes",
+    documentType: "APPROVED_EXAMPLE",
+    intent: "CASUAL_CHAT",
+    funnelStage: "RAPPORT",
+    tags: ["natural", "persona"],
+    content: `If he asks what music she likes, answer with authorised persona interests. Same for hobbies, food, sleep, jokes, compliments. One short authorised detail. At most one question. No invented facts. No content pitch.`,
+  },
+  {
+    title: "Natural chat — short answers topic changes returning fans",
+    documentType: "APPROVED_EXAMPLE",
+    intent: "CASUAL_CHAT",
+    funnelStage: "FOLLOW_UP",
+    tags: ["natural", "continuity", "rapport"],
+    content: `Short answers do not justify a sexual jump. Topic changes during a sales sequence get answered first. Returning fans get a natural hello, not a recycled pitch. It is allowed to continue with a statement and zero questions. After two question-led turns, reply with a reaction not another question.`,
+  },
 ];
 
 export const AGENCY_SYSTEM_RULES = [

@@ -61,6 +61,7 @@ import {
   looksLikeAffirm,
   repeatsRecentBubbles,
   RAPPORT_ONLY_VARIANTS,
+  NATURAL_CHAT_VARIANTS,
   FAN_DOMINANT_FOLLOW_VARIANTS,
   FAN_SUBMISSIVE_FOLLOW_VARIANTS,
   SOFT_TEASE_VARIANTS,
@@ -224,6 +225,8 @@ export type ReplyGuardExtras = {
   sellTarget?: { productId: string; name: string; price: number; reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE" };
   operationalIntent?: OperationalIntent;
   responseMode?: ResponseMode;
+  salesReadiness?: string;
+  intakeOpportunity?: boolean;
 };
 
 function firstText(output: GenerationOutput): string {
@@ -369,6 +372,10 @@ export function applyReplyGuards(
     mode === "NATURAL" ||
     route.intent === "COMPLAINT" ||
     route.intent === "SUPPORT_REQUEST";
+  const naturalPool = NATURAL_CHAT_VARIANTS;
+  if (extras?.intakeOpportunity === false && extras.flowPlan) {
+    extras.flowPlan.askPending = false;
+  }
 
   if (hits.offline) {
     next = swap(next, TOS_OFFLINE_VARIANTS);
@@ -502,7 +509,7 @@ export function applyReplyGuards(
   ) {
     next = swap(
       next,
-      sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      noSexual ? naturalPool : sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
     );
     replaced = true;
     reason = "stale-are-you-real";
@@ -536,12 +543,14 @@ export function applyReplyGuards(
     !locked &&
     next.replyOptions.some((o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach))
   ) {
-    next = swap(next, extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
+    next = swap(next, noSexual ? naturalPool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
     replaced = true;
     reason = "invented-beach-output";
   }
 
-  next = applySequenceRecovery(next, extras);
+  if (!noSexual) {
+    next = applySequenceRecovery(next, extras);
+  }
 
   const draftRepeats =
     next.replyOptions.some((o) => bannedRepeats.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r)))) ||
@@ -552,21 +561,27 @@ export function applyReplyGuards(
     );
     const tellLoop = next.replyOptions.some((o) => looksLikeTellHook(o.text)) || looksLikeWaitingForReveal(subscriberText);
     const fresh = pickFreshVariants(
-      extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      noSexual ? naturalPool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
       bannedRepeats,
       extras?.variantSeed,
     ).filter((text) => !looksLikeTellHook(text) || !tellLoop);
-    const pool = looksLikeTeaseAsk(subscriberText) || tellLoop ? teasePool : fresh.length ? fresh : teasePool;
+    const pool = noSexual
+      ? (fresh.length ? fresh : naturalPool)
+      : looksLikeTeaseAsk(subscriberText) || tellLoop
+        ? teasePool
+        : fresh.length
+          ? fresh
+          : teasePool;
     next = swap(next, pool);
     replaced = true;
     reason = repeatedRejected ? "rejected-draft-repeat" : "duplicate-outbound";
-    next = applySequenceRecovery(next, extras);
+    if (!noSexual) next = applySequenceRecovery(next, extras);
   }
 
   if (rejectedDrafts.length) {
     next = mapOptionTexts(next, (text, i) =>
       rejectedDrafts.some((draft) => tooSimilar(text, draft))
-        ? RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!
+        ? (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!
         : text,
     );
   }
@@ -577,6 +592,7 @@ export function applyReplyGuards(
   const inferredDominant = (dominance ?? "").toUpperCase() === "DOMINANT" || (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(subscriberText));
   if (
     !locked &&
+    !noSexual &&
     next.replyOptions.some(
       (o) =>
         looksLikeWrongDominanceFlip(o.text, inferredDominant ? "DOMINANT" : dominance) ||
@@ -598,7 +614,10 @@ export function applyReplyGuards(
     );
     if (pitched) {
       const pool = (repairPool ?? []).filter((text) => !looksLikeTellHook(text) && !looksLikePrematureVideoPitch(text));
-      next = swap(next, pool.length ? pool : inferredDominant ? FAN_DOMINANT_FOLLOW_VARIANTS : teasePool);
+      next = swap(
+        next,
+        pool.length ? pool : noSexual ? naturalPool : inferredDominant ? FAN_DOMINANT_FOLLOW_VARIANTS : teasePool,
+      );
       replaced = true;
       reason = "skip-pitch";
     }
@@ -649,7 +668,7 @@ export function applyReplyGuards(
         noPitch || (next.recommendedProductId != null && idsToDrop.has(next.recommendedProductId));
       next = mapOptionTexts(next, (text, i) => {
         const stripped = stripCatalogMentions(text, namesToStrip);
-        return stripped.trim() ? stripped : RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!;
+        return stripped.trim() ? stripped : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!;
       });
       if (dropProduct) {
         next = {
@@ -676,7 +695,7 @@ export function applyReplyGuards(
   ) {
     next = mapOptionTexts(next, (text, i) => {
       const stripped = stripCatalogMentions(text, catalogNames);
-      return stripped.trim() ? stripped : RAPPORT_ONLY_VARIANTS[i % RAPPORT_ONLY_VARIANTS.length]!;
+      return stripped.trim() ? stripped : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!;
     });
     next = {
       ...next,
@@ -698,7 +717,7 @@ export function applyReplyGuards(
   ) {
     next = swap(
       next,
-      sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      noSexual ? naturalPool : sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
     );
   }
 
@@ -784,6 +803,8 @@ export function validateProductsAndPrices(
     sellTarget?: ReplyGuardExtras["sellTarget"];
     operationalIntent?: OperationalIntent;
     responseMode?: ResponseMode;
+    salesReadiness?: string;
+    intakeOpportunity?: boolean;
   },
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
@@ -809,6 +830,8 @@ export function validateProductsAndPrices(
     sellTarget: opts?.sellTarget,
     operationalIntent: opts?.operationalIntent,
     responseMode: opts?.responseMode,
+    salesReadiness: opts?.salesReadiness,
+    intakeOpportunity: opts?.intakeOpportunity,
   });
 
   if (next.recommendedProductId) {

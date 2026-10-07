@@ -19,3 +19,8 @@ test-results
 apps/extension/dist
 .canopy-profiles
 apps/web/.canopy-diagnostics
+
+# Local environments and generated artifacts
+node_modules/
+.env.*
+!.env.example

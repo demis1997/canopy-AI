@@ -31,7 +31,10 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ...form,
-        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: form.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
       }),
     });
     setBusy(false);
@@ -43,7 +46,11 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
       <form className="grid gap-3 md:grid-cols-3" onSubmit={onSubmit}>
         <div>
           <Label>Name</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
         </div>
         <div>
           <Label>Creator</Label>
@@ -105,7 +112,8 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
             onChange={(e) => setForm({ ...form, discountLimitPercent: Number(e.target.value) })}
           />
           <p className="mt-1 text-[11px] text-white/35">
-            Ignored on the first PPV and anything $10 or under. Later PPVs discount only after he goes silent.
+            Ignored on the first PPV and anything $10 or under. Later PPVs discount only after he
+            goes silent.
           </p>
         </div>
         <div>
@@ -122,7 +130,10 @@ export function CreateProductForm({ creators }: { creators: { id: string; name: 
         </label>
         <div className="md:col-span-3">
           <Label>Description</Label>
-          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <Textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
         </div>
         <Button type="submit" disabled={busy}>
           Add product

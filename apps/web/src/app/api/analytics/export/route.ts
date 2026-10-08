@@ -34,7 +34,9 @@ export async function GET(request: Request) {
         [`day_${row.day}_gens`, String(row.gens)],
       ]),
     ];
-    const csv = rows.map((r) => r.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
+    const csv = rows
+      .map((r) => r.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","))
+      .join("\n");
     return new NextResponse(csv, {
       headers: {
         "content-type": "text/csv; charset=utf-8",

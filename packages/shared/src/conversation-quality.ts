@@ -49,8 +49,7 @@ export type TurnDecision = {
   debugExplanation: string;
 };
 
-const GREETING =
-  /^(hey+|hi+|hello|heya|yo|sup|morning|evening)(\s|$|[!?.])/i;
+const GREETING = /^(hey+|hi+|hello|heya|yo|sup|morning|evening)(\s|$|[!?.])/i;
 
 const WELLBEING_ASK =
   /\b(how are you|how r u|hows it going|how’s it going|how have you been|how u been|you good|u good)\b/i;
@@ -58,26 +57,26 @@ const WELLBEING_ASK =
 const EMOTION =
   /\b(awful|horrible|terrible|rough day|bad day|sad|tired|stressed|lonely|miss(ed)? you|had a (bad|shit|rough) (day|night))\b/i;
 
-const WORK_TALK =
-  /\b(work|job|shift|boss|office|meeting|clients?)\b/i;
+const WORK_TALK = /\b(work|job|shift|boss|office|meeting|clients?)\b/i;
 
-const PLACE_TALK =
-  /\b(weather|rain|snow|city|town|from|visiting|travel)\b/i;
+const PLACE_TALK = /\b(weather|rain|snow|city|town|from|visiting|travel)\b/i;
 
-const AGE_TALK =
-  /\b(birthday|turning \d{2}|years? old|my age)\b/i;
+const AGE_TALK = /\b(birthday|turning \d{2}|years? old|my age)\b/i;
 
 const INTAKE_QUESTION =
   /\b(how many hands|how old are you|where are you from|what do you do for (a living|work)|taking control|told what to do|something personal|submitting like a good boy)\b/i;
 
-const OPENER =
-  /^(heyy+|mmm+|good\.|oh really|ok so)/i;
+const OPENER = /^(heyy+|mmm+|good\.|oh really|ok so)/i;
 
 export function looksLikeGreeting(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
   if (looksLikeSextAsk(t) || looksLikePurchaseSignal(t) || looksLikeTeaseAsk(t)) return false;
-  return GREETING.test(t) || WELLBEING_ASK.test(t) || /^(hey+|hi+)\s*(how are you|hows it going)?\??$/i.test(t);
+  return (
+    GREETING.test(t) ||
+    WELLBEING_ASK.test(t) ||
+    /^(hey+|hi+)\s*(how are you|hows it going)?\??$/i.test(t)
+  );
 }
 
 export function looksLikeWellbeingAsk(text: string): boolean {
@@ -93,7 +92,8 @@ export function classifyTurnIntensity(text: string): TurnIntensity {
   if (looksLikeSextAsk(text)) return "EXPLICIT";
   if (looksLikeTeaseAsk(text)) return "SUGGESTIVE";
   if (looksLikeFlirtyTurn(text)) return "FLIRTY";
-  if (looksLikeEmotionalStatement(text) || /\b(nice|cool|lol|haha|thanks|thank you)\b/i.test(text)) return "WARM";
+  if (looksLikeEmotionalStatement(text) || /\b(nice|cool|lol|haha|thanks|thank you)\b/i.test(text))
+    return "WARM";
   return "NEUTRAL";
 }
 
@@ -109,16 +109,25 @@ export function analyzePacing(
   }
   let consecutiveSalesOrIntakeTurns = 0;
   for (const row of last) {
-    if (INTAKE_QUESTION.test(row.body) || looksLikeDirectUnlockPitch(row.body) || /\$\s*\d+/.test(row.body)) {
+    if (
+      INTAKE_QUESTION.test(row.body) ||
+      looksLikeDirectUnlockPitch(row.body) ||
+      /\$\s*\d+/.test(row.body)
+    ) {
       consecutiveSalesOrIntakeTurns += 1;
     } else break;
   }
   const recent = creator.slice(-4);
   return {
-    previousAskedQuestion: Boolean(creator.at(-1) && (/\?/.test(creator.at(-1)!.body) || INTAKE_QUESTION.test(creator.at(-1)!.body))),
+    previousAskedQuestion: Boolean(
+      creator.at(-1) &&
+      (/\?/.test(creator.at(-1)!.body) || INTAKE_QUESTION.test(creator.at(-1)!.body)),
+    ),
     consecutiveQuestionTurns,
     consecutiveSalesOrIntakeTurns,
-    recentOpeners: recent.map((row) => row.body.trim().split(/\s+/).slice(0, 2).join(" ").toLowerCase()),
+    recentOpeners: recent.map((row) =>
+      row.body.trim().split(/\s+/).slice(0, 2).join(" ").toLowerCase(),
+    ),
     recentUsedEmoji: recent.some((row) => /\p{Extended_Pictographic}/u.test(row.body)),
     recentBubbleCount: (creator.at(-1)?.body ?? "").split("\n").filter(Boolean).length,
   };
@@ -127,7 +136,8 @@ export function analyzePacing(
 export function detectBuyingSignals(text: string): string[] {
   const signals: string[] = [];
   if (/\b(how much|price|cost)\b/i.test(text)) signals.push("price");
-  if (/\b(show me|send (it|me)|got anything|what do you have)\b/i.test(text)) signals.push("show-me");
+  if (/\b(show me|send (it|me)|got anything|what do you have)\b/i.test(text))
+    signals.push("show-me");
   if (/\b(ppv|unlock|buy|purchase)\b/i.test(text)) signals.push("purchase");
   if (looksLikeContentAsk(text)) signals.push("content");
   return [...new Set(signals)];
@@ -159,14 +169,29 @@ export function decideIntakeOpportunity(opts: {
   ) {
     return false;
   }
-  if (opts.responseMode === "OPERATIONAL" || opts.responseMode === "SUPPORT" || opts.responseMode === "NATURAL") {
-    if (!intakeFitsNaturally(text) || looksLikeGreeting(text) || looksLikeWellbeingAsk(text)) return false;
+  if (
+    opts.responseMode === "OPERATIONAL" ||
+    opts.responseMode === "SUPPORT" ||
+    opts.responseMode === "NATURAL"
+  ) {
+    if (!intakeFitsNaturally(text) || looksLikeGreeting(text) || looksLikeWellbeingAsk(text))
+      return false;
   }
-  if (looksLikeDirectCreatorQuestion(text) || looksLikeWellbeingAsk(text) || looksLikeEmotionalStatement(text) || /\?/.test(text)) {
+  if (
+    looksLikeDirectCreatorQuestion(text) ||
+    looksLikeWellbeingAsk(text) ||
+    looksLikeEmotionalStatement(text) ||
+    /\?/.test(text)
+  ) {
     return false;
   }
   if (looksLikeGreeting(text) && !intakeFitsNaturally(text)) return false;
-  if (opts.pacing.previousAskedQuestion && INTAKE_QUESTION.test(opts.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").at(-1)?.body ?? "")) {
+  if (
+    opts.pacing.previousAskedQuestion &&
+    INTAKE_QUESTION.test(
+      opts.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").at(-1)?.body ?? "",
+    )
+  ) {
     return false;
   }
   if (opts.pacing.consecutiveQuestionTurns >= 2) return false;
@@ -192,9 +217,15 @@ export function determineSalesReadiness(opts: {
   ) {
     if (opts.intensity === "NEUTRAL" || opts.followUpPhase === "AFTERCARE") return "AFTERCARE";
   }
-  if (opts.unpaidOffer && (opts.intensity === "OFFER" || looksLikePurchaseSignal(opts.subscriberText))) return "ACTIVE_SALE";
-  if (opts.intensity === "OFFER" || looksLikePurchaseSignal(opts.subscriberText)) return "BUYING_SIGNAL";
-  if (opts.intensity === "EXPLICIT" || looksLikeSextAsk(opts.subscriberText)) return "SEXUAL_MOMENTUM";
+  if (
+    opts.unpaidOffer &&
+    (opts.intensity === "OFFER" || looksLikePurchaseSignal(opts.subscriberText))
+  )
+    return "ACTIVE_SALE";
+  if (opts.intensity === "OFFER" || looksLikePurchaseSignal(opts.subscriberText))
+    return "BUYING_SIGNAL";
+  if (opts.intensity === "EXPLICIT" || looksLikeSextAsk(opts.subscriberText))
+    return "SEXUAL_MOMENTUM";
   if (opts.intensity === "SUGGESTIVE" || opts.intensity === "FLIRTY") return "FLIRTING";
   if (opts.intensity === "WARM" && !looksLikeGreeting(opts.subscriberText)) return "WARMING";
   return "CONNECTING";
@@ -227,12 +258,15 @@ export function decideConversationTurn(opts: {
   if (looksLikeGreeting(opts.subscriberText) && intensity !== "OFFER" && intensity !== "EXPLICIT") {
     responseMode = "NATURAL";
   }
-  if (salesReadiness === "AFTERCARE" && (intensity === "NEUTRAL" || intensity === "WARM")) responseMode = "NATURAL";
+  if (salesReadiness === "AFTERCARE" && (intensity === "NEUTRAL" || intensity === "WARM"))
+    responseMode = "NATURAL";
   if (salesReadiness === "CONNECTING" || salesReadiness === "WARMING") {
     if (responseMode === "EXPLICIT" || responseMode === "SALES") responseMode = "NATURAL";
   }
-  if (salesReadiness === "BUYING_SIGNAL" || salesReadiness === "ACTIVE_SALE") responseMode = "SALES";
-  if (operational.intent === "COMPLAINT" || operational.intent === "SUPPORT_REQUEST") responseMode = "SUPPORT";
+  if (salesReadiness === "BUYING_SIGNAL" || salesReadiness === "ACTIVE_SALE")
+    responseMode = "SALES";
+  if (operational.intent === "COMPLAINT" || operational.intent === "SUPPORT_REQUEST")
+    responseMode = "SUPPORT";
   if (
     operational.intent === "HUMAN_REQUEST" ||
     operational.intent === "AI_SUSPICION" ||
@@ -257,7 +291,11 @@ export function decideConversationTurn(opts: {
     salesReadiness === "BUYING_SIGNAL" ||
     salesReadiness === "ACTIVE_SALE";
   const debugExplanation = (() => {
-    if (responseMode === "NATURAL" && looksLikeGreeting(opts.subscriberText) && looksLikeWellbeingAsk(opts.subscriberText)) {
+    if (
+      responseMode === "NATURAL" &&
+      looksLikeGreeting(opts.subscriberText) &&
+      looksLikeWellbeingAsk(opts.subscriberText)
+    ) {
       return "Mode NATURAL because the fan greeted and asked how the creator was. No buying or sexual signal. Intake paused.";
     }
     if (responseMode === "NATURAL" && looksLikeGreeting(opts.subscriberText)) {
@@ -304,8 +342,15 @@ export function validateQualityGrounding(opts: {
 }): { ok: true } | { ok: false; code: string } {
   const reply = opts.reply.trim();
   const decision = opts.decision;
-  if (!decision.allowExplicit && containsSexualLanguage(reply)) return { ok: false, code: "SEXUAL_NOT_ALLOWED" };
-  if (!decision.allowPitch && (opts.recommendedProductId || looksLikeDirectUnlockPitch(reply) || looksLikePrematureVideoPitch(reply) || /\$\s*\d+/.test(reply))) {
+  if (!decision.allowExplicit && containsSexualLanguage(reply))
+    return { ok: false, code: "SEXUAL_NOT_ALLOWED" };
+  if (
+    !decision.allowPitch &&
+    (opts.recommendedProductId ||
+      looksLikeDirectUnlockPitch(reply) ||
+      looksLikePrematureVideoPitch(reply) ||
+      /\$\s*\d+/.test(reply))
+  ) {
     return { ok: false, code: "PITCH_DISABLED" };
   }
   if (opts.pacing && opts.pacing.consecutiveQuestionTurns >= 2 && /\?/.test(reply)) {
@@ -314,28 +359,52 @@ export function validateQualityGrounding(opts: {
   if (!decision.allowIntakeQuestion && replyLooksLikeIntakeQuestion(reply)) {
     return { ok: false, code: "INTAKE_NOT_OPPORTUNE" };
   }
-  if (looksLikeWellbeingAsk(opts.turn) && !/\b(good|well|okay|ok|fine|chillin|relaxing|alright|great|pretty)\b/i.test(reply)) {
+  if (
+    looksLikeWellbeingAsk(opts.turn) &&
+    !/\b(good|well|okay|ok|fine|chillin|relaxing|alright|great|pretty)\b/i.test(reply)
+  ) {
     return { ok: false, code: "IGNORED_QUESTION" };
   }
   if (looksLikeEmotionalStatement(opts.turn)) {
     const first = reply.split("\n")[0] ?? reply;
-    if (replyLooksLikeIntakeQuestion(reply) || looksLikeDirectUnlockPitch(reply) || containsSexualLanguage(reply)) {
+    if (
+      replyLooksLikeIntakeQuestion(reply) ||
+      looksLikeDirectUnlockPitch(reply) ||
+      containsSexualLanguage(reply)
+    ) {
       return { ok: false, code: "IGNORED_EMOTION" };
     }
-    if (/\?/.test(first) && !/\b(sorry|rough|awful|sucks|hear you|sounds|hard|stress)\b/i.test(first)) {
+    if (
+      /\?/.test(first) &&
+      !/\b(sorry|rough|awful|sucks|hear you|sounds|hard|stress)\b/i.test(first)
+    ) {
       return { ok: false, code: "IGNORED_EMOTION" };
     }
   }
-  if ((/\?/.test(opts.turn) || looksLikeDirectCreatorQuestion(opts.turn)) && replyLooksLikeIntakeQuestion(reply)) {
+  if (
+    (/\?/.test(opts.turn) || looksLikeDirectCreatorQuestion(opts.turn)) &&
+    replyLooksLikeIntakeQuestion(reply)
+  ) {
     return { ok: false, code: "IGNORED_QUESTION" };
   }
-  if (looksLikeDirectCreatorQuestion(opts.turn) && containsSexualLanguage(reply) && !looksLikeSextAsk(opts.turn)) {
+  if (
+    looksLikeDirectCreatorQuestion(opts.turn) &&
+    containsSexualLanguage(reply) &&
+    !looksLikeSextAsk(opts.turn)
+  ) {
     return { ok: false, code: "IGNORED_QUESTION" };
   }
-  if (/\bmusic\b/i.test(opts.turn) && !/\b(music|song|listen|playlist|indie|pop|rock|hip ?hop)\b/i.test(reply)) {
+  if (
+    /\bmusic\b/i.test(opts.turn) &&
+    !/\b(music|song|listen|playlist|indie|pop|rock|hip ?hop)\b/i.test(reply)
+  ) {
     return { ok: false, code: "IGNORED_QUESTION" };
   }
-  if (decision.responseMode === "NATURAL" && (looksLikeGreeting(opts.turn) || looksLikeWellbeingAsk(opts.turn)) && containsSexualLanguage(reply)) {
+  if (
+    decision.responseMode === "NATURAL" &&
+    (looksLikeGreeting(opts.turn) || looksLikeWellbeingAsk(opts.turn)) &&
+    containsSexualLanguage(reply)
+  ) {
     return { ok: false, code: "SEXUAL_NOT_ALLOWED" };
   }
   return { ok: true };

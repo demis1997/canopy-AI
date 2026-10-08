@@ -37,7 +37,9 @@ describe("tenant isolation", () => {
     await prisma.$disconnect();
   });
 
-  it("prevents org A from reading org B creators, subscribers, conversations, messages, memories, products, prompts, analytics, and training", async ({ skip }) => {
+  it("prevents org A from reading org B creators, subscribers, conversations, messages, memories, products, prompts, analytics, and training", async ({
+    skip,
+  }) => {
     try {
       await prisma.$connect();
     } catch (error) {

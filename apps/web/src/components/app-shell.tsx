@@ -43,8 +43,18 @@ const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
     label: "Operate",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perm: "conversations.view" },
-      { href: "/conversations", label: "Conversations", icon: MessageSquare, perm: "conversations.view" },
-      { href: "/escalations", label: "Escalations", icon: AlertTriangle, perm: "conversations.escalate" },
+      {
+        href: "/conversations",
+        label: "Conversations",
+        icon: MessageSquare,
+        perm: "conversations.view",
+      },
+      {
+        href: "/escalations",
+        label: "Escalations",
+        icon: AlertTriangle,
+        perm: "conversations.escalate",
+      },
       { href: "/creators", label: "Creators", icon: Users, perm: "creators.view_assigned" },
     ],
   },
@@ -74,7 +84,9 @@ const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
   {
     id: "platform",
     label: "Platform",
-    items: [{ href: "/admin", label: "Admin", icon: Shield, perm: "admin.platform", adminOnly: true }],
+    items: [
+      { href: "/admin", label: "Admin", icon: Shield, perm: "admin.platform", adminOnly: true },
+    ],
   },
 ];
 
@@ -132,7 +144,9 @@ export function AppShell({
           <CanopyMark size={28} />
           {collapsed ? null : (
             <div className="min-w-0">
-              <div className="truncate text-[12px] font-medium tracking-[0.18em] text-bone">CANOPY</div>
+              <div className="truncate text-[12px] font-medium tracking-[0.18em] text-bone">
+                CANOPY
+              </div>
               <div className="truncate text-[11px] text-mist">
                 {workspace.name}
                 {workspace.isDemo ? " · DEMO" : ""}
@@ -213,10 +227,18 @@ export function AppShell({
             className="hidden items-center gap-1.5 rounded-full border border-white/[0.06] px-2.5 py-1 text-[11px] text-white/50 md:inline-flex"
             title="Extension status"
           >
-            <span className={cn("h-1.5 w-1.5 rounded-full", extensionConnected ? "bg-sunfleck" : "bg-brass")} />
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                extensionConnected ? "bg-sunfleck" : "bg-brass",
+              )}
+            />
             {extensionConnected ? "Extension connected" : "Extension"}
           </Link>
-          <Link href="/escalations" className="relative rounded-[10px] p-2 text-white/50 hover:bg-white/[0.04]">
+          <Link
+            href="/escalations"
+            className="relative rounded-[10px] p-2 text-white/50 hover:bg-white/[0.04]"
+          >
             <Bell size={16} />
             {escalationCount ? (
               <span className="absolute right-1 top-1 h-4 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] text-white">

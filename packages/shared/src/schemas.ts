@@ -11,7 +11,10 @@ import { normalizeReplyBubbles } from "./replies.js";
 
 function pickEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   if (typeof value !== "string") return fallback;
-  const v = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const v = value
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
   return (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
 }
 
@@ -53,49 +56,57 @@ const replyOptionSchema = z.preprocess(
   }),
 );
 
-export const generationOutputSchema = z.preprocess((raw) => {
-  if (!raw || typeof raw !== "object") return raw;
-  const o = raw as Record<string, unknown>;
-  const options = Array.isArray(o.replyOptions) ? o.replyOptions.slice(0, 3) : o.replyOptions;
-  const suggested = o.suggestedFunnelTransition;
-  const suggestedOk =
-    typeof suggested === "string" &&
-    (FUNNEL_STAGES as readonly string[]).includes(suggested.trim().toUpperCase().replace(/[\s-]+/g, "_"));
-  return {
-    ...o,
-    intent: pickEnum(o.intent, INTENTS, "UNCERTAIN"),
-    funnelStage: pickEnum(o.funnelStage, FUNNEL_STAGES, "RAPPORT"),
-    explicitnessLevel: pickEnum(o.explicitnessLevel, EXPLICITNESS_LEVELS, "SUGGESTIVE"),
-    recommendedAction: pickEnum(o.recommendedAction, RECOMMENDED_ACTIONS, "REPLY"),
-    replyOptions: options,
-    recommendedProductId: o.recommendedProductId ?? null,
-    approvedPrice: coercePrice(o.approvedPrice),
-    requiresHumanReview: coerceBool(o.requiresHumanReview, true),
-    riskFlags: Array.isArray(o.riskFlags) ? o.riskFlags.map(String) : [],
-    memoryUpdates: Array.isArray(o.memoryUpdates) ? o.memoryUpdates : [],
-    suggestedFunnelTransition: suggestedOk ? pickEnum(suggested, FUNNEL_STAGES, "RAPPORT") : null,
-  };
-}, z.object({
-  intent: z.enum(INTENTS),
-  funnelStage: z.enum(FUNNEL_STAGES),
-  explicitnessLevel: z.enum(EXPLICITNESS_LEVELS),
-  recommendedAction: z.enum(RECOMMENDED_ACTIONS),
-  replyOptions: z.array(replyOptionSchema).min(1).max(3),
-  recommendedProductId: z.string().nullable(),
-  approvedPrice: z.number().nonnegative().nullable(),
-  requiresHumanReview: z.boolean(),
-  riskFlags: z.array(z.string()),
-  memoryUpdates: z.array(
-    z.object({
-      category: z.enum(MEMORY_CATEGORIES).or(z.string()),
-      key: z.string(),
-      value: z.string(),
-      confidence: z.number().min(0).max(1),
-      sourceMessageId: z.string(),
-    }),
-  ),
-  suggestedFunnelTransition: z.enum(FUNNEL_STAGES).nullable(),
-}));
+export const generationOutputSchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const o = raw as Record<string, unknown>;
+    const options = Array.isArray(o.replyOptions) ? o.replyOptions.slice(0, 3) : o.replyOptions;
+    const suggested = o.suggestedFunnelTransition;
+    const suggestedOk =
+      typeof suggested === "string" &&
+      (FUNNEL_STAGES as readonly string[]).includes(
+        suggested
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, "_"),
+      );
+    return {
+      ...o,
+      intent: pickEnum(o.intent, INTENTS, "UNCERTAIN"),
+      funnelStage: pickEnum(o.funnelStage, FUNNEL_STAGES, "RAPPORT"),
+      explicitnessLevel: pickEnum(o.explicitnessLevel, EXPLICITNESS_LEVELS, "SUGGESTIVE"),
+      recommendedAction: pickEnum(o.recommendedAction, RECOMMENDED_ACTIONS, "REPLY"),
+      replyOptions: options,
+      recommendedProductId: o.recommendedProductId ?? null,
+      approvedPrice: coercePrice(o.approvedPrice),
+      requiresHumanReview: coerceBool(o.requiresHumanReview, true),
+      riskFlags: Array.isArray(o.riskFlags) ? o.riskFlags.map(String) : [],
+      memoryUpdates: Array.isArray(o.memoryUpdates) ? o.memoryUpdates : [],
+      suggestedFunnelTransition: suggestedOk ? pickEnum(suggested, FUNNEL_STAGES, "RAPPORT") : null,
+    };
+  },
+  z.object({
+    intent: z.enum(INTENTS),
+    funnelStage: z.enum(FUNNEL_STAGES),
+    explicitnessLevel: z.enum(EXPLICITNESS_LEVELS),
+    recommendedAction: z.enum(RECOMMENDED_ACTIONS),
+    replyOptions: z.array(replyOptionSchema).min(1).max(3),
+    recommendedProductId: z.string().nullable(),
+    approvedPrice: z.number().nonnegative().nullable(),
+    requiresHumanReview: z.boolean(),
+    riskFlags: z.array(z.string()),
+    memoryUpdates: z.array(
+      z.object({
+        category: z.enum(MEMORY_CATEGORIES).or(z.string()),
+        key: z.string(),
+        value: z.string(),
+        confidence: z.number().min(0).max(1),
+        sourceMessageId: z.string(),
+      }),
+    ),
+    suggestedFunnelTransition: z.enum(FUNNEL_STAGES).nullable(),
+  }),
+);
 
 export type GenerationOutput = z.infer<typeof generationOutputSchema>;
 
@@ -117,9 +128,7 @@ export const personaInputSchema = z.object({
   prohibitedWords: z.array(z.string()).default([]),
   preferredCompliments: z.array(z.string()).default([]),
   allowedExplicitness: z.enum(EXPLICITNESS_LEVELS).default("SUGGESTIVE"),
-  style: z
-    .enum(["DOMINANT", "SUBMISSIVE", "ROMANTIC", "PLAYFUL", "DIRECT"])
-    .default("PLAYFUL"),
+  style: z.enum(["DOMINANT", "SUBMISSIVE", "ROMANTIC", "PLAYFUL", "DIRECT"]).default("PLAYFUL"),
   interests: z.array(z.string()).default([]),
   contentBoundaries: z.array(z.string()).default([]),
   claimsNeverToMake: z.array(z.string()).default([]),
@@ -149,7 +158,9 @@ export const productInputSchema = z.object({
   available: z.boolean().default(true),
   customContent: z.boolean().default(false),
   deliveryRules: z.string().max(2000).default(""),
-  source: z.enum(["DEMO_SEED", "MANUAL", "CSV_IMPORT", "MEDIA_UPLOAD", "PLATFORM_VAULT_SYNC"]).default("MANUAL"),
+  source: z
+    .enum(["DEMO_SEED", "MANUAL", "CSV_IMPORT", "MEDIA_UPLOAD", "PLATFORM_VAULT_SYNC"])
+    .default("MANUAL"),
 });
 
 export type ProductInput = z.infer<typeof productInputSchema>;
@@ -188,7 +199,12 @@ export const memoryUpdateSchema = z.object({
 export const sequenceStepInputSchema = z.object({
   body: z.string().min(1).max(2000),
   mediaHint: z.enum(["TEXT", "VOICE", "PHOTO", "PPV"]).default("TEXT"),
-  delayMinutes: z.number().int().min(0).max(7 * 24 * 60).default(0),
+  delayMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(7 * 24 * 60)
+    .default(0),
   productId: z.string().nullable().optional(),
   priceTier: z.number().int().min(1).max(3).default(1),
 });

@@ -1,4 +1,4 @@
-import type { PlatformAdapter, ThreadContext } from "./types";
+import type { PlatformAdapter, ThreadContext, VisibleMessage } from "./types";
 
 export const demoAdapter: PlatformAdapter = {
   id: "demo",
@@ -8,14 +8,18 @@ export const demoAdapter: PlatformAdapter = {
   getVisibleThread(): ThreadContext | null {
     const thread = document.querySelector("[data-canopy-thread]");
     if (!thread) return null;
-    const messages = [...thread.querySelectorAll("[data-canopy-message]")].map((node) => {
-      const author = node.getAttribute("data-author") === "fan" ? "subscriber" : "creator";
-      return { author, text: (node.textContent ?? "").replace(/^(fan|creator)/i, "").trim() };
-    });
+    const messages = [...thread.querySelectorAll("[data-canopy-message]")].map<VisibleMessage>(
+      (node) => {
+        const author = node.getAttribute("data-author") === "fan" ? "subscriber" : "creator";
+        return { author, text: (node.textContent ?? "").replace(/^(fan|creator)/i, "").trim() };
+      },
+    );
     return {
       messages,
       composeFound: Boolean(document.querySelector("[data-canopy-compose]")),
-      conversationId: document.querySelector("[data-canopy-thread]")?.getAttribute("data-conversation-id") || undefined,
+      conversationId:
+        document.querySelector("[data-canopy-thread]")?.getAttribute("data-conversation-id") ||
+        undefined,
     };
   },
   insertReply(text: string) {

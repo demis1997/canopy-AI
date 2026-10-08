@@ -2,7 +2,11 @@ import { prisma } from "@canopy/database";
 import { Card } from "@/components/ui/card";
 import { dollars } from "@/lib/utils";
 import { CreateProductForm } from "@/components/create-product-form";
-import { ProductImportPanel, VaultSyncPanel, ProductApproval } from "@/components/product-import-panel";
+import {
+  ProductImportPanel,
+  VaultSyncPanel,
+  ProductApproval,
+} from "@/components/product-import-panel";
 import Link from "next/link";
 import { guardOrgPage } from "@/lib/page-guard";
 import { AccessDenied, EmptyState, PageHeader } from "@/components/page-chrome";
@@ -19,7 +23,17 @@ export default async function ProductsPage() {
   const creators = await prisma.creator.findMany({
     where: { organizationId: ctx.tenant.organizationId, active: true },
   });
-  const accounts = await prisma.platformAccount.findMany({ where: { organizationId: ctx.tenant.organizationId, driver: "ONLYFANS_API" }, select: { id: true, creatorId: true, displayName: true, providerAccountId: true, connectionStatus: true, lastCatalogSyncAt: true } });
+  const accounts = await prisma.platformAccount.findMany({
+    where: { organizationId: ctx.tenant.organizationId, driver: "ONLYFANS_API" },
+    select: {
+      id: true,
+      creatorId: true,
+      displayName: true,
+      providerAccountId: true,
+      connectionStatus: true,
+      lastCatalogSyncAt: true,
+    },
+  });
   return (
     <div className="space-y-6">
       <PageHeader
@@ -36,7 +50,13 @@ export default async function ProductsPage() {
       <ProductImportPanel
         creators={creators.map((c) => ({ id: c.id, name: c.displayName, handle: c.handle }))}
       />
-      <VaultSyncPanel creators={creators.map((c) => ({ id: c.id, name: c.displayName }))} accounts={accounts.map((a) => ({ ...a, lastCatalogSyncAt: a.lastCatalogSyncAt?.toISOString() ?? null }))} />
+      <VaultSyncPanel
+        creators={creators.map((c) => ({ id: c.id, name: c.displayName }))}
+        accounts={accounts.map((a) => ({
+          ...a,
+          lastCatalogSyncAt: a.lastCatalogSyncAt?.toISOString() ?? null,
+        }))}
+      />
       <Card className="p-0">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-white/40">
@@ -55,7 +75,20 @@ export default async function ProductsPage() {
           <tbody>
             {products.map((p) => (
               <tr key={p.id} className="border-t border-white/5">
-                <td className="px-5 py-3">{p.name}{p.source === "PLATFORM_VAULT_SYNC" ? <ProductApproval product={{ id: p.id, standardPriceCents: p.standardPriceCents, minimumPriceCents: p.minimumPriceCents, available: p.available, sourceAvailable: p.sourceAvailable }} /> : null}</td>
+                <td className="px-5 py-3">
+                  {p.name}
+                  {p.source === "PLATFORM_VAULT_SYNC" ? (
+                    <ProductApproval
+                      product={{
+                        id: p.id,
+                        standardPriceCents: p.standardPriceCents,
+                        minimumPriceCents: p.minimumPriceCents,
+                        available: p.available,
+                        sourceAvailable: p.sourceAvailable,
+                      }}
+                    />
+                  ) : null}
+                </td>
                 <td>{p.creator.displayName}</td>
                 <td>{p.mediaType}</td>
                 <td>{dollars(p.standardPriceCents)}</td>
@@ -74,7 +107,10 @@ export default async function ProductsPage() {
         </table>
         {!products.length ? (
           <div className="p-6">
-            <EmptyState title="No products" body="Add a vault item so the copilot can pitch approved prices." />
+            <EmptyState
+              title="No products"
+              body="Add a vault item so the copilot can pitch approved prices."
+            />
           </div>
         ) : null}
       </Card>

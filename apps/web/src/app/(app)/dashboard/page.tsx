@@ -14,7 +14,9 @@ export default async function DashboardPage({
   if (!ctx.tenant) return <AccessDenied title="Select an organization" />;
   if (!allowed) return <AccessDenied />;
   const params = await searchParams;
-  const org = await prisma.organization.findUniqueOrThrow({ where: { id: ctx.tenant.organizationId } });
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: ctx.tenant.organizationId },
+  });
   const metrics = await loadOrgMetrics(org.id, parseWindow(params));
   const demo = org.isDemo;
 
@@ -26,9 +28,23 @@ export default async function DashboardPage({
         description="Revenue influenced, conversion, copilot quality and inbox health. Metrics open the detailed workspace."
         actions={
           <form className="flex flex-wrap gap-2 text-xs">
-            <input type="date" name="from" defaultValue={metrics.window.from.toISOString().slice(0, 10)} className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2" />
-            <input type="date" name="to" defaultValue={metrics.window.to.toISOString().slice(0, 10)} className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2" />
-            <select name="creator" defaultValue={params.creator ?? ""} className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2">
+            <input
+              type="date"
+              name="from"
+              defaultValue={metrics.window.from.toISOString().slice(0, 10)}
+              className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2"
+            />
+            <input
+              type="date"
+              name="to"
+              defaultValue={metrics.window.to.toISOString().slice(0, 10)}
+              className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2"
+            />
+            <select
+              name="creator"
+              defaultValue={params.creator ?? ""}
+              className="h-9 rounded-[10px] border border-white/10 bg-ink-900 px-2"
+            >
               <option value="">All creators</option>
               {metrics.creators.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -43,15 +59,45 @@ export default async function DashboardPage({
         }
       />
       {demo ? (
-        <p className="text-xs text-amber-300">Figures include labelled DEMO seed data when live events are sparse.</p>
+        <p className="text-xs text-amber-300">
+          Figures include labelled DEMO seed data when live events are sparse.
+        </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard label="Revenue influenced" value={formatUsdFromCents(metrics.revenueCents)} href="/analytics" hint={`${metrics.unlocks} unlocks`} />
-        <MetricCard label="PPV conversion" value={formatPct(metrics.conversion)} href="/analytics" hint={`${metrics.offers} offers sent`} />
-        <MetricCard label="Active conversations" value={String(metrics.conversations)} href="/conversations" />
-        <MetricCard label="Avg response time" value={`${Math.round(metrics.avgLatencyMs)}ms`} href="/analytics" hint="Model latency, not chatter typing" />
-        <MetricCard label="AI acceptance" value={formatPct(metrics.acceptance)} href="/analytics" hint={`${formatPct(metrics.editRate)} edited`} />
-        <MetricCard label="Escalation rate" value={formatPct(metrics.escalationRate)} href="/escalations" />
+        <MetricCard
+          label="Revenue influenced"
+          value={formatUsdFromCents(metrics.revenueCents)}
+          href="/analytics"
+          hint={`${metrics.unlocks} unlocks`}
+        />
+        <MetricCard
+          label="PPV conversion"
+          value={formatPct(metrics.conversion)}
+          href="/analytics"
+          hint={`${metrics.offers} offers sent`}
+        />
+        <MetricCard
+          label="Active conversations"
+          value={String(metrics.conversations)}
+          href="/conversations"
+        />
+        <MetricCard
+          label="Avg response time"
+          value={`${Math.round(metrics.avgLatencyMs)}ms`}
+          href="/analytics"
+          hint="Model latency, not chatter typing"
+        />
+        <MetricCard
+          label="AI acceptance"
+          value={formatPct(metrics.acceptance)}
+          href="/analytics"
+          hint={`${formatPct(metrics.editRate)} edited`}
+        />
+        <MetricCard
+          label="Escalation rate"
+          value={formatPct(metrics.escalationRate)}
+          href="/escalations"
+        />
       </div>
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
@@ -80,9 +126,18 @@ export default async function DashboardPage({
           <div className="text-sm font-medium">Funnel</div>
           <p className="mt-1 text-xs text-white/40">Conversations → offers → unlocks</p>
           <ol className="mt-4 space-y-3 text-sm">
-            <li className="flex justify-between"><span>Conversations</span><span>{metrics.conversations}</span></li>
-            <li className="flex justify-between"><span>Offers</span><span>{metrics.offers}</span></li>
-            <li className="flex justify-between"><span>Unlocks</span><span>{metrics.unlocks}</span></li>
+            <li className="flex justify-between">
+              <span>Conversations</span>
+              <span>{metrics.conversations}</span>
+            </li>
+            <li className="flex justify-between">
+              <span>Offers</span>
+              <span>{metrics.offers}</span>
+            </li>
+            <li className="flex justify-between">
+              <span>Unlocks</span>
+              <span>{metrics.unlocks}</span>
+            </li>
           </ol>
         </Card>
       </div>
@@ -137,13 +192,16 @@ export default async function DashboardPage({
                 ) : null}
               </li>
             ))}
-            {!metrics.recentEscalations.length ? <li className="text-white/40">None open.</li> : null}
+            {!metrics.recentEscalations.length ? (
+              <li className="text-white/40">None open.</li>
+            ) : null}
           </ul>
         </Card>
         <Card>
           <div className="text-sm font-medium">Extension / API health</div>
           <p className="mt-2 text-sm text-white/60">
-            Active extension sessions: {metrics.tokens}. Provider generations in range: {metrics.generationCount}.
+            Active extension sessions: {metrics.tokens}. Provider generations in range:{" "}
+            {metrics.generationCount}.
           </p>
           <Link href="/platform" className="mt-3 inline-block text-xs text-canopy-300">
             Open platform & extension

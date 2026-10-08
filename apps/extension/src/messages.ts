@@ -6,7 +6,11 @@ export type CanopyMessage =
 
 export type ThreadResponse = {
   adapter: string | null;
-  thread: { messages: { author: string; text: string }[]; composeFound: boolean; conversationId?: string } | null;
+  thread: {
+    messages: { author: string; text: string }[];
+    composeFound: boolean;
+    conversationId?: string;
+  } | null;
   diagnostics: Record<string, boolean | string> | null;
   paused?: boolean;
   inboxOpen?: boolean;

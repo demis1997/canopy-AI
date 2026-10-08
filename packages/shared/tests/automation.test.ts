@@ -32,7 +32,12 @@ const baseGate = (over: Partial<DeliveryGateInput> = {}): DeliveryGateInput => (
   expectedFanId: "fan_1",
   actualFanId: "fan_1",
   autonomyMode: "HYBRID",
-  flags: { browserIntegration: true, autonomousText: true, autonomousPpv: false, mockPlatform: true },
+  flags: {
+    browserIntegration: true,
+    autonomousText: true,
+    autonomousPpv: false,
+    mockPlatform: true,
+  },
   humanTakeover: false,
   lockedUntil: null,
   newerMessageAfterTrigger: false,
@@ -81,15 +86,24 @@ describe("delivery gates", () => {
   });
 
   it("allows a human-approved copilot send while still blocking paused accounts", () => {
-    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT", humanApproved: true })).ok).toBe(true);
-    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "PAUSED", humanApproved: true })).ok).toBe(false);
+    expect(
+      evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT", humanApproved: true })).ok,
+    ).toBe(true);
+    expect(
+      evaluateDeliveryGates(baseGate({ autonomyMode: "PAUSED", humanApproved: true })).ok,
+    ).toBe(false);
   });
 
   it("blocks when autonomous text flag is off", () => {
     expect(
       evaluateDeliveryGates(
         baseGate({
-          flags: { browserIntegration: true, autonomousText: false, autonomousPpv: false, mockPlatform: true },
+          flags: {
+            browserIntegration: true,
+            autonomousText: false,
+            autonomousPpv: false,
+            mockPlatform: true,
+          },
         }),
       ).reason,
     ).toBe("AUTONOMOUS_TEXT_DISABLED");
@@ -97,24 +111,35 @@ describe("delivery gates", () => {
 
   it("blocks human takeover and newer messages and duplicates", () => {
     expect(evaluateDeliveryGates(baseGate({ humanTakeover: true })).reason).toBe("HUMAN_TAKEOVER");
-    expect(evaluateDeliveryGates(baseGate({ newerMessageAfterTrigger: true })).reason).toBe("NEWER_MESSAGE");
-    expect(evaluateDeliveryGates(baseGate({ alreadySentForTrigger: true })).reason).toBe("DUPLICATE_TRIGGER");
+    expect(evaluateDeliveryGates(baseGate({ newerMessageAfterTrigger: true })).reason).toBe(
+      "NEWER_MESSAGE",
+    );
+    expect(evaluateDeliveryGates(baseGate({ alreadySentForTrigger: true })).reason).toBe(
+      "DUPLICATE_TRIGGER",
+    );
   });
 
   it("enforces per-fan hourly rate limits", () => {
     const policy = { ...defaultAutomationPolicy(), maximumMessagesPerHourPerFan: 2 };
-    expect(evaluateDeliveryGates(baseGate({ policy, messagesSentLastHour: 2 })).reason).toBe("RATE_LIMIT");
+    expect(evaluateDeliveryGates(baseGate({ policy, messagesSentLastHour: 2 })).reason).toBe(
+      "RATE_LIMIT",
+    );
   });
 
   it("escalates low confidence", () => {
-    expect(evaluateDeliveryGates(baseGate({ decision: decision({ confidence: 0.2 }) })).reason).toBe(
-      "LOW_CONFIDENCE",
-    );
+    expect(
+      evaluateDeliveryGates(baseGate({ decision: decision({ confidence: 0.2 }) })).reason,
+    ).toBe("LOW_CONFIDENCE");
   });
 
   it("blocks PPV when flag, mapping, purchase or price fails", () => {
     const ppv = decision({ action: "SEND_PPV", productId: "p1", price: 40, confidence: 0.9 });
-    const flags = { browserIntegration: true, autonomousText: true, autonomousPpv: true, mockPlatform: true };
+    const flags = {
+      browserIntegration: true,
+      autonomousText: true,
+      autonomousPpv: true,
+      mockPlatform: true,
+    };
     const product = {
       id: "p1",
       approvedForAutomation: true,
@@ -125,7 +150,14 @@ describe("delivery gates", () => {
       standardPriceCents: 4000,
     };
     expect(
-      evaluateDeliveryGates(baseGate({ decision: ppv, flags, product, policy: { ...defaultAutomationPolicy(), ppvEnabled: true } })).ok,
+      evaluateDeliveryGates(
+        baseGate({
+          decision: ppv,
+          flags,
+          product,
+          policy: { ...defaultAutomationPolicy(), ppvEnabled: true },
+        }),
+      ).ok,
     ).toBe(true);
     expect(
       evaluateDeliveryGates(
@@ -171,25 +203,48 @@ describe("delivery gates", () => {
 });
 
 describe("autonomy routing", () => {
-  const flags = { browserIntegration: true, autonomousText: true, autonomousPpv: false, mockPlatform: true };
+  const flags = {
+    browserIntegration: true,
+    autonomousText: true,
+    autonomousPpv: false,
+    mockPlatform: true,
+  };
   const policy = defaultAutomationPolicy();
   const gateOk = { ok: true, reason: "OK", flags: [] };
 
   it("requires copilot approval even with autonomous text enabled; paused cancels", () => {
     expect(
-      routeAutonomy({ mode: "COPILOT", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
-        .status,
+      routeAutonomy({
+        mode: "COPILOT",
+        flags,
+        decision: decision(),
+        policy,
+        humanTakeover: false,
+        gate: gateOk,
+      }).status,
     ).toBe("APPROVAL_REQUIRED");
     expect(
-      routeAutonomy({ mode: "PAUSED", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
-        .status,
+      routeAutonomy({
+        mode: "PAUSED",
+        flags,
+        decision: decision(),
+        policy,
+        humanTakeover: false,
+        gate: gateOk,
+      }).status,
     ).toBe("CANCELLED");
   });
 
   it("schedules hybrid/autopilot only when gates pass", () => {
     expect(
-      routeAutonomy({ mode: "AUTOPILOT", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
-        .status,
+      routeAutonomy({
+        mode: "AUTOPILOT",
+        flags,
+        decision: decision(),
+        policy,
+        humanTakeover: false,
+        gate: gateOk,
+      }).status,
     ).toBe("SCHEDULED");
     expect(
       routeAutonomy({
@@ -212,7 +267,9 @@ describe("safety helpers", () => {
 
   it("treats quiet hours as UTC", () => {
     expect(inQuietHours(new Date("2026-09-04T03:00:00Z"), { startHour: 2, endHour: 8 })).toBe(true);
-    expect(inQuietHours(new Date("2026-09-04T12:00:00Z"), { startHour: 2, endHour: 8 })).toBe(false);
+    expect(inQuietHours(new Date("2026-09-04T12:00:00Z"), { startHour: 2, endHour: 8 })).toBe(
+      false,
+    );
   });
 
   it("lowers confidence for blocked generations", () => {

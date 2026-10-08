@@ -7,7 +7,7 @@ export const MEET_SPEAK_RE =
 export const TOS_OFFLINE_FALLBACK = [
   "nahh i dont do irl babe its against tos",
   "i spent too long building this page to get banned over a risk like that",
-    "anyway i was gonna tell u something",
+  "anyway i was gonna tell u something",
 ].join("\n");
 
 export const TOS_OFFLINE_VARIANTS = [
@@ -40,11 +40,25 @@ export const TOS_OFFLINE_VARIANTS = [
 ];
 
 export const TOS_OFFLINE_FOLLOWUP_VARIANTS = [
-  ["its not about the money", "its against tos and i wont risk this page", "anyway i was gonna tell u something"].join("\n"),
-  ["irl gets accounts banned", "im not throwing this one away", "anyway i was gonna tell u something"].join("\n"),
+  [
+    "its not about the money",
+    "its against tos and i wont risk this page",
+    "anyway i was gonna tell u something",
+  ].join("\n"),
+  [
+    "irl gets accounts banned",
+    "im not throwing this one away",
+    "anyway i was gonna tell u something",
+  ].join("\n"),
   ["nahh still no", "tos is tos even if u pay", "ok but i wanna show u something"].join("\n"),
-  ["still a no on that", "id get banned and im not doing that", "i shot something earlier anyway"].join("\n"),
-  ["money doesnt change tos", "this page stays online", "anyway i was gonna tell u something"].join("\n"),
+  [
+    "still a no on that",
+    "id get banned and im not doing that",
+    "i shot something earlier anyway",
+  ].join("\n"),
+  ["money doesnt change tos", "this page stays online", "anyway i was gonna tell u something"].join(
+    "\n",
+  ),
 ];
 
 /** Rotate a reply pool so generate does not always lead with the same first option. */
@@ -82,10 +96,7 @@ function splitSentences(line: string): string[] {
 }
 
 /** Split a reply into short iMessage-style bubbles. Newlines first; optional sentence split for leftover paragraphs. */
-export function splitReplyBubbles(
-  text: string,
-  opts?: { splitSentences?: boolean },
-): string[] {
+export function splitReplyBubbles(text: string, opts?: { splitSentences?: boolean }): string[] {
   const raw = text.replace(/\r\n/g, "\n").trim();
   if (!raw) return [];
   const lines = raw
@@ -97,10 +108,10 @@ export function splitReplyBubbles(
   return expanded.slice(0, MAX_REPLY_BUBBLES);
 }
 
-export function normalizeReplyBubbles(input: {
-  text?: unknown;
-  messages?: unknown;
-}): { text: string; messages: string[] } {
+export function normalizeReplyBubbles(input: { text?: unknown; messages?: unknown }): {
+  text: string;
+  messages: string[];
+} {
   const fromMessages = Array.isArray(input.messages)
     ? input.messages.map((s) => String(s).trim()).filter(Boolean)
     : [];
@@ -172,7 +183,9 @@ export function formatOperatorRejectionPrompt(rejections: OperatorRejection[]): 
   const rules = rejections.map((row, i) => {
     const reason = row.reason.trim() || "Not a fit";
     const draft = row.text.trim();
-    const example = draft ? `\n   Bad example (never send this or a close paraphrase): ${draft.slice(0, 400)}` : "";
+    const example = draft
+      ? `\n   Bad example (never send this or a close paraphrase): ${draft.slice(0, 400)}`
+      : "";
     return `${i + 1}. Never repeat this mistake: ${reason}${example}`;
   });
   return [
@@ -240,7 +253,9 @@ export const FAN_SUBMISSIVE_FOLLOW_VARIANTS = [
 ];
 
 export function looksLikeTellHook(text: string): boolean {
-  return /\b((i was )?gonna tell (u|you) something|i was going to tell (u|you) something)\b/i.test(text);
+  return /\b((i was )?gonna tell (u|you) something|i was going to tell (u|you) something)\b/i.test(
+    text,
+  );
 }
 
 export function looksLikeWaitingForReveal(text: string): boolean {
@@ -251,7 +266,11 @@ export function looksLikeWaitingForReveal(text: string): boolean {
 
 export function looksLikeAffirm(text: string): boolean {
   const t = text.trim();
-  if (/^(yes|yeah|yea|yep|yup|ok|okay|sure|alright|aite|i will|lets go|let's go|do it|show me|prove it)\.?$/i.test(t)) {
+  if (
+    /^(yes|yeah|yea|yep|yup|ok|okay|sure|alright|aite|i will|lets go|let's go|do it|show me|prove it)\.?$/i.test(
+      t,
+    )
+  ) {
     return true;
   }
   return t.split(/\s+/).length <= 6 && /\b(yes|yeah|i will|i can|lets go|do it)\b/i.test(t);
@@ -273,13 +292,17 @@ export function looksLikeWrongDominanceFlip(text: string, dominance?: string | n
     );
   }
   if (role === "SUBMISSIVE") {
-    return /\b(you take control of me|i'?ll let you (lead|be in charge)|your move then)\b/i.test(text);
+    return /\b(you take control of me|i'?ll let you (lead|be in charge)|your move then)\b/i.test(
+      text,
+    );
   }
   return false;
 }
 
 export function looksLikePrematureVideoPitch(text: string): boolean {
-  return /\b(it'?s a video|its a video|worth every penny|trust me it'?s worth|unlock .{0,40}for \$\s*\d+)\b/i.test(text);
+  return /\b(it'?s a video|its a video|worth every penny|trust me it'?s worth|unlock .{0,40}for \$\s*\d+)\b/i.test(
+    text,
+  );
 }
 
 export function repeatsRecentBubbles(text: string, recent: string[]): boolean {
@@ -294,7 +317,11 @@ export function repeatsRecentBubbles(text: string, recent: string[]): boolean {
 
 export function looksLikeAimlessRapport(text: string): boolean {
   const t = text.toLowerCase();
-  if (/\b(prove myself|seen me|verification|how old|where are you from|how many hands|are you ready for me|naughty question|deal breaker|shot something|ppv|girlcock|for a living|cloud nine)\b/i.test(t)) {
+  if (
+    /\b(prove myself|seen me|verification|how old|where are you from|how many hands|are you ready for me|naughty question|deal breaker|shot something|ppv|girlcock|for a living|cloud nine)\b/i.test(
+      t,
+    )
+  ) {
     return false;
   }
   return /\b(tell me more|keep talking|im listening|what else|say that again)\b/i.test(t);
@@ -311,7 +338,9 @@ export const ARE_YOU_REAL_NO_PIC_VARIANTS = [
 ];
 
 export function areYouRealReplyVariants(fanSentPics = false): string[] {
-  return fanSentPics ? ARE_YOU_REAL_VARIANTS : [...ARE_YOU_REAL_NO_PIC_VARIANTS, ...ARE_YOU_REAL_VARIANTS];
+  return fanSentPics
+    ? ARE_YOU_REAL_VARIANTS
+    : [...ARE_YOU_REAL_NO_PIC_VARIANTS, ...ARE_YOU_REAL_VARIANTS];
 }
 
 export function looksLikeWeakAreYouReal(text: string): boolean {
@@ -339,10 +368,20 @@ export const REFUND_CALLOUT_VARIANTS = [
 ];
 
 export const TEASE_VARIANTS = [
-  ["mmm id start at ur neck", "talk in ur ear while my hand goes lower", "tell me if ure already hard"].join("\n"),
-  ["imagine me on my knees taking my time", "id make u wait till ure leaking", "say please"].join("\n"),
+  [
+    "mmm id start at ur neck",
+    "talk in ur ear while my hand goes lower",
+    "tell me if ure already hard",
+  ].join("\n"),
+  ["imagine me on my knees taking my time", "id make u wait till ure leaking", "say please"].join(
+    "\n",
+  ),
   ["id drag this out", "mouth on u slow then mean", "dont u dare finish yet"].join("\n"),
-  ["shirt off in ur head for me", "id lick slow till u cant sit still", "tell me where u want my mouth"].join("\n"),
+  [
+    "shirt off in ur head for me",
+    "id lick slow till u cant sit still",
+    "tell me where u want my mouth",
+  ].join("\n"),
   ["id pin u there and breathe on it first", "no hands yet", "beg a little"].join("\n"),
 ];
 
@@ -397,7 +436,10 @@ export function relationshipReplyVariants(nextBeat?: string | null): string[] {
 
 export function looksLikeAgeAsk(text: string): boolean {
   if (/\bhow old (do i|am i|i (have|gotta|got to|need to) be)\b/i.test(text)) return false;
-  return /\bhow old (are you|are u|r u)\b/i.test(text) || /\bwhat(?:'?s| is) (?:your|ur) age\b/i.test(text);
+  return (
+    /\bhow old (are you|are u|r u)\b/i.test(text) ||
+    /\bwhat(?:'?s| is) (?:your|ur) age\b/i.test(text)
+  );
 }
 
 export function fanSentMedia(
@@ -405,7 +447,11 @@ export function fanSentMedia(
 ): boolean {
   return messages.some((message) => {
     if ((message.authorType ?? "SUBSCRIBER") !== "SUBSCRIBER") return false;
-    if (/\b(sent (a |you )?(pic|photo|selfie|vid)|here(?:'| i)?s (a |my )?(pic|photo|selfie)|\[(photo|image|video|pic)\])\b/i.test(message.body)) {
+    if (
+      /\b(sent (a |you )?(pic|photo|selfie|vid)|here(?:'| i)?s (a |my )?(pic|photo|selfie)|\[(photo|image|video|pic)\])\b/i.test(
+        message.body,
+      )
+    ) {
       return true;
     }
     const attachments = message.attachments;
@@ -452,7 +498,11 @@ export function looksLikeInventedBeach(text: string): boolean {
 }
 
 export function normalizeForDup(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function tooSimilar(a: string, b: string): boolean {
@@ -466,14 +516,20 @@ export function tooSimilar(a: string, b: string): boolean {
   return a6.length > 14 && a6 === b6;
 }
 
-export function pickFreshVariants(pool: string[], recent: string[] = [], seed?: string | null): string[] {
+export function pickFreshVariants(
+  pool: string[],
+  recent: string[] = [],
+  seed?: string | null,
+): string[] {
   const rotated = rotateVariants(pool, seed);
   const fresh = rotated.filter((v) => !recent.some((r) => tooSimilar(v, r)));
   return fresh.length ? fresh : rotated;
 }
 
 export function threadBannedPetNames(messages: { authorType?: string; body: string }[]): boolean {
-  return messages.some((m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER" && looksLikePetNamePushback(m.body));
+  return messages.some(
+    (m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER" && looksLikePetNamePushback(m.body),
+  );
 }
 
 export function looksLikeWhatsWrongFollowup(text: string): boolean {
@@ -481,7 +537,9 @@ export function looksLikeWhatsWrongFollowup(text: string): boolean {
 }
 
 export function threadIsOnBotAsk(messages: { authorType?: string; body: string }[]): boolean {
-  const lastSub = [...messages].reverse().find((m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER");
+  const lastSub = [...messages]
+    .reverse()
+    .find((m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER");
   if (!lastSub) return false;
   if (looksLikeAreYouReal(lastSub.body)) return true;
   if (
@@ -519,7 +577,9 @@ export function looksLikeDirectCreatorQuestion(text: string): boolean {
 }
 
 export function looksLikeMixupApology(text: string): boolean {
-  return /\b(talking about me|that was about me|mixed it up|mixed that up|that was me not u)\b/i.test(text);
+  return /\b(talking about me|that was about me|mixed it up|mixed that up|that was me not u)\b/i.test(
+    text,
+  );
 }
 
 function mixupFacts(text: string): string[] {
@@ -535,7 +595,10 @@ function mixupFacts(text: string): string[] {
 }
 
 function lastCreatorBodies(messages: { authorType: string; body: string }[]): string[] {
-  return messages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-6).map((m) => m.body);
+  return messages
+    .filter((m) => m.authorType !== "SUBSCRIBER")
+    .slice(-6)
+    .map((m) => m.body);
 }
 
 export function looksLikeConfirmedInventedAboutHimCallout(input: {
@@ -556,11 +619,15 @@ export function looksLikeConfirmedInventedAboutHimCallout(input: {
   }
   if (!looksLikeMixupCalloutLanguage(last)) return { matched: false, aboutMe: false, facts: [] };
   const facts = mixupFacts(last);
-  const creatorBlob = lastCreatorBodies(input.recentMessages ?? []).join("\n").toLowerCase();
+  const creatorBlob = lastCreatorBodies(input.recentMessages ?? [])
+    .join("\n")
+    .toLowerCase();
   if (!creatorBlob.trim()) return { matched: false, aboutMe: false, facts };
   const mentioned =
     facts.length === 0
-      ? /\b(you(?:'?re| are|re) (?:a |from )|you(?:'?re| are) \d{2}|you(?:'?re| are) perfect)\b/i.test(creatorBlob)
+      ? /\b(you(?:'?re| are|re) (?:a |from )|you(?:'?re| are) \d{2}|you(?:'?re| are) perfect)\b/i.test(
+          creatorBlob,
+        )
       : facts.some((fact) => creatorBlob.includes(fact));
   if (!mentioned) return { matched: false, aboutMe: false, facts };
   const aboutMe = /\b(i(?:'?m| am) \d{2}|i(?:'?m| am) from|i live)\b/i.test(creatorBlob);
@@ -588,12 +655,18 @@ export function answersAgeAsk(text: string, age?: number | null): boolean {
 
 export function answersLocationAsk(text: string): boolean {
   if (looksLikeMixupApology(text)) return false;
-  if (looksLikeInventedBeach(text) && /\byou(?:'?re| are|re) from the beach|beach fan\b/i.test(text)) return false;
+  if (
+    looksLikeInventedBeach(text) &&
+    /\byou(?:'?re| are|re) from the beach|beach fan\b/i.test(text)
+  )
+    return false;
   return /\b(im in |i live|coast|not telling yet|secret for now)\b/i.test(text);
 }
 
 export function looksLikeLocationAsk(text: string): boolean {
-  return /\bwhere (are you|are u|r u) from\b/i.test(text) || /\bwhere do (you|u) live\b/i.test(text);
+  return (
+    /\bwhere (are you|are u|r u) from\b/i.test(text) || /\bwhere do (you|u) live\b/i.test(text)
+  );
 }
 
 export function creatorCityFromText(...parts: (string | undefined | null)[]): string | null {
@@ -653,9 +726,9 @@ export function ageReplyVariants(age: number | null): string[] {
 
 const PET_NAME_TOKEN_RE = /\b(good boy|loser+|baby|daddy)\b/i;
 const TRAILING_EMOJI_RE =
-  /([😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤️🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥])(\s*)$/u;
+  /((?:❤️|[😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥]))(\s*)$/u;
 const DOUBLED_EMOJI_RE =
-  /([😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤️🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥])\1/u;
+  /((?:❤️|[😁😂😄😅😆😉😊😋😍😘🥰🤗🤔🤨🙄😏😣😴🥱😫😌😜😝🤤😔😕😭😤😩🥵😡😠🥹🥺😇🥳😈🫢🤭❤🩷🧡💛💚💙🩵💜🤎🖤🩶🤍💕💞💓💗💖💝💟💦🍆💋🔥]))\1/u;
 
 export function looksLikeFanInvitesQuestions(text: string): boolean {
   return /\b(what do (you|u) (wanna|want to|want) know about me|ask me (anything|something)|what (are you|are u|r u) curious about)\b/i.test(
@@ -718,7 +791,10 @@ export function bannedCatalogNames(
   const rows = conversationId
     ? rejections.filter((r) => !r.conversationId || r.conversationId === conversationId)
     : rejections;
-  const blob = rows.map((r) => `${r.reason} ${r.text}`).join(" ").toLowerCase();
+  const blob = rows
+    .map((r) => `${r.reason} ${r.text}`)
+    .join(" ")
+    .toLowerCase();
   const names: string[] = [];
   const ids: string[] = [];
   for (const product of catalog) {
@@ -780,7 +856,9 @@ export function rewriteDirectUnlockPitch(text: string): string {
   return text
     .split("\n")
     .map((line) =>
-      looksLikeDirectUnlockPitch(line) ? "i shot something filthy for that mood if u actually wanna see" : line,
+      looksLikeDirectUnlockPitch(line)
+        ? "i shot something filthy for that mood if u actually wanna see"
+        : line,
     )
     .join("\n")
     .trim();
@@ -800,11 +878,11 @@ export function looksLikeSexualPivot(text: string): boolean {
   return /\b(make me forget|how can you make|show me (then|how)|what would you do)\b/i.test(text);
 }
 
-export function threadIsOnOfflineAsk(
-  messages: { authorType?: string; body: string }[],
-): boolean {
+export function threadIsOnOfflineAsk(messages: { authorType?: string; body: string }[]): boolean {
   const window = messages.slice(-8);
-  const lastSub = [...window].reverse().find((m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER");
+  const lastSub = [...window]
+    .reverse()
+    .find((m) => (m.authorType ?? "SUBSCRIBER") === "SUBSCRIBER");
   if (!lastSub) return false;
   if (looksLikeOfflineAsk(lastSub.body)) return true;
   const recentHadIrl = window.some((m) => looksLikeOfflineAsk(m.body));
@@ -823,8 +901,10 @@ export function pitchIsTooEarly(opts: {
   if (opts.threadOnOffline) return true;
   if (looksLikeOfflineAsk(opts.subscriberText)) return true;
   if (opts.catalogFit) return false;
-  if (looksLikeContentAsk(opts.subscriberText) || looksLikeSextAsk(opts.subscriberText)) return false;
-  if (/\b(too much|cheaper|discount|too expensive|how much)\b/i.test(opts.subscriberText)) return false;
+  if (looksLikeContentAsk(opts.subscriberText) || looksLikeSextAsk(opts.subscriberText))
+    return false;
+  if (/\b(too much|cheaper|discount|too expensive|how much)\b/i.test(opts.subscriberText))
+    return false;
   const funnel = opts.funnelStage ?? "";
   if (funnel === "NEW_FAN" || funnel === "RAPPORT") return true;
   if ((opts.fanMessageCount ?? 99) < 4) return true;

@@ -1,4 +1,10 @@
-import { PrismaClient, type ExplicitnessLevel, type FunnelStage, type MediaType, type PersonaStyle } from "@prisma/client";
+import {
+  PrismaClient,
+  type ExplicitnessLevel,
+  type FunnelStage,
+  type MediaType,
+  type PersonaStyle,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { AGENCY_TRAINING_CHUNKS } from "../../ai/src/training/corpus.ts";
 
@@ -68,7 +74,11 @@ const MODELS: DemoModel[] = [
       frequentlyUsedPhrases: ["mmm hi", "you're trouble", "don't make me blush"],
       preferredExplicitVocabulary: ["girlcock", "cock", "wet", "filthy"],
       prohibitedWords: ["daddy issues", "meet up tonight"],
-      preferredCompliments: ["nice cock", "you have such a filthy mind", "i like how direct you are"],
+      preferredCompliments: [
+        "nice cock",
+        "you have such a filthy mind",
+        "i like how direct you are",
+      ],
       allowedExplicitness: "VERY_EXPLICIT",
       style: "PLAYFUL",
       interests: ["lingerie", "netflix", "girlcock tease"],
@@ -164,7 +174,8 @@ const MODELS: DemoModel[] = [
     bio: "DEMO fictional creator. Direct, dominant, precise.",
     persona: {
       displayName: "Elena",
-      biography: "Fictional 32-year-old luxury creator. Calm, dominant, high standards. DEMO ONLY. Adult.",
+      biography:
+        "Fictional 32-year-old luxury creator. Calm, dominant, high standards. DEMO ONLY. Adult.",
       authorisedBackstory: "Travels often, collects vinyl, does not discuss her real schedule.",
       personality: "Composed, teasing from above, rewards obedience.",
       tone: "Short commands. Dry humour. No emoji spam.",
@@ -176,7 +187,11 @@ const MODELS: DemoModel[] = [
       allowedExplicitness: "VERY_EXPLICIT",
       style: "DOMINANT",
       interests: ["wine", "film photography", "control"],
-      contentBoundaries: ["no underage", "no non-consent involving third parties", "no home address"],
+      contentBoundaries: [
+        "no underage",
+        "no non-consent involving third parties",
+        "no home address",
+      ],
       claimsNeverToMake: ["I am free this weekend to meet", "I already sent the file"],
       customContentRules: "No custom content under $80. No face-in-custom without approval.",
       discountLimitPercent: 15,
@@ -323,7 +338,8 @@ const MODELS: DemoModel[] = [
       claimsNeverToMake: ["Come to my apartment", "I miss you from last night"],
       customContentRules: "GFE customs 72h. No meet-up roleplay framed as real.",
       discountLimitPercent: 15,
-      escalationRules: "Escalate loneliness-spiral self-harm talk, age doubt, and meeting requests.",
+      escalationRules:
+        "Escalate loneliness-spiral self-harm talk, age doubt, and meeting requests.",
       approvedExampleMessages: [
         "hi baby 🥺 you actually wrote me",
         "slow down for me, i want to feel that",
@@ -490,7 +506,12 @@ async function main() {
     ],
   });
 
-  const seeded: { creatorId: string; productIds: string[]; conversationId: string; fanId: string }[] = [];
+  const seeded: {
+    creatorId: string;
+    productIds: string[];
+    conversationId: string;
+    fanId: string;
+  }[] = [];
 
   for (const model of MODELS) {
     const user = await prisma.user.create({
@@ -564,7 +585,11 @@ async function main() {
       await prisma.productMedia.create({
         data: { productId: product.id, mediaId: media.id },
       });
-      if (product.mediaType === "PHOTO" || product.mediaType === "VIDEO" || product.mediaType === "BUNDLE") {
+      if (
+        product.mediaType === "PHOTO" ||
+        product.mediaType === "VIDEO" ||
+        product.mediaType === "BUNDLE"
+      ) {
         const preview = await prisma.mediaAsset.create({
           data: {
             organizationId: agency.id,
@@ -621,7 +646,9 @@ async function main() {
       await prisma.product.update({
         where: { id: product.id },
         data: {
-          secondPriceCents: Math.round((product.standardPriceCents + product.minimumPriceCents) / 2),
+          secondPriceCents: Math.round(
+            (product.standardPriceCents + product.minimumPriceCents) / 2,
+          ),
         },
       });
     }
@@ -734,7 +761,8 @@ async function main() {
       location: "Bali",
       dominance: "SUBMISSIVE",
       preferredTone: "teasing girlfriend",
-      notes: "Gym fan. Responds to mirror clips. Do not mention family. Spent on tease content before.",
+      notes:
+        "Gym fan. Responds to mirror clips. Do not mention family. Spent on tease content before.",
       extra: { job: "remote", timezone: "WITA" },
     },
   });
@@ -917,7 +945,9 @@ async function main() {
     {
       title: "Sexting Script Master Guidelines",
       documentType: "SALES_SCRIPT" as const,
-      chunks: AGENCY_TRAINING_CHUNKS.filter((c) => c.title.startsWith("Sexting") || c.title.startsWith("Pet")),
+      chunks: AGENCY_TRAINING_CHUNKS.filter(
+        (c) => c.title.startsWith("Sexting") || c.title.startsWith("Pet"),
+      ),
     },
     {
       title: "Trans Model Terminology",
@@ -986,14 +1016,78 @@ async function main() {
   });
 
   const extraFans = [
-    { name: "Noah K. (DEMO)", handle: "noahk_demo", creator: seeded[0]!, stage: "OFFER" as const, spend: 2500, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
-    { name: "Priya L. (DEMO)", handle: "priyal_demo", creator: seeded[0]!, stage: "OBJECTION" as const, spend: 0, intent: "PRICE_OBJECTION" as const, outcome: "EDITED" as const },
-    { name: "Marcus D. (DEMO)", handle: "marcusd_demo", creator: seeded[1]!, stage: "PURCHASE" as const, spend: 3500, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
-    { name: "Owen F. (DEMO)", handle: "owenf_demo", creator: seeded[1]!, stage: "FOLLOW_UP" as const, spend: 3500, intent: "CASUAL_CHAT" as const, outcome: "SELECTED" as const },
-    { name: "Theo R. (DEMO)", handle: "theor_demo", creator: seeded[2]!, stage: "RAPPORT" as const, spend: 0, intent: "FLIRT" as const, outcome: "DISCARDED" as const },
-    { name: "Blake S. (DEMO)", handle: "blakes_demo", creator: seeded[2]!, stage: "OFFER" as const, spend: 1900, intent: "CONTENT_REQUEST" as const, outcome: "INSERTED" as const },
-    { name: "Andre V. (DEMO)", handle: "andrev_demo", creator: seeded[3]!, stage: "INTEREST" as const, spend: 0, intent: "FLIRT" as const, outcome: "EDITED" as const },
-    { name: "Chris P. (DEMO)", handle: "chrisp_demo", creator: seeded[3]!, stage: "PURCHASE" as const, spend: 2000, intent: "PURCHASE_INTEREST" as const, outcome: "INSERTED" as const },
+    {
+      name: "Noah K. (DEMO)",
+      handle: "noahk_demo",
+      creator: seeded[0]!,
+      stage: "OFFER" as const,
+      spend: 2500,
+      intent: "PURCHASE_INTEREST" as const,
+      outcome: "INSERTED" as const,
+    },
+    {
+      name: "Priya L. (DEMO)",
+      handle: "priyal_demo",
+      creator: seeded[0]!,
+      stage: "OBJECTION" as const,
+      spend: 0,
+      intent: "PRICE_OBJECTION" as const,
+      outcome: "EDITED" as const,
+    },
+    {
+      name: "Marcus D. (DEMO)",
+      handle: "marcusd_demo",
+      creator: seeded[1]!,
+      stage: "PURCHASE" as const,
+      spend: 3500,
+      intent: "PURCHASE_INTEREST" as const,
+      outcome: "INSERTED" as const,
+    },
+    {
+      name: "Owen F. (DEMO)",
+      handle: "owenf_demo",
+      creator: seeded[1]!,
+      stage: "FOLLOW_UP" as const,
+      spend: 3500,
+      intent: "CASUAL_CHAT" as const,
+      outcome: "SELECTED" as const,
+    },
+    {
+      name: "Theo R. (DEMO)",
+      handle: "theor_demo",
+      creator: seeded[2]!,
+      stage: "RAPPORT" as const,
+      spend: 0,
+      intent: "FLIRT" as const,
+      outcome: "DISCARDED" as const,
+    },
+    {
+      name: "Blake S. (DEMO)",
+      handle: "blakes_demo",
+      creator: seeded[2]!,
+      stage: "OFFER" as const,
+      spend: 1900,
+      intent: "CONTENT_REQUEST" as const,
+      outcome: "INSERTED" as const,
+    },
+    {
+      name: "Andre V. (DEMO)",
+      handle: "andrev_demo",
+      creator: seeded[3]!,
+      stage: "INTEREST" as const,
+      spend: 0,
+      intent: "FLIRT" as const,
+      outcome: "EDITED" as const,
+    },
+    {
+      name: "Chris P. (DEMO)",
+      handle: "chrisp_demo",
+      creator: seeded[3]!,
+      stage: "PURCHASE" as const,
+      spend: 2000,
+      intent: "PURCHASE_INTEREST" as const,
+      outcome: "INSERTED" as const,
+    },
   ];
 
   for (const fan of extraFans) {
@@ -1022,7 +1116,10 @@ async function main() {
         organizationId: agency.id,
         conversationId: conversation.id,
         authorType: "SUBSCRIBER",
-        body: fan.stage === "OBJECTION" ? "that's a lot, anything cheaper?" : "you around? i liked that last set",
+        body:
+          fan.stage === "OBJECTION"
+            ? "that's a lot, anything cheaper?"
+            : "you around? i liked that last set",
         isDemo: true,
       },
     });
@@ -1036,7 +1133,8 @@ async function main() {
         status: fan.outcome === "DISCARDED" ? "MANUAL_REVIEW" : "COMPLETED",
         intent: fan.intent,
         funnelStage: fan.stage,
-        recommendedAction: fan.stage === "OFFER" || fan.stage === "PURCHASE" ? "PRESENT_OFFER" : "REPLY",
+        recommendedAction:
+          fan.stage === "OFFER" || fan.stage === "PURCHASE" ? "PRESENT_OFFER" : "REPLY",
         recommendedProductId: fan.creator.productIds[0],
         approvedPriceCents: fan.spend || null,
         requiresHumanReview: true,

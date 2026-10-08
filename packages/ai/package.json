@@ -11,7 +11,8 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json --noEmit",
-    "eval": "tsx src/eval/runner.ts"
+    "eval": "tsx src/eval/runner.ts",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "dependencies": {
     "@canopy/shared": "workspace:*",

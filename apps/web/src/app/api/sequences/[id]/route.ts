@@ -3,10 +3,7 @@ import { prisma } from "@canopy/database";
 import { sequenceInputSchema } from "@canopy/shared";
 import { jsonError, requireOrgUser, requirePerm } from "@/lib/session";
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
@@ -46,10 +43,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });

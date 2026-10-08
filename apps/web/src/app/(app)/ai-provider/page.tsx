@@ -3,7 +3,7 @@ import { guardOrgPage } from "@/lib/page-guard";
 import { AccessDenied, PageHeader } from "@/components/page-chrome";
 
 export default async function AiProviderPage() {
-  const { allowed, ctx } = await guardOrgPage("settings.ai_provider");
+  const { allowed } = await guardOrgPage("settings.ai_provider");
   if (!allowed) return <AccessDenied />;
   return (
     <div className="space-y-6">

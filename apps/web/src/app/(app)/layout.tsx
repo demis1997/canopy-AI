@@ -5,11 +5,7 @@ import { AppShell } from "@/components/app-shell";
 
 export const dynamic = "force-dynamic";
 
-export default async function AuthenticatedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const org = session.user.organizationId
@@ -17,7 +13,10 @@ export default async function AuthenticatedLayout({
     : null;
   const escalationCount = session.user.organizationId
     ? await prisma.escalation.count({
-        where: { organizationId: session.user.organizationId, status: { in: ["OPEN", "IN_REVIEW"] } },
+        where: {
+          organizationId: session.user.organizationId,
+          status: { in: ["OPEN", "IN_REVIEW"] },
+        },
       })
     : 0;
   const extensionConnected = session.user.id

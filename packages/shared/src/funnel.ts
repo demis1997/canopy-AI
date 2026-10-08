@@ -73,10 +73,7 @@ export function recommendedActionFor(input: {
   if (intent === "COMPLAINT" || intent === "REFUND") return "REQUEST_HUMAN_REVIEW";
   if (intent === "PRICE_OBJECTION") return "ANSWER_OBJECTION";
   if (rapportPriority && stage !== "OFFER") return "BUILD_RAPPORT";
-  if (
-    (intent === "PURCHASE_INTEREST" || intent === "CONTENT_REQUEST") &&
-    !offerCooldownActive
-  ) {
+  if ((intent === "PURCHASE_INTEREST" || intent === "CONTENT_REQUEST") && !offerCooldownActive) {
     return "PRESENT_OFFER";
   }
   if (intent === "SEXTING" && (stage === "RAPPORT" || stage === "INTEREST")) {

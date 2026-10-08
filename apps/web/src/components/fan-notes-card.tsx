@@ -59,18 +59,24 @@ export function FanNotesCard({
       <div>
         <div className="text-sm font-medium">Creator notes</div>
         <p className="text-xs text-white/40">
-          {fanName} talking with {creatorName}. Other fans on this model have their own notes. Spend on{" "}
-          {creatorName}: ${spend.toFixed(0)}.
+          {fanName} talking with {creatorName}. Other fans on this model have their own notes. Spend
+          on {creatorName}: ${spend.toFixed(0)}.
         </p>
       </div>
       <div className="grid gap-2">
         <div>
           <Label>Real name</Label>
-          <Input value={form.realName} onChange={(e) => setForm({ ...form, realName: e.target.value })} />
+          <Input
+            value={form.realName}
+            onChange={(e) => setForm({ ...form, realName: e.target.value })}
+          />
         </div>
         <div>
           <Label>Location</Label>
-          <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          <Input
+            value={form.location}
+            onChange={(e) => setForm({ ...form, location: e.target.value })}
+          />
         </div>
         <div>
           <Label>His dynamic</Label>

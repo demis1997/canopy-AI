@@ -9,7 +9,9 @@ export function parseWindow(search: {
   chatter?: string;
 }): MetricWindow {
   const to = search.to ? new Date(search.to) : new Date();
-  const from = search.from ? new Date(search.from) : new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
+  const from = search.from
+    ? new Date(search.from)
+    : new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000);
   return {
     from,
     to,

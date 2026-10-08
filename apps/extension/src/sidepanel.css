@@ -1,12 +1,24 @@
 body {
-  font: 13px/1.4 Inter, Helvetica Neue, Arial, ui-sans-serif, system-ui;
+  font:
+    13px/1.4 Inter,
+    Helvetica Neue,
+    Arial,
+    ui-sans-serif,
+    system-ui;
   background: #161816;
   color: #ebe5d9;
   padding: 12px;
 }
-h1 { font-size: 16px; }
-.muted { color: #8b9088; }
-input, textarea, button, pre {
+h1 {
+  font-size: 16px;
+}
+.muted {
+  color: #8b9088;
+}
+input,
+textarea,
+button,
+pre {
   width: 100%;
   margin: 6px 0;
   background: #0e100f;
@@ -15,5 +27,14 @@ input, textarea, button, pre {
   border-radius: 6px;
   padding: 8px;
 }
-button { background: #6b8f6e; color: #ebe5d9; font-weight: 600; cursor: pointer; }
-pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }
+button {
+  background: #6b8f6e;
+  color: #ebe5d9;
+  font-weight: 600;
+  cursor: pointer;
+}
+pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

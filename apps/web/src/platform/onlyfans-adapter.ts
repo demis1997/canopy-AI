@@ -41,7 +41,8 @@ export class PlaywrightOnlyFansAdapter implements OnlyFansAdapter {
   private async failIfAmbiguous(locator: ReturnType<Page["locator"]>, label: string) {
     const count = await locator.count();
     if (count === 0) throw new AdapterClosedError("SELECTOR_FAILURE", `${label} not found`);
-    if (count > 1) throw new AdapterClosedError("AMBIGUOUS_ELEMENT", `${label} matched ${count} nodes`);
+    if (count > 1)
+      throw new AdapterClosedError("AMBIGUOUS_ELEMENT", `${label} matched ${count} nodes`);
   }
 
   async detectAccount() {
@@ -67,7 +68,11 @@ export class PlaywrightOnlyFansAdapter implements OnlyFansAdapter {
       return "CHALLENGE_REQUIRED";
     }
     if (await this.page.locator(LIVE.challenge).count()) {
-      const visible = await this.page.locator(LIVE.challenge).first().isVisible().catch(() => false);
+      const visible = await this.page
+        .locator(LIVE.challenge)
+        .first()
+        .isVisible()
+        .catch(() => false);
       if (visible && this.opts.liveUnverified) return "CHALLENGE_REQUIRED";
     }
     const state = await this.page.locator("body").getAttribute("data-state");
@@ -91,7 +96,10 @@ export class PlaywrightOnlyFansAdapter implements OnlyFansAdapter {
       const fanId = await item.getAttribute("data-fan-id");
       const name = await item.getAttribute("data-fan-name");
       if (!id || !fanId || !name) {
-        throw new AdapterClosedError("AMBIGUOUS_ELEMENT", "Conversation row missing stable attributes");
+        throw new AdapterClosedError(
+          "AMBIGUOUS_ELEMENT",
+          "Conversation row missing stable attributes",
+        );
       }
       rows.push({
         externalConversationId: id,
@@ -192,9 +200,19 @@ export class PlaywrightOnlyFansAdapter implements OnlyFansAdapter {
     const last = [...messages].reverse().find((m) => m.direction === "OUTBOUND");
     if (!last) return { verified: false, ambiguous: true };
     if (last.body.trim() !== expectedText.trim()) {
-      return { verified: false, ambiguous: true, visibleText: last.body, externalMessageId: last.externalMessageId };
+      return {
+        verified: false,
+        ambiguous: true,
+        visibleText: last.body,
+        externalMessageId: last.externalMessageId,
+      };
     }
-    return { verified: true, ambiguous: false, visibleText: last.body, externalMessageId: last.externalMessageId };
+    return {
+      verified: true,
+      ambiguous: false,
+      visibleText: last.body,
+      externalMessageId: last.externalMessageId,
+    };
   }
 
   async detectPurchaseEvents() {
@@ -211,7 +229,10 @@ export class PlaywrightOnlyFansAdapter implements OnlyFansAdapter {
       throw new AdapterClosedError("LOGIN_REQUIRED", "Creator must finish login and 2FA manually");
     }
     if (state === "CHALLENGE_REQUIRED") {
-      throw new AdapterClosedError("CHALLENGE_REQUIRED", "Pause automation until the creator completes the challenge");
+      throw new AdapterClosedError(
+        "CHALLENGE_REQUIRED",
+        "Pause automation until the creator completes the challenge",
+      );
     }
     if (state === "CONNECTED" || state === "SYNCING") return;
     throw new AdapterClosedError("SELECTOR_FAILURE", `Not connected (${state})`);

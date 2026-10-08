@@ -1,9 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
 const secure = process.env.NODE_ENV === "production";
-export const sessionCookieName = secure
-  ? "__Secure-authjs.session-token"
-  : "authjs.session-token";
+export const sessionCookieName = secure ? "__Secure-authjs.session-token" : "authjs.session-token";
 
 export const authConfig = {
   trustHost: true,

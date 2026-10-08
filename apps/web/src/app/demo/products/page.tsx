@@ -70,7 +70,10 @@ export default function DemoProductsPage() {
       mediaType: "PHOTO",
       standardPrice: standard,
       minimumPrice: minimum,
-      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+      tags: tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
       available,
       source: "MANUAL",
       timesSold: 0,
@@ -81,7 +84,9 @@ export default function DemoProductsPage() {
       previewIds: previewId ? [previewId] : [],
     };
     setProducts((p) => [product, ...p]);
-    setNotice(`Saved ${product.name} as MANUAL. The model can recommend it after the next generate.`);
+    setNotice(
+      `Saved ${product.name} as MANUAL. The model can recommend it after the next generate.`,
+    );
   }
 
   function importCsv() {
@@ -104,7 +109,9 @@ export default function DemoProductsPage() {
       previewIds: row.preview_reference ? [row.preview_reference] : [],
     }));
     setProducts((p) => [...imported, ...p]);
-    setNotice(`Imported ${imported.length} valid row(s). ${rows.length - validRows.length} row(s) skipped.`);
+    setNotice(
+      `Imported ${imported.length} valid row(s). ${rows.length - validRows.length} row(s) skipped.`,
+    );
   }
 
   async function tryVaultSync() {
@@ -122,29 +129,38 @@ export default function DemoProductsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Product catalogue</h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Canopy never invents products. Suggestions can only recommend IDs returned by this catalogue. Demo
-            seed, manual create, CSV import, and media upload are available here. Live platform vault sync is
-            not claimed and stays disabled without an authorised integration.
+            Canopy never invents products. Suggestions can only recommend IDs returned by this
+            catalogue. Demo seed, manual create, CSV import, and media upload are available here.
+            Live platform vault sync is not claimed and stays disabled without an authorised
+            integration.
           </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
           {SOURCES.map((s) => (
             <div key={s.mode} className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-teal-700">{s.mode}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+                {s.mode}
+              </div>
               <div className="mt-1 text-sm font-medium">{s.title}</div>
               <p className="mt-1 text-xs text-slate-500">{s.body}</p>
             </div>
           ))}
         </div>
 
-        {notice ? <div className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-900">{notice}</div> : null}
+        {notice ? (
+          <div className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-900">{notice}</div>
+        ) : null}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold">Manual product</h2>
             <label className="mt-3 block text-xs text-slate-500">Creator</label>
-            <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={creatorId} onChange={(e) => setCreatorId(e.target.value)}>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={creatorId}
+              onChange={(e) => setCreatorId(e.target.value)}
+            >
               {demoCreators.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.displayName}
@@ -152,23 +168,49 @@ export default function DemoProductsPage() {
               ))}
             </select>
             <label className="mt-3 block text-xs text-slate-500">Name</label>
-            <input className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
             <label className="mt-3 block text-xs text-slate-500">Description</label>
-            <textarea className="mt-1 min-h-[64px] w-full rounded-md border border-slate-200 px-2 py-1 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea
+              className="mt-1 min-h-[64px] w-full rounded-md border border-slate-200 px-2 py-1 text-sm"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-slate-500">Standard price</label>
-                <input type="number" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={standard} onChange={(e) => setStandard(Number(e.target.value))} />
+                <input
+                  type="number"
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                  value={standard}
+                  onChange={(e) => setStandard(Number(e.target.value))}
+                />
               </div>
               <div>
                 <label className="text-xs text-slate-500">Minimum price</label>
-                <input type="number" className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={minimum} onChange={(e) => setMinimum(Number(e.target.value))} />
+                <input
+                  type="number"
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                  value={minimum}
+                  onChange={(e) => setMinimum(Number(e.target.value))}
+                />
               </div>
             </div>
             <label className="mt-3 block text-xs text-slate-500">Tags</label>
-            <input className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={tags} onChange={(e) => setTags(e.target.value)} />
+            <input
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+            />
             <label className="mt-3 block text-xs text-slate-500">Locked media</label>
-            <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={mediaId} onChange={(e) => setMediaId(e.target.value)}>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={mediaId}
+              onChange={(e) => setMediaId(e.target.value)}
+            >
               {creatorVault.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.title}
@@ -176,7 +218,11 @@ export default function DemoProductsPage() {
               ))}
             </select>
             <label className="mt-3 block text-xs text-slate-500">Free preview</label>
-            <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={previewId} onChange={(e) => setPreviewId(e.target.value)}>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={previewId}
+              onChange={(e) => setPreviewId(e.target.value)}
+            >
               <option value="">None</option>
               {creatorVault.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -185,16 +231,28 @@ export default function DemoProductsPage() {
               ))}
             </select>
             <label className="mt-3 flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> Available
+              <input
+                type="checkbox"
+                checked={available}
+                onChange={(e) => setAvailable(e.target.checked)}
+              />{" "}
+              Available
             </label>
-            <button className="mt-4 h-9 rounded-md bg-teal-600 px-3 text-sm font-medium text-white" onClick={createManual}>
+            <button
+              className="mt-4 h-9 rounded-md bg-teal-600 px-3 text-sm font-medium text-white"
+              onClick={createManual}
+            >
               Save product
             </button>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold">CSV import preview</h2>
-            <textarea className="mt-3 min-h-[160px] w-full rounded-md border border-slate-200 p-2 font-mono text-[11px]" value={csv} onChange={(e) => setCsv(e.target.value)} />
+            <textarea
+              className="mt-3 min-h-[160px] w-full rounded-md border border-slate-200 p-2 font-mono text-[11px]"
+              value={csv}
+              onChange={(e) => setCsv(e.target.value)}
+            />
             <table className="mt-3 w-full text-left text-[11px]">
               <thead>
                 <tr className="text-slate-400">
@@ -219,16 +277,24 @@ export default function DemoProductsPage() {
                 ))}
               </tbody>
             </table>
-            <button className="mt-3 h-9 rounded-md bg-slate-800 px-3 text-sm font-medium text-white disabled:opacity-40" disabled={!validRows.length} onClick={importCsv}>
+            <button
+              className="mt-3 h-9 rounded-md bg-slate-800 px-3 text-sm font-medium text-white disabled:opacity-40"
+              disabled={!validRows.length}
+              onClick={importCsv}
+            >
               Import {validRows.length} valid row(s)
             </button>
             <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
               <div className="font-semibold">Platform vault sync</div>
               <p className="mt-1">
-                There is no public OnlyFans API in this product. Sync stays queued-disabled until an authorised
-                connector or permitted extension import is enabled.
+                There is no public OnlyFans API in this product. Sync stays queued-disabled until an
+                authorised connector or permitted extension import is enabled.
               </p>
-              <button className="mt-2 h-8 rounded-md border border-amber-300 bg-white px-2 font-medium" disabled={syncBusy} onClick={() => void tryVaultSync()}>
+              <button
+                className="mt-2 h-8 rounded-md border border-amber-300 bg-white px-2 font-medium"
+                disabled={syncBusy}
+                onClick={() => void tryVaultSync()}
+              >
                 {syncBusy ? "Checking…" : "Request authorised vault sync"}
               </button>
             </div>
@@ -237,7 +303,8 @@ export default function DemoProductsPage() {
 
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <h2 className="text-sm font-semibold">
-            {creator.displayName} catalogue · {products.filter((p) => p.creatorId === creatorId).length} products
+            {creator.displayName} catalogue ·{" "}
+            {products.filter((p) => p.creatorId === creatorId).length} products
           </h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {products
@@ -260,7 +327,8 @@ export default function DemoProductsPage() {
                     {p.mediaType} · ${p.standardPrice} list · min ${p.minimumPrice} · {p.source}
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    {p.tags.join(" · ")} · sold {p.timesSold} · {p.available ? "available" : "off"} · {p.id}
+                    {p.tags.join(" · ")} · sold {p.timesSold} · {p.available ? "available" : "off"}{" "}
+                    · {p.id}
                   </div>
                 </div>
               ))}

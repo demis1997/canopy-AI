@@ -11,7 +11,13 @@ import { FanNotesCard, type FanNoteValue } from "@/components/fan-notes-card";
 import { ClearChatButton } from "@/components/clear-chat-button";
 import { splitReplyBubbles } from "@canopy/shared";
 
-type Reply = { id: string; text: string; tone: string; internalReason: string; messages?: string[] };
+type Reply = {
+  id: string;
+  text: string;
+  tone: string;
+  internalReason: string;
+  messages?: string[];
+};
 
 type Generation = {
   id?: string;
@@ -223,7 +229,11 @@ export function CopilotWorkspace(props: {
       const res = await fetch(`/api/conversations/${props.conversation.id}/generate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ conversationId: props.conversation.id, rewriteStyle, regenerate: true }),
+        body: JSON.stringify({
+          conversationId: props.conversation.id,
+          rewriteStyle,
+          regenerate: true,
+        }),
       });
       return (await res.json()) as Generation;
     };
@@ -234,9 +244,16 @@ export function CopilotWorkspace(props: {
     setGeneration(gen);
     setDrafts(Object.fromEntries((gen.replyOptions ?? []).map((o) => [o.id, o.text])));
     if (gen.blocked) setNotice(gen.chatterMessage || "Reply blocked.");
-    else if (gen.failed) setNotice(gen.chatterMessage || "The model missed that send. Hit generate again.");
+    else if (gen.failed)
+      setNotice(gen.chatterMessage || "The model missed that send. Hit generate again.");
     else if (gen.chatterMessage) setNotice(gen.chatterMessage);
-    else setNotice(afterNotice ?? (rewriteStyle ? `Rewritten (${rewriteStyle.toLowerCase()}).` : "Three suggestions ready. Approve before insert."));
+    else
+      setNotice(
+        afterNotice ??
+          (rewriteStyle
+            ? `Rewritten (${rewriteStyle.toLowerCase()}).`
+            : "Three suggestions ready. Approve before insert."),
+      );
     setBusy(false);
     router.refresh();
   }
@@ -256,7 +273,11 @@ export function CopilotWorkspace(props: {
       }),
     });
     const json = await res.json();
-    setNotice(inserted ? "Approved and inserted into the thread. Human still sends on the live platform." : "Approved.");
+    setNotice(
+      inserted
+        ? "Approved and inserted into the thread. Human still sends on the live platform."
+        : "Approved.",
+    );
     if (json.error) setNotice(json.error);
     setBusy(false);
     router.refresh();
@@ -307,7 +328,8 @@ export function CopilotWorkspace(props: {
   }
 
   const ageBad =
-    props.conversation.adultStatus === "UNCERTAIN" || props.conversation.adultStatus.includes("MINOR");
+    props.conversation.adultStatus === "UNCERTAIN" ||
+    props.conversation.adultStatus.includes("MINOR");
 
   return (
     <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)_340px]">
@@ -336,7 +358,8 @@ export function CopilotWorkspace(props: {
                   {item.creatorName} · {item.spendTier}
                 </span>
                 <span className="block truncate text-[11px] text-white/35">
-                  {item.intent ?? item.funnelStage} · {new Date(item.lastActivity).toLocaleTimeString()}
+                  {item.intent ?? item.funnelStage} ·{" "}
+                  {new Date(item.lastActivity).toLocaleTimeString()}
                 </span>
               </Link>
               <div className="px-1 py-2">
@@ -364,22 +387,30 @@ export function CopilotWorkspace(props: {
           <div className="text-[11px] uppercase tracking-[0.16em] text-mist">
             {props.conversation.personaName}
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{props.conversation.creatorName}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {props.conversation.creatorName}
+          </h1>
           <p className="mt-1 text-sm text-white/50">Fan: {props.conversation.subscriberName}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Badge tone="accent">{props.conversation.funnelStage}</Badge>
             <Badge tone={ageBad ? "bad" : "good"}>{props.conversation.adultStatus}</Badge>
             <Badge>{props.conversation.explicitness}</Badge>
             {generation?.mockMode ? <Badge tone="warn">MOCK PROVIDER</Badge> : null}
-            <Badge tone={mutedAi ? "warn" : "good"}>{mutedAi ? "This chat paused" : "Autonomous on"}</Badge>
+            <Badge tone={mutedAi ? "warn" : "good"}>
+              {mutedAi ? "This chat paused" : "Autonomous on"}
+            </Badge>
             {purchasedPpvCount > 0 ? (
               <Badge tone={purchasedPpvCount >= 3 ? "good" : "accent"}>
-                {purchasedPpvCount >= 3 ? "Aftercare (3rd PPV)" : `${purchasedPpvCount} PPV unlocked`}
+                {purchasedPpvCount >= 3
+                  ? "Aftercare (3rd PPV)"
+                  : `${purchasedPpvCount} PPV unlocked`}
               </Badge>
             ) : null}
             {followUps > 0 && purchasedPpvCount < 3 ? (
               <Badge tone="warn">
-                {followUps === 1 ? "Follow-up · still list" : `Follow-up ${followUps} · discount ok`}
+                {followUps === 1
+                  ? "Follow-up · still list"
+                  : `Follow-up ${followUps} · discount ok`}
               </Badge>
             ) : null}
           </div>
@@ -479,7 +510,9 @@ export function CopilotWorkspace(props: {
             </Button>
           </div>
         </Card>
-        {notice ? <Card className="border-brass/30 bg-brass/10 text-sm text-bone">{notice}</Card> : null}
+        {notice ? (
+          <Card className="border-brass/30 bg-brass/10 text-sm text-bone">{notice}</Card>
+        ) : null}
       </section>
 
       <aside className="space-y-3 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto">
@@ -492,7 +525,13 @@ export function CopilotWorkspace(props: {
           </div>
           <div className="flex flex-wrap gap-1">
             {REWRITES.map((r) => (
-              <Button key={r.id} size="sm" variant="outline" disabled={busy} onClick={() => void generate(r.id)}>
+              <Button
+                key={r.id}
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void generate(r.id)}
+              >
                 {r.label}
               </Button>
             ))}
@@ -512,7 +551,9 @@ export function CopilotWorkspace(props: {
           {generation?.blocked ? (
             <div className="rounded-[10px] border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
               Safety warning: {generation.chatterMessage}
-              <div className="mt-1 text-xs">{(generation.riskFlags ?? []).join(", ") || "blocked"}</div>
+              <div className="mt-1 text-xs">
+                {(generation.riskFlags ?? []).join(", ") || "blocked"}
+              </div>
             </div>
           ) : null}
           {replies.length ? (
@@ -526,16 +567,16 @@ export function CopilotWorkspace(props: {
                     <span>AI-generated</span>
                   </div>
                   <div className="mb-2 space-y-1">
-                    {splitReplyBubbles(drafts[option.id] ?? option.text, { splitSentences: true }).map(
-                      (bubble, bi) => (
-                        <div
-                          key={`${option.id}-b${bi}`}
-                          className="block w-fit max-w-[95%] rounded-[12px] bg-pine px-3 py-1.5 text-sm text-bone"
-                        >
-                          {bubble}
-                        </div>
-                      ),
-                    )}
+                    {splitReplyBubbles(drafts[option.id] ?? option.text, {
+                      splitSentences: true,
+                    }).map((bubble, bi) => (
+                      <div
+                        key={`${option.id}-b${bi}`}
+                        className="block w-fit max-w-[95%] rounded-[12px] bg-pine px-3 py-1.5 text-sm text-bone"
+                      >
+                        {bubble}
+                      </div>
+                    ))}
                   </div>
                   <Textarea
                     value={drafts[option.id] ?? option.text}
@@ -543,13 +584,19 @@ export function CopilotWorkspace(props: {
                     className="min-h-[96px] whitespace-pre-wrap"
                   />
                   <p className="mt-1 text-[11px] text-white/35">
-                    One bubble per line. Insert sends each line as its own message. {option.internalReason}
+                    One bubble per line. Insert sends each line as its own message.{" "}
+                    {option.internalReason}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <Button size="sm" disabled={busy} onClick={() => void approve(option, true)}>
                       Approve and insert
                     </Button>
-                    <Button size="sm" variant="outline" disabled={busy} onClick={() => void reject(option)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void reject(option)}
+                    >
                       Reject
                     </Button>
                   </div>
@@ -557,7 +604,9 @@ export function CopilotWorkspace(props: {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-white/40">No suggestions yet. Generate after the latest fan message.</p>
+            <p className="text-sm text-white/40">
+              No suggestions yet. Generate after the latest fan message.
+            </p>
           )}
         </Card>
         <Card className="space-y-3">
@@ -583,8 +632,8 @@ export function CopilotWorkspace(props: {
             <div className="space-y-2">
               <div className="rounded-[10px] border border-white/10 p-2 text-sm text-white/70">
                 <div className="text-[11px] uppercase tracking-wide text-white/35">
-                  Step {sequenceStep + 1}/{activeSequence?.steps.length} · {currentStep.mediaHint} · price tier{" "}
-                  {currentStep.priceTier}
+                  Step {sequenceStep + 1}/{activeSequence?.steps.length} · {currentStep.mediaHint} ·
+                  price tier {currentStep.priceTier}
                 </div>
                 {currentStep.body}
               </div>
@@ -593,7 +642,9 @@ export function CopilotWorkspace(props: {
               </p>
             </div>
           ) : (
-            <p className="text-xs text-white/40">Pick a sequence to pin the next script beat for this chat.</p>
+            <p className="text-xs text-white/40">
+              Pick a sequence to pin the next script beat for this chat.
+            </p>
           )}
           <div className="flex flex-wrap gap-1">
             <Button
@@ -630,7 +681,10 @@ export function CopilotWorkspace(props: {
             Recommended product:{" "}
             {recommended ? `${recommended.name} · $${approvedPrice ?? recommended.price}` : "none"}
           </div>
-          <div>Confidence: {generation?.confidence != null ? generation.confidence.toFixed(2) : "not scored"}</div>
+          <div>
+            Confidence:{" "}
+            {generation?.confidence != null ? generation.confidence.toFixed(2) : "not scored"}
+          </div>
         </Card>
         <Card>
           <div className="text-xs text-white/40">Relevant memory</div>
@@ -648,7 +702,9 @@ export function CopilotWorkspace(props: {
         </Card>
         <Card>
           <div className="text-xs text-white/40">Rolling summary</div>
-          <p className="mt-2 text-sm text-white/70">{props.conversation.summary ?? "No summary yet."}</p>
+          <p className="mt-2 text-sm text-white/70">
+            {props.conversation.summary ?? "No summary yet."}
+          </p>
         </Card>
       </aside>
     </div>

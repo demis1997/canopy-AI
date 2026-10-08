@@ -79,7 +79,10 @@ export function ladderPrice(input: {
   const second = money(
     Math.min(
       input.standardPrice,
-      Math.max(floor, input.secondPrice ?? defaultSecondPrice(input.standardPrice, input.minimumPrice)),
+      Math.max(
+        floor,
+        input.secondPrice ?? defaultSecondPrice(input.standardPrice, input.minimumPrice),
+      ),
     ),
   );
   if (input.sendAttempt <= 1) return { price: money(input.standardPrice), kind: "LIST" };
@@ -108,7 +111,10 @@ export function assessSpendLikelihood(input: {
     /\b(doctor|surgeon|lawyer|attorney|engineer|software|founder|ceo|owner|entrepreneur|finance|banker|pilot|architect|producer|investor)\b/.test(
       job,
     );
-  const highCity = /\b(nyc|new york|la|los angeles|miami|london|sf|san francisco|chicago|dubai|sydney)\b/.test(city);
+  const highCity =
+    /\b(nyc|new york|la|los angeles|miami|london|sf|san francisco|chicago|dubai|sydney)\b/.test(
+      city,
+    );
   const highAge = Number.isFinite(age) && age >= 30;
   if (highJob || highCity || highAge) return "HIGH";
   return "LOW";
@@ -128,9 +134,10 @@ export function sequenceDropPrice(input: {
     : input.spendTier === "HIGH"
       ? UNPAID_HIGH_LADDER
       : UNPAID_LOW_LADDER;
-  const index = input.boughtWelcome && input.purchasedSequenceCount > 0
-    ? input.purchasedSequenceCount - 1
-    : input.purchasedSequenceCount;
+  const index =
+    input.boughtWelcome && input.purchasedSequenceCount > 0
+      ? input.purchasedSequenceCount - 1
+      : input.purchasedSequenceCount;
   const raw = ladder[Math.min(index, ladder.length - 1)];
   if (raw == null) return null;
   const floor = input.previousPrice != null ? input.previousPrice + 0.01 : 0;

@@ -90,16 +90,76 @@ export function PolicyForm({
         window.location.reload();
       }}
     >
-      <label>Minimum confidence <input name="minimumConfidence" type="number" step="0.01" defaultValue={policy.minimumConfidence} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label>Max PPV price (cents) <input name="maximumPpvPriceCents" type="number" defaultValue={policy.maximumPpvPriceCents} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label>Min reply delay (s) <input name="minimumReplyDelaySeconds" type="number" defaultValue={policy.minimumReplyDelaySeconds} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label>Max reply delay (s) <input name="maximumReplyDelaySeconds" type="number" defaultValue={policy.maximumReplyDelaySeconds} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label>Per-fan hourly cap <input name="maximumMessagesPerHourPerFan" type="number" defaultValue={policy.maximumMessagesPerHourPerFan} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label>Human takeover (min) <input name="humanTakeoverMinutes" type="number" defaultValue={policy.humanTakeoverMinutes} className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1" /></label>
-      <label className="flex items-center gap-2"><input type="checkbox" name="ppvEnabled" defaultChecked={policy.ppvEnabled} /> PPV enabled (still requires ONLYFANS_AUTONOMOUS_PPV)</label>
-      <label className="flex items-center gap-2"><input type="checkbox" name="welcomeEnabled" defaultChecked={policy.welcomeEnabled} /> Welcome enabled</label>
-      <label className="flex items-center gap-2"><input type="checkbox" name="followUpsEnabled" defaultChecked={policy.followUpsEnabled} /> Follow-ups enabled</label>
-      <button type="submit" className="rounded-md bg-white/10 px-3 py-2">Save policy</button>
+      <label>
+        Minimum confidence{" "}
+        <input
+          name="minimumConfidence"
+          type="number"
+          step="0.01"
+          defaultValue={policy.minimumConfidence}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label>
+        Max PPV price (cents){" "}
+        <input
+          name="maximumPpvPriceCents"
+          type="number"
+          defaultValue={policy.maximumPpvPriceCents}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label>
+        Min reply delay (s){" "}
+        <input
+          name="minimumReplyDelaySeconds"
+          type="number"
+          defaultValue={policy.minimumReplyDelaySeconds}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label>
+        Max reply delay (s){" "}
+        <input
+          name="maximumReplyDelaySeconds"
+          type="number"
+          defaultValue={policy.maximumReplyDelaySeconds}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label>
+        Per-fan hourly cap{" "}
+        <input
+          name="maximumMessagesPerHourPerFan"
+          type="number"
+          defaultValue={policy.maximumMessagesPerHourPerFan}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label>
+        Human takeover (min){" "}
+        <input
+          name="humanTakeoverMinutes"
+          type="number"
+          defaultValue={policy.humanTakeoverMinutes}
+          className="mt-1 w-full rounded border border-white/10 bg-black/30 px-2 py-1"
+        />
+      </label>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" name="ppvEnabled" defaultChecked={policy.ppvEnabled} /> PPV enabled
+        (still requires ONLYFANS_AUTONOMOUS_PPV)
+      </label>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" name="welcomeEnabled" defaultChecked={policy.welcomeEnabled} />{" "}
+        Welcome enabled
+      </label>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" name="followUpsEnabled" defaultChecked={policy.followUpsEnabled} />{" "}
+        Follow-ups enabled
+      </label>
+      <button type="submit" className="rounded-md bg-white/10 px-3 py-2">
+        Save policy
+      </button>
     </form>
   );
 }

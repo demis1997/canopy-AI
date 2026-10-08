@@ -3,7 +3,11 @@ import { composeGenerationPrompt } from "../src/prompts/compose.js";
 import { retrieveTraining } from "../src/training/retrieve.js";
 import { MockLLMProvider } from "../src/provider/mock.js";
 import { applyReplyGuards } from "../src/pipeline/validate-output.js";
-import { decideConversationTurn, detectOperationalIntent, validateQualityGrounding } from "@canopy/shared";
+import {
+  decideConversationTurn,
+  detectOperationalIntent,
+  validateQualityGrounding,
+} from "@canopy/shared";
 import type { GenerationInput } from "../src/provider/types.js";
 
 const persona = {
@@ -69,7 +73,8 @@ function genInput(message: string, extras: Partial<GenerationInput> = {}): Gener
 }
 
 const SEX = /\b(pussy|cock|fuck|suck|cum|horny|stroke|dick|jerk|sext)\b/i;
-const INTAKE = /\b(how many hands|how old are you|where are you from|what do you do for (a living|work)|taking control|told what to do)\b/i;
+const INTAKE =
+  /\b(how many hands|how old are you|where are you from|what do you do for (a living|work)|taking control|told what to do)\b/i;
 const PITCH = /\$\s*\d+|unlock|ppv|video/i;
 
 describe("natural greeting quality", () => {
@@ -193,7 +198,9 @@ describe("explicit and sales mock paths", () => {
   it("matches a direct explicit request", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("fuck me, talk dirty"));
-    expect(result.output.replyOptions[0]?.text.toLowerCase()).toMatch(/cock|fuck|kneel|hard|wet|tell me/);
+    expect(result.output.replyOptions[0]?.text.toLowerCase()).toMatch(
+      /cock|fuck|kneel|hard|wet|tell me/,
+    );
   });
 
   it("pitches when the fan asks for content and price", async () => {
@@ -223,7 +230,9 @@ describe("operational routing still wins", () => {
         funnelStage: "OFFER",
         explicitnessLevel: "EXPLICIT",
         recommendedAction: "PRESENT_OFFER",
-        replyOptions: [{ text: "kneel", messages: ["kneel"], tone: "TEASING", internalReason: "x" }],
+        replyOptions: [
+          { text: "kneel", messages: ["kneel"], tone: "TEASING", internalReason: "x" },
+        ],
         recommendedProductId: "prod_1",
         approvedPrice: 9,
         requiresHumanReview: false,
@@ -234,7 +243,9 @@ describe("operational routing still wins", () => {
       "im talking to an ai redirect me to a human",
     );
     expect(guarded.replyOptions).toEqual([]);
-    expect(detectOperationalIntent("im talking to an ai redirect me to a human").intent).toBe("HUMAN_REQUEST");
+    expect(detectOperationalIntent("im talking to an ai redirect me to a human").intent).toBe(
+      "HUMAN_REQUEST",
+    );
   });
 
   it("clears AI suspicion options", () => {
@@ -244,7 +255,14 @@ describe("operational routing still wins", () => {
         funnelStage: "OFFER",
         explicitnessLevel: "EXPLICIT",
         recommendedAction: "PRESENT_OFFER",
-        replyOptions: [{ text: "prove myself", messages: ["prove myself"], tone: "TEASING", internalReason: "x" }],
+        replyOptions: [
+          {
+            text: "prove myself",
+            messages: ["prove myself"],
+            tone: "TEASING",
+            internalReason: "x",
+          },
+        ],
         recommendedProductId: "prod_1",
         approvedPrice: 9,
         requiresHumanReview: false,
@@ -272,12 +290,18 @@ describe("operational routing still wins", () => {
 
 describe("prompt speaker identity", () => {
   it("puts fan questions in user turns and the creator's answer in an assistant turn", () => {
-    const prompt = composeGenerationPrompt(genInput("what are you doing?", { recentMessages: [
-      { authorType: "SUBSCRIBER", body: "how are you?" },
-      { authorType: "CHATTER", body: "I'm good" },
-      { authorType: "SUBSCRIBER", body: "what are you doing?" },
-    ] }));
-    expect(prompt.filter((m) => m.content === "I'm good").map((m) => m.role)).toEqual(["assistant"]);
+    const prompt = composeGenerationPrompt(
+      genInput("what are you doing?", {
+        recentMessages: [
+          { authorType: "SUBSCRIBER", body: "how are you?" },
+          { authorType: "CHATTER", body: "I'm good" },
+          { authorType: "SUBSCRIBER", body: "what are you doing?" },
+        ],
+      }),
+    );
+    expect(prompt.filter((m) => m.content === "I'm good").map((m) => m.role)).toEqual([
+      "assistant",
+    ]);
     expect(prompt.filter((m) => m.content === "how are you?").map((m) => m.role)).toEqual(["user"]);
     expect(String(prompt[0]?.content)).toContain("Never attribute your own words");
   });

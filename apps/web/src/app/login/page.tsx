@@ -46,7 +46,13 @@ function LoginForm() {
       <form className="mt-6 space-y-4" onSubmit={onSubmit}>
         <div className="space-y-1">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+          <Input
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            required
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="password">Password</Label>

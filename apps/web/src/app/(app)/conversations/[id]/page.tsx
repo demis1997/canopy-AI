@@ -28,70 +28,72 @@ export default async function ConversationDetailPage({
   const allowedIds = await assignedCreatorIds(ctx);
   if (allowedIds && !allowedIds.includes(conversation.creatorId)) notFound();
 
-  const [memories, products, takeover, latestGeneration, inbox, sequences, fanNote, spend] = await Promise.all([
-    prisma.subscriberMemory.findMany({
-      where: {
-        organizationId: ctx.tenant.organizationId,
-        subscriberId: conversation.subscriberId,
-        creatorId: conversation.creatorId,
-        deletedAt: null,
-      },
-      orderBy: { lastConfirmedAt: "desc" },
-    }),
-    prisma.product.findMany({
-      where: {
-        organizationId: ctx.tenant.organizationId,
-        creatorId: conversation.creatorId,
-        available: true,
-      },
-    }),
-    prisma.platformConversation.findFirst({
-      where: {
-        canopyConversationId: conversation.id,
-        organizationId: ctx.tenant.organizationId,
-        humanTakeover: true,
-      },
-    }),
-    prisma.generation.findFirst({
-      where: { organizationId: ctx.tenant.organizationId, conversationId: conversation.id },
-      include: { replyOptions: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    loadInbox(ctx.tenant.organizationId, allowedIds),
-    prisma.sequence.findMany({
-      where: {
-        organizationId: ctx.tenant.organizationId,
-        creatorId: conversation.creatorId,
-        active: true,
-      },
-      include: { steps: { orderBy: { position: "asc" } } },
-      orderBy: { name: "asc" },
-    }),
-    prisma.fanNote.findUnique({
-      where: {
-        creatorId_subscriberId: {
-          creatorId: conversation.creatorId,
+  const [memories, products, takeover, latestGeneration, inbox, sequences, fanNote, spend] =
+    await Promise.all([
+      prisma.subscriberMemory.findMany({
+        where: {
+          organizationId: ctx.tenant.organizationId,
           subscriberId: conversation.subscriberId,
+          creatorId: conversation.creatorId,
+          deletedAt: null,
         },
-      },
-    }),
-    prisma.purchase.aggregate({
-      where: {
-        organizationId: ctx.tenant.organizationId,
-        subscriberId: conversation.subscriberId,
-        refunded: false,
-        conversation: { creatorId: conversation.creatorId },
-      },
-      _sum: { amountCents: true },
-      _count: true,
-    }),
-  ]);
+        orderBy: { lastConfirmedAt: "desc" },
+      }),
+      prisma.product.findMany({
+        where: {
+          organizationId: ctx.tenant.organizationId,
+          creatorId: conversation.creatorId,
+          available: true,
+        },
+      }),
+      prisma.platformConversation.findFirst({
+        where: {
+          canopyConversationId: conversation.id,
+          organizationId: ctx.tenant.organizationId,
+          humanTakeover: true,
+        },
+      }),
+      prisma.generation.findFirst({
+        where: { organizationId: ctx.tenant.organizationId, conversationId: conversation.id },
+        include: { replyOptions: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      loadInbox(ctx.tenant.organizationId, allowedIds),
+      prisma.sequence.findMany({
+        where: {
+          organizationId: ctx.tenant.organizationId,
+          creatorId: conversation.creatorId,
+          active: true,
+        },
+        include: { steps: { orderBy: { position: "asc" } } },
+        orderBy: { name: "asc" },
+      }),
+      prisma.fanNote.findUnique({
+        where: {
+          creatorId_subscriberId: {
+            creatorId: conversation.creatorId,
+            subscriberId: conversation.subscriberId,
+          },
+        },
+      }),
+      prisma.purchase.aggregate({
+        where: {
+          organizationId: ctx.tenant.organizationId,
+          subscriberId: conversation.subscriberId,
+          refunded: false,
+          conversation: { creatorId: conversation.creatorId },
+        },
+        _sum: { amountCents: true },
+        _count: true,
+      }),
+    ]);
 
   return (
     <div className="space-y-4">
       {takeover ? (
         <div className="rounded-[10px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Human takeover active. Automation is locked on this conversation until an operator releases it.
+          Human takeover active. Automation is locked on this conversation until an operator
+          releases it.
         </div>
       ) : null}
       <CopilotWorkspace
@@ -103,7 +105,8 @@ export default async function ConversationDetailPage({
           blocked: conversation.blocked,
           creatorName: conversation.creator.displayName,
           subscriberName: conversation.subscriber.displayName,
-          personaName: conversation.creator.personas[0]?.displayName ?? conversation.creator.displayName,
+          personaName:
+            conversation.creator.personas[0]?.displayName ?? conversation.creator.displayName,
           explicitness: conversation.creator.personas[0]?.allowedExplicitness ?? "SUGGESTIVE",
           summary: conversation.summary?.summary ?? null,
           mutedAi: conversation.mutedAi,
@@ -176,7 +179,10 @@ export default async function ConversationDetailPage({
                 replyOptions: latestGeneration.replyOptions.map((o) => ({
                   id: o.id,
                   text: o.text,
-                  messages: o.text.split(/\n+/).map((s) => s.trim()).filter(Boolean),
+                  messages: o.text
+                    .split(/\n+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean),
                   tone: o.tone,
                   internalReason: o.internalReason,
                 })),

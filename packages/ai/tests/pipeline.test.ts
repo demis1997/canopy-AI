@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { evaluateSafety, containsPromptInjection } from "../src/safety/index.js";
-import { parseGenerationOutput, validateProductsAndPrices, applyReplyGuards } from "../src/pipeline/validate-output.js";
+import {
+  parseGenerationOutput,
+  validateProductsAndPrices,
+  applyReplyGuards,
+} from "../src/pipeline/validate-output.js";
 import { containsMeetSpeak, inferFanIntake } from "@canopy/shared";
 import { MockLLMProvider } from "../src/provider/mock.js";
 import { concessionAllowedFrom, resolveOfferPrice } from "../src/pricing/concession.js";
@@ -77,15 +81,15 @@ describe("safety", () => {
   });
 
   it("blocks suspected minor", () => {
-    expect(
-      evaluateSafety({ adultStatus: "SUSPECTED_MINOR", subscriberText: "hi" }).allowed,
-    ).toBe(false);
+    expect(evaluateSafety({ adultStatus: "SUSPECTED_MINOR", subscriberText: "hi" }).allowed).toBe(
+      false,
+    );
   });
 
   it("blocks confirmed minor", () => {
-    expect(
-      evaluateSafety({ adultStatus: "CONFIRMED_MINOR", subscriberText: "hi" }).allowed,
-    ).toBe(false);
+    expect(evaluateSafety({ adultStatus: "CONFIRMED_MINOR", subscriberText: "hi" }).allowed).toBe(
+      false,
+    );
   });
 
   it("blocks subscriber claiming to be 16", () => {
@@ -171,7 +175,9 @@ describe("structured output", () => {
       funnelStage: "RAPPORT",
       explicitnessLevel: "FLIRTY",
       recommendedAction: "REPLY",
-      replyOptions: [{ text: "sure we can meetup later", tone: "PLAYFUL", internalReason: "rapport" }],
+      replyOptions: [
+        { text: "sure we can meetup later", tone: "PLAYFUL", internalReason: "rapport" },
+      ],
       recommendedProductId: null,
       approvedPrice: null,
       requiresHumanReview: true,
@@ -195,6 +201,11 @@ describe("structured output", () => {
       replyOptions: [
         {
           text: "you're asking about meetups?\nkeep it in the app good boy\nshower set $40",
+          messages: [
+            "you're asking about meetups?",
+            "keep it in the app good boy",
+            "shower set $40",
+          ],
           tone: "PLAYFUL" as const,
           internalReason: "bad",
         },
@@ -206,10 +217,19 @@ describe("structured output", () => {
       memoryUpdates: [],
       suggestedFunnelTransition: null,
     };
-    const result = validateProductsAndPrices(json, [{ id: "prod_1", standardPrice: 40, minimumPrice: 35, available: true }], 10, false, {
-      subscriberText: "Do you do meetups with fans or not?",
-    });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const result = validateProductsAndPrices(
+      json,
+      [{ id: "prod_1", standardPrice: 40, minimumPrice: 35, available: true }],
+      10,
+      false,
+      {
+        subscriberText: "Do you do meetups with fans or not?",
+      },
+    );
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(containsMeetSpeak(blob)).toBe(false);
     expect(blob).not.toMatch(/good boy/);
     expect(blob).not.toMatch(/shower set/);
@@ -280,7 +300,10 @@ describe("structured output", () => {
         catalog: [{ id: "prod_1", name: "Shower set (DEMO)" }],
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/shower set/);
     expect(blob).not.toMatch(/\$40/);
     expect(guarded.recommendedProductId).toBeNull();
@@ -292,7 +315,10 @@ describe("structured output", () => {
     const guarded = applyReplyGuards(guardDraft("kneel loser\nsay thank you"), "hey", {
       rejections: [{ text: "kneel loser\nsay thank you", reason: "dont call fans losers" }],
     });
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/kneel loser/);
   });
 
@@ -397,7 +423,11 @@ describe("structured output", () => {
         replyOptions: [
           {
             text: "u have seen me online tho\ni havent even seen u\nwhy would i prove myself to a stranger",
-            messages: ["u have seen me online tho", "i havent even seen u", "why would i prove myself to a stranger"],
+            messages: [
+              "u have seen me online tho",
+              "i havent even seen u",
+              "why would i prove myself to a stranger",
+            ],
             tone: "DIRECT",
             internalReason: "good",
           },
@@ -445,7 +475,10 @@ describe("structured output", () => {
         ],
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/never said you'?re 28/);
   });
@@ -506,11 +539,17 @@ describe("structured output", () => {
       {
         recentMessages: [
           { authorType: "CREATOR", body: "29 is perfect" },
-          { authorType: "SUBSCRIBER", body: "What do you mean 29 is perfect? You just said you're 29" },
+          {
+            authorType: "SUBSCRIBER",
+            body: "What do you mean 29 is perfect? You just said you're 29",
+          },
         ],
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/loser|perfect/);
   });
@@ -539,7 +578,10 @@ describe("structured output", () => {
       },
       "Im asking are you single?",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single|no bf|single on here/);
     expect(blob).not.toMatch(/talking about me|that was about me|mixed it up/);
   });
@@ -582,14 +624,23 @@ describe("structured output", () => {
     "got a bf?",
   ])("answers %s with a direct relationship line, not a mixup", (ask) => {
     const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), ask);
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single|no bf|single on here|not taken/);
     expect(blob).not.toMatch(mixupLeak);
   });
 
   it("answers do you have a boyfriend with a relationship line", () => {
-    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "do you have a boyfriend?");
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\ni was talking about me"),
+      "do you have a boyfriend?",
+    );
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single|no bf|single on here/);
     expect(blob).not.toMatch(mixupLeak);
   });
@@ -604,39 +655,65 @@ describe("structured output", () => {
       guardDraft("yeah im single\nyou're from the beach"),
       "are you single?",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single/);
     expect(blob).not.toMatch(mixupLeak);
   });
 
   it("answers how old are you with her age, not a mixup", () => {
-    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "how old are you?", {
-      creatorAge: 28,
-    });
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\ni was talking about me"),
+      "how old are you?",
+      {
+        creatorAge: 28,
+      },
+    );
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/\bim 28\b/);
     expect(blob).not.toMatch(mixupLeak);
   });
 
   it("keeps a valid model age answer", () => {
-    const guarded = applyReplyGuards(guardDraft("im 28\nnosey huh"), "how old are you?", { creatorAge: 28 });
+    const guarded = applyReplyGuards(guardDraft("im 28\nnosey huh"), "how old are you?", {
+      creatorAge: 28,
+    });
     expect(guarded.replyOptions[0]!.text.toLowerCase()).toMatch(/\bim 28\b/);
   });
 
   it("answers where are you from with her location, not a mixup", () => {
-    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "where are you from?", {
-      creatorCity: "coastal city",
-    });
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\ni was talking about me"),
+      "where are you from?",
+      {
+        creatorCity: "coastal city",
+      },
+    );
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/coast|water|i live/);
     expect(blob).not.toMatch(mixupLeak);
   });
 
   it("answers where do you live with her location", () => {
-    const guarded = applyReplyGuards(guardDraft("lol my bad\ni was talking about me"), "where do you live?", {
-      creatorCity: "coastal city",
-    });
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\ni was talking about me"),
+      "where do you live?",
+      {
+        creatorCity: "coastal city",
+      },
+    );
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/coast|water|i live/);
     expect(blob).not.toMatch(mixupLeak);
   });
@@ -646,7 +723,10 @@ describe("structured output", () => {
       guardDraft("lol my bad\ni was talking about me"),
       "what do you want to know about me?",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(mixupLeak);
   });
 
@@ -657,14 +737,23 @@ describe("structured output", () => {
         { authorType: "SUBSCRIBER", body: "i never said i'm 29" },
       ],
     });
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
 
   it("does not invent a that-was-about-me explanation without a prior incorrect creator claim", () => {
-    const guarded = applyReplyGuards(guardDraft("lol my bad\nthat was about me"), "i never said i'm 29");
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const guarded = applyReplyGuards(
+      guardDraft("lol my bad\nthat was about me"),
+      "i never said i'm 29",
+    );
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/wait what|what do u mean|dont think i said/);
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
@@ -685,7 +774,10 @@ describe("structured output", () => {
         },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single/);
     expect(blob).toMatch(/how old/);
     expect(blob).not.toMatch(mixupLeak);
@@ -693,10 +785,15 @@ describe("structured output", () => {
 
   it("does not re-ask an already sent vibe question after an unexpected sexual interruption", () => {
     const recent = [
-      { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+      {
+        authorType: "CHATTER",
+        body: "how many hands are you typing with, haha? you can be honest with me",
+      },
     ];
     const guarded = applyReplyGuards(
-      guardDraft("oh, you're not jerking off, huh?\nwait\nhow many hands are you typing with, haha?"),
+      guardDraft(
+        "oh, you're not jerking off, huh?\nwait\nhow many hands are you typing with, haha?",
+      ),
       "Well, I'm not jerking off now",
       {
         recentMessages: recent,
@@ -712,7 +809,10 @@ describe("structured output", () => {
         },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/not jerking/);
     expect(blob).not.toMatch(/how old/);
     expect(blob).not.toMatch(/how many hands|typing with/);
@@ -721,42 +821,37 @@ describe("structured output", () => {
 
   it("blocks a semantically repeated vibe question even when the wording changed", () => {
     const recent = [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }];
-    const guarded = applyReplyGuards(
-      guardDraft("so both hands free or nah?"),
-      "lol maybe later",
-      {
-        recentMessages: recent,
-        recentOutbound: recent.map((m) => m.body),
-        flowPlan: {
-          closer: null,
-          step: "ASK_AGE",
-          previousStep: "VIBE_CHECK",
-          askedObjectives: ["VIBE"],
-          askPending: false,
-          pendingQuestion: "AGE",
-        },
+    const guarded = applyReplyGuards(guardDraft("so both hands free or nah?"), "lol maybe later", {
+      recentMessages: recent,
+      recentOutbound: recent.map((m) => m.body),
+      flowPlan: {
+        closer: null,
+        step: "ASK_AGE",
+        previousStep: "VIBE_CHECK",
+        askedObjectives: ["VIBE"],
+        askPending: false,
+        pendingQuestion: "AGE",
       },
-    );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    });
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/both hands free|how many hands|typing with|how old/);
   });
 
   it("strips a standalone wait bubble unless it is part of a real sentence", () => {
-    const guarded = applyReplyGuards(
-      guardDraft("wait\nhow old are u btw?"),
-      "haha",
-      {
-        recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
-        flowPlan: {
-          closer: null,
-          step: "ASK_AGE",
-          previousStep: "VIBE_CHECK",
-          askedObjectives: ["VIBE"],
-          askPending: false,
-          pendingQuestion: "AGE",
-        },
+    const guarded = applyReplyGuards(guardDraft("wait\nhow old are u btw?"), "haha", {
+      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with?" }],
+      flowPlan: {
+        closer: null,
+        step: "ASK_AGE",
+        previousStep: "VIBE_CHECK",
+        askedObjectives: ["VIBE"],
+        askPending: false,
+        pendingQuestion: "AGE",
       },
-    );
+    });
     const lines = guarded.replyOptions[0]!.text.split("\n").map((line) => line.trim());
     expect(lines.some((line) => /^wait[.!?]*$/i.test(line))).toBe(false);
     expect(guarded.replyOptions[0]!.text.toLowerCase()).not.toMatch(/how old/);
@@ -769,7 +864,9 @@ describe("structured output", () => {
       ),
       "I'm a carpenter",
       {
-        recentMessages: [{ authorType: "CHATTER", body: "what do u do for a living? just curiouss" }],
+        recentMessages: [
+          { authorType: "CHATTER", body: "what do u do for a living? just curiouss" },
+        ],
         flowPlan: {
           closer: "mind if i ask you something a little personal?",
           step: "ASK_PERSONAL_PERMISSION",
@@ -780,9 +877,14 @@ describe("structured output", () => {
         },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/personal|read you/i);
-    expect(blob).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+    expect(blob).not.toMatch(
+      /taking control|told what to do|being in charge or submitting|good boy/i,
+    );
   });
 
   it("does not let the closer guard append the sub/dom question after a permission transition", () => {
@@ -801,7 +903,10 @@ describe("structured output", () => {
         },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/read you|personal/i);
     expect(blob).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
   });
@@ -816,7 +921,10 @@ describe("structured output", () => {
         replyOptions: [
           {
             text: "oh really? you're from the beach?\ni'm from... well nevermind. where are you from? tell me",
-            messages: ["oh really? you're from the beach?", "i'm from... well nevermind. where are you from? tell me"],
+            messages: [
+              "oh really? you're from the beach?",
+              "i'm from... well nevermind. where are you from? tell me",
+            ],
             tone: "PLAYFUL",
             internalReason: "invert",
           },
@@ -831,7 +939,10 @@ describe("structured output", () => {
       "Where are you from?",
       { creatorCity: "coastal city" },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/you'?re from the beach/);
     expect(blob).toMatch(/coast|water/);
   });
@@ -843,9 +954,24 @@ describe("structured output", () => {
       explicitnessLevel: "FLIRTY" as const,
       recommendedAction: "REPLY" as const,
       replyOptions: [
-        { text: "placeholder", messages: ["placeholder"], tone: "PLAYFUL" as const, internalReason: "x" },
-        { text: "placeholder2", messages: ["placeholder2"], tone: "PLAYFUL" as const, internalReason: "x" },
-        { text: "placeholder3", messages: ["placeholder3"], tone: "PLAYFUL" as const, internalReason: "x" },
+        {
+          text: "placeholder",
+          messages: ["placeholder"],
+          tone: "PLAYFUL" as const,
+          internalReason: "x",
+        },
+        {
+          text: "placeholder2",
+          messages: ["placeholder2"],
+          tone: "PLAYFUL" as const,
+          internalReason: "x",
+        },
+        {
+          text: "placeholder3",
+          messages: ["placeholder3"],
+          tone: "PLAYFUL" as const,
+          internalReason: "x",
+        },
       ],
       recommendedProductId: null,
       approvedPrice: null,
@@ -856,7 +982,9 @@ describe("structured output", () => {
     };
     const firsts = new Set(
       ["seed-one", "seed-two", "seed-three", "alpha", "omega", "irl-ask-7"].map(
-        (seed) => applyReplyGuards(draft, "So do you do IRL stuff?", { variantSeed: seed }).replyOptions[0]!.text,
+        (seed) =>
+          applyReplyGuards(draft, "So do you do IRL stuff?", { variantSeed: seed }).replyOptions[0]!
+            .text,
       ),
     );
     expect(firsts.size).toBeGreaterThan(1);
@@ -886,7 +1014,10 @@ describe("structured output", () => {
       },
       "Tease me then",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/you want me to tease|gonna love it|what i do best/);
     expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg/);
   });
@@ -915,7 +1046,10 @@ describe("structured output", () => {
       },
       "Stop calling me a loser",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/loser/);
     expect(blob).toMatch(/my bad|dropping it|heard u|wont call/);
   });
@@ -944,7 +1078,10 @@ describe("structured output", () => {
       },
       "Of course I'm not happy. I'm talking to a robot. I want to speak with the actual model",
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/refund/);
     expect(guarded.recommendedAction).toBe("REQUEST_HUMAN_REVIEW");
     expect(guarded.replyOptions).toEqual([]);
@@ -1004,7 +1141,10 @@ describe("structured output", () => {
       "i'm so hard for you",
       { threadLessons: { answeredAreYouReal: true, heWantsTease: true } },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/ofcourse|not a bot/);
     expect(blob).toMatch(/mouth|knees|neck|hard|leaking|tongue|cock|beg|show u|shot something/);
   });
@@ -1034,7 +1174,10 @@ describe("structured output", () => {
       "hey",
       { fanIntake: ["mmm how old are you?\nfeel curious idk why"] },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/tell me more/);
     expect(blob).toMatch(/how old|tell u something|shot something|show u/);
   });
@@ -1068,7 +1211,10 @@ describe("structured output", () => {
       "Why? we just started talking",
       { fanIntake: beat?.variants },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/beach|water|burns/);
     expect(blob).toMatch(/getting to know|no rush|what u doing|fair/);
   });
@@ -1106,7 +1252,10 @@ describe("structured output", () => {
         catalog: [{ id: "prod_1", name: "Girlcock video" }],
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/unlock the/);
     expect(blob).not.toMatch(/\$28/);
     expect(blob).not.toMatch(/girlcock video/);
@@ -1125,7 +1274,10 @@ describe("structured output", () => {
         },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/gonna tell u something/);
     expect(blob).toMatch(/mouth on u|shot something filthy|start slow/);
   });
@@ -1145,7 +1297,10 @@ describe("structured output", () => {
         flowPlan: { skipPitch: true, facts: { fan_dominance: "DOMINANT" } },
       },
     );
-    const blob = guarded.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = guarded.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/i like being in charge/);
     expect(blob).not.toMatch(/kneel/);
     expect(blob).not.toMatch(/worth every penny|it's a video/);
@@ -1176,7 +1331,11 @@ describe("structured output", () => {
         suggestedFunnelTransition: null,
       },
       "can you send the video",
-      { funnelStage: "OFFER", fanMessageCount: 8, catalog: [{ id: "prod_1", name: "Girlcock video" }] },
+      {
+        funnelStage: "OFFER",
+        fanMessageCount: 8,
+        catalog: [{ id: "prod_1", name: "Girlcock video" }],
+      },
     );
     const blob = guarded.replyOptions[0]!.text.toLowerCase();
     expect(blob).not.toMatch(/unlock the/);
@@ -1191,7 +1350,9 @@ describe("product validation", () => {
     funnelStage: "OFFER" as const,
     explicitnessLevel: "EXPLICIT" as const,
     recommendedAction: "PRESENT_OFFER" as const,
-    replyOptions: [{ text: "here", messages: ["here"], tone: "DIRECT" as const, internalReason: "offer" }],
+    replyOptions: [
+      { text: "here", messages: ["here"], tone: "DIRECT" as const, internalReason: "offer" },
+    ],
     recommendedProductId: "prod_1" as string | null,
     approvedPrice: 40 as number | null,
     requiresHumanReview: true,
@@ -1327,7 +1488,11 @@ describe("mock provider", () => {
         name: "Tease",
         kind: "TEASER",
         stepIndex: 1,
-        current: { body: "sending that voice note i just recorded", mediaHint: "VOICE", priceTier: 1 },
+        current: {
+          body: "sending that voice note i just recorded",
+          mediaHint: "VOICE",
+          priceTier: 1,
+        },
         remaining: ["then the ppv", "aftercare later"],
       },
     });
@@ -1344,11 +1509,17 @@ describe("mock provider", () => {
       funnelStage: "RAPPORT",
       existingFan: true,
       recentMessages: [
-        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+        {
+          authorType: "CHATTER",
+          body: "how many hands are you typing with, haha? you can be honest with me",
+        },
         { authorType: "SUBSCRIBER", body: "Well, I'm not jerking off now" },
       ],
     });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/how many hands|typing with/);
     expect(blob.split("\n").some((line) => /^wait[.!?]*$/i.test(line.trim()))).toBe(false);
     expect(blob).not.toMatch(/how old/);
@@ -1396,7 +1567,12 @@ describe("mock provider", () => {
       ],
     });
     expect(result.output.recommendedProductId).toBe("dick");
-    expect(result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase()).toMatch(/girlcock/);
+    expect(
+      result.output.replyOptions
+        .map((o) => o.text)
+        .join("\n")
+        .toLowerCase(),
+    ).toMatch(/girlcock/);
   });
 
   it("does not pitch a rejected catalog item when the fan is just talking", async () => {
@@ -1410,7 +1586,10 @@ describe("mock provider", () => {
         },
       ],
     });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/shower set/);
     expect(result.output.recommendedProductId).toBeNull();
     expect(result.output.recommendedAction).toBe("REPLY");
@@ -1419,7 +1598,10 @@ describe("mock provider", () => {
   it("asks about him instead of flipping his question", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("What do you wanna know about me?"));
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).not.toMatch(/curious about me/);
     expect(blob).toMatch(/lots|fun|told a girl/);
   });
@@ -1430,7 +1612,10 @@ describe("mock provider", () => {
       ...genInput("How old are you?"),
       persona: { ...persona, biography: "Fictional 28-year-old fitness creator" },
     });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im 28|old enough|send u something|hold on/);
     expect(blob).not.toMatch(/how old do u think i am/);
     expect(blob).not.toMatch(/you'?re a/);
@@ -1439,7 +1624,10 @@ describe("mock provider", () => {
   it("answers are-you-single about her, not a mixup about him", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("Im asking are you single?"));
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/im single|no bf|single on here/);
     expect(blob).not.toMatch(/talking about me|that was about me|mixed it up|my bad/);
   });
@@ -1451,7 +1639,10 @@ describe("mock provider", () => {
       followUpPhase: "AFTERCARE",
       playbook: "AFTERCARE",
     });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/cloud nine/);
     expect(result.output.recommendedProductId).toBeNull();
   });
@@ -1477,7 +1668,10 @@ describe("mock provider", () => {
         { authorType: "SUBSCRIBER", body: "i never said i'm 29" },
       ],
     });
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/my bad|mixed that up|mixed it up/);
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
@@ -1485,7 +1679,10 @@ describe("mock provider", () => {
   it("asks for clarification when the mixup is not confirmed by prior creator text", async () => {
     const mock = new MockLLMProvider();
     const result = await mock.generateReplies(genInput("i never said i'm 29"));
-    const blob = result.output.replyOptions.map((o) => o.text).join("\n").toLowerCase();
+    const blob = result.output.replyOptions
+      .map((o) => o.text)
+      .join("\n")
+      .toLowerCase();
     expect(blob).toMatch(/wait what|what do u mean|dont think i said/);
     expect(blob).not.toMatch(/that was about me|talking about me/);
   });
@@ -1574,9 +1771,9 @@ describe("venice error mapping", () => {
     expect(mapProviderError({ status: 429 }, "r1").code).toBe("RATE_LIMIT");
   });
   it("maps circuit open and dropped sockets", () => {
-    expect(mapProviderError({ code: "CIRCUIT_OPEN", message: "Circuit breaker open" }, "r1").code).toBe(
-      "CIRCUIT_OPEN",
-    );
+    expect(
+      mapProviderError({ code: "CIRCUIT_OPEN", message: "Circuit breaker open" }, "r1").code,
+    ).toBe("CIRCUIT_OPEN");
     expect(mapProviderError({ code: "ECONNRESET", message: "socket hang up" }, "r1").code).toBe(
       "UNAVAILABLE",
     );
@@ -1627,9 +1824,7 @@ describe("operator rejection prompt", () => {
   it("puts reject reasons in the system prompt as bans", () => {
     const messages = composeGenerationPrompt({
       ...genInput("hey"),
-      operatorRejections: [
-        { text: "kneel loser", reason: "dont call fans losers" },
-      ],
+      operatorRejections: [{ text: "kneel loser", reason: "dont call fans losers" }],
     });
     const system = String(messages[0]?.content ?? "");
     const user = String(messages[1]?.content ?? "");
@@ -1652,7 +1847,12 @@ describe("operator rejection prompt", () => {
       responseMode: "SALES",
       salesReadiness: "BUYING_SIGNAL",
       allowPitch: true,
-      sellTarget: { productId: "dick", name: "Dick — playing with girlcock", price: 19, reason: "CONTEXT" },
+      sellTarget: {
+        productId: "dick",
+        name: "Dick — playing with girlcock",
+        price: 19,
+        reason: "CONTEXT",
+      },
     });
     const user = String(messages[1]?.content ?? "");
     expect(user).toMatch(/sell_target/);

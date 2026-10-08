@@ -1,10 +1,4 @@
-export function CanopyMark({
-  className,
-  size = 32,
-}: {
-  className?: string;
-  size?: number;
-}) {
+export function CanopyMark({ className, size = 32 }: { className?: string; size?: number }) {
   return (
     <svg
       width={size}
@@ -37,7 +31,5 @@ export function CanopyMark({
 }
 
 export function CanopyWordmark({ className }: { className?: string }) {
-  return (
-    <span className={className ?? "font-medium tracking-[0.18em] text-bone"}>CANOPY</span>
-  );
+  return <span className={className ?? "font-medium tracking-[0.18em] text-bone"}>CANOPY</span>;
 }

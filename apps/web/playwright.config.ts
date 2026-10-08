@@ -11,9 +11,11 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
     ? undefined
     : {
-        command: "pnpm --filter @canopy/web dev",
+        command: process.env.CI
+          ? "pnpm --filter @canopy/web start"
+          : "pnpm --filter @canopy/web dev",
         url: "http://localhost:3000",
-        reuseExistingServer: true,
+        reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },
 });

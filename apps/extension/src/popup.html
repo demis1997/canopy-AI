@@ -7,7 +7,10 @@
   </head>
   <body>
     <h1>Canopy copilot</h1>
-    <p class="muted">Human-in-the-loop. This extension never sends messages, never stores the app API key, and never reads platform cookies.</p>
+    <p class="muted">
+      Human-in-the-loop. This extension never sends messages, never stores the app API key, and
+      never reads platform cookies.
+    </p>
     <div id="inbox">Checking inbox…</div>
     <label>Session token from /platform</label>
     <input id="token" type="password" placeholder="Extension token" />
@@ -25,7 +28,9 @@
     <textarea id="draft" placeholder="Approved draft"></textarea>
     <button id="insert">Insert into composer</button>
     <p class="muted">Send stays a human click on the native button.</p>
-    <a id="audit" href="http://localhost:3000/security" target="_blank" rel="noreferrer">Open audit log</a>
+    <a id="audit" href="http://localhost:3000/security" target="_blank" rel="noreferrer"
+      >Open audit log</a
+    >
     <script src="popup.js" type="module"></script>
   </body>
 </html>

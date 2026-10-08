@@ -75,8 +75,11 @@ export class MockOnlyFansAdapter implements OnlyFansAdapter {
 
   async openConversation(externalConversationId: string) {
     this.assertConnected();
-    const found = this.state.conversations.find((c) => c.externalConversationId === externalConversationId);
-    if (!found) throw new AdapterClosedError("SELECTOR_FAILURE", "Conversation not found in mock inbox");
+    const found = this.state.conversations.find(
+      (c) => c.externalConversationId === externalConversationId,
+    );
+    if (!found)
+      throw new AdapterClosedError("SELECTOR_FAILURE", "Conversation not found in mock inbox");
     this.state.openConversationId = externalConversationId;
   }
 
@@ -96,7 +99,9 @@ export class MockOnlyFansAdapter implements OnlyFansAdapter {
   }
 
   async readFanMetadata(): Promise<FanMetadata> {
-    const open = this.state.conversations.find((c) => c.externalConversationId === this.state.openConversationId);
+    const open = this.state.conversations.find(
+      (c) => c.externalConversationId === this.state.openConversationId,
+    );
     if (!open) throw new AdapterClosedError("AMBIGUOUS_ELEMENT", "Fan header missing");
     return { externalFanId: open.externalFanId, displayName: open.externalFanDisplayName };
   }
@@ -131,12 +136,14 @@ export class MockOnlyFansAdapter implements OnlyFansAdapter {
   }
 
   async selectVaultItem(reference: VaultReference) {
-    if (!this.state.vaultOpen) throw new AdapterClosedError("SELECTOR_FAILURE", "Vault picker is closed");
+    if (!this.state.vaultOpen)
+      throw new AdapterClosedError("SELECTOR_FAILURE", "Vault picker is closed");
     this.state.selectedVault = reference.platformMediaReference;
   }
 
   async setPpvPrice(price: number) {
-    if (!this.state.vaultOpen) throw new AdapterClosedError("SELECTOR_FAILURE", "Vault picker is closed");
+    if (!this.state.vaultOpen)
+      throw new AdapterClosedError("SELECTOR_FAILURE", "Vault picker is closed");
     this.state.ppvPrice = price;
   }
 
@@ -145,9 +152,19 @@ export class MockOnlyFansAdapter implements OnlyFansAdapter {
     const last = [...visible].reverse().find((m) => m.direction === "OUTBOUND");
     if (!last) return { verified: false, ambiguous: true };
     if (last.body.trim() !== expectedText.trim()) {
-      return { verified: false, ambiguous: true, visibleText: last.body, externalMessageId: last.externalMessageId };
+      return {
+        verified: false,
+        ambiguous: true,
+        visibleText: last.body,
+        externalMessageId: last.externalMessageId,
+      };
     }
-    return { verified: true, ambiguous: false, visibleText: last.body, externalMessageId: last.externalMessageId };
+    return {
+      verified: true,
+      ambiguous: false,
+      visibleText: last.body,
+      externalMessageId: last.externalMessageId,
+    };
   }
 
   async detectPurchaseEvents() {
@@ -172,13 +189,22 @@ export class MockOnlyFansAdapter implements OnlyFansAdapter {
 
   private assertConnected() {
     if (this.state.connectionState === "LOGIN_REQUIRED") {
-      throw new AdapterClosedError("LOGIN_REQUIRED", "Creator must complete login and 2FA in the browser");
+      throw new AdapterClosedError(
+        "LOGIN_REQUIRED",
+        "Creator must complete login and 2FA in the browser",
+      );
     }
     if (this.state.connectionState === "CHALLENGE_REQUIRED") {
-      throw new AdapterClosedError("CHALLENGE_REQUIRED", "Platform challenge requires manual completion");
+      throw new AdapterClosedError(
+        "CHALLENGE_REQUIRED",
+        "Platform challenge requires manual completion",
+      );
     }
     if (this.state.connectionState !== "CONNECTED" && this.state.connectionState !== "SYNCING") {
-      throw new AdapterClosedError("SELECTOR_FAILURE", `Worker state ${this.state.connectionState} is not operable`);
+      throw new AdapterClosedError(
+        "SELECTOR_FAILURE",
+        `Worker state ${this.state.connectionState} is not operable`,
+      );
     }
   }
 }

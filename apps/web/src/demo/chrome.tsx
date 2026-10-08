@@ -12,7 +12,9 @@ export function DemoChrome({ active }: { active: "conversations" | "products" | 
   return (
     <header className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">C</div>
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">
+          C
+        </div>
         <span className="text-sm font-semibold tracking-tight">Canopy</span>
         <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 ring-1 ring-teal-200">
           Demo environment

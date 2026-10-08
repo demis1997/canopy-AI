@@ -1,4 +1,11 @@
-import type { FunnelStage, Intent, MediaType, ProductSource, RecommendedAction, Tone } from "@canopy/shared";
+import type {
+  FunnelStage,
+  Intent,
+  MediaType,
+  ProductSource,
+  RecommendedAction,
+  Tone,
+} from "@canopy/shared";
 
 export type DemoAttachment = {
   id: string;

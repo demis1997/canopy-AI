@@ -37,7 +37,12 @@ export const automationPolicyPatchSchema = z.object({
   welcomeEnabled: z.boolean().optional(),
   followUpsEnabled: z.boolean().optional(),
   ppvEnabled: z.boolean().optional(),
-  humanTakeoverMinutes: z.number().int().min(1).max(24 * 60).optional(),
+  humanTakeoverMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .optional(),
   allowedLanguages: z.array(z.string().min(2).max(8)).optional(),
   allowedProductIds: z.array(z.string()).optional(),
 });
@@ -129,8 +134,7 @@ export function detectUnexpectedLanguage(text: string, allowed: string[]): boole
 
 const MEETING =
   /\b(meet (up|me)|come over|my (hotel|place|house)|whats?app|telegram|kik|snapchat|real life)\b/i;
-const CUSTOM =
-  /\b(custom (video|pic|content)|make me a|shoot (a )?video of|write my name)\b/i;
+const CUSTOM = /\b(custom (video|pic|content)|make me a|shoot (a )?video of|write my name)\b/i;
 
 export function extraAutomationFlags(text: string): string[] {
   const flags: string[] = [];

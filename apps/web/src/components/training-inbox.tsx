@@ -39,7 +39,11 @@ export function TrainingInbox({
       <form className="space-y-3" onSubmit={ingest}>
         <Label>Ingest TXT / pasted training</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste chapter text…" />
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Paste chapter text…"
+        />
         <Button type="submit">Split into pending chunks</Button>
       </form>
       <div className="flex flex-wrap gap-2">

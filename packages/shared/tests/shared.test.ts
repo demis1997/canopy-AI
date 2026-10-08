@@ -3,9 +3,53 @@ import { assertPermission, hasPermission, AuthorizationError } from "../src/perm
 import { canTransition, recommendedActionFor } from "../src/funnel.js";
 import { generationOutputSchema } from "../src/schemas.js";
 import { maskSecret } from "../src/redaction.js";
-import { ladderPrice, nextSendAttempt, followUpPhase, isFirstPpv, ladderSendAttempt, sequenceDropPrice, nextLockedDropPolicy, assessSpendLikelihood } from "../src/crm.js";
-import { parseProductCsv, eligibleProducts, matchSellTarget, boughtWelcomeMessage, pickSequenceDropProduct } from "../src/catalog.js";
-import { splitReplyBubbles, collectOperatorRejections, parseOperatorRejectReason, containsMeetSpeak, scrubMeetSpeak, looksLikeOfflineAsk, looksLikePetNamePushback, looksLikeFanInvitesQuestions, looksLikeInvertedCuriosity, looksLikeNoPitchAsk, looksLikeAgeAsk, looksLikeAreYouReal, looksLikeInventedAboutHimCallout, looksLikeConfirmedInventedAboutHimCallout, looksLikeLocationAsk, looksLikeDirectUnlockPitch, looksLikeAimlessRapport, looksLikeRelationshipAsk, pitchIsTooEarly, creatorAgeFromText, creatorCityFromText, rotateVariants, threadIsOnOfflineAsk, stripUnauthorizedPetNames, stripCatalogMentions, bannedCatalogNames, wantsNoPitch, doubleOneTrailingEmoji } from "../src/replies.js";
+import {
+  ladderPrice,
+  nextSendAttempt,
+  followUpPhase,
+  isFirstPpv,
+  ladderSendAttempt,
+  sequenceDropPrice,
+  nextLockedDropPolicy,
+  assessSpendLikelihood,
+} from "../src/crm.js";
+import {
+  parseProductCsv,
+  eligibleProducts,
+  matchSellTarget,
+  boughtWelcomeMessage,
+  pickSequenceDropProduct,
+} from "../src/catalog.js";
+import {
+  splitReplyBubbles,
+  collectOperatorRejections,
+  parseOperatorRejectReason,
+  containsMeetSpeak,
+  scrubMeetSpeak,
+  looksLikeOfflineAsk,
+  looksLikePetNamePushback,
+  looksLikeFanInvitesQuestions,
+  looksLikeInvertedCuriosity,
+  looksLikeNoPitchAsk,
+  looksLikeAgeAsk,
+  looksLikeAreYouReal,
+  looksLikeInventedAboutHimCallout,
+  looksLikeConfirmedInventedAboutHimCallout,
+  looksLikeLocationAsk,
+  looksLikeDirectUnlockPitch,
+  looksLikeAimlessRapport,
+  looksLikeRelationshipAsk,
+  pitchIsTooEarly,
+  creatorAgeFromText,
+  creatorCityFromText,
+  rotateVariants,
+  threadIsOnOfflineAsk,
+  stripUnauthorizedPetNames,
+  stripCatalogMentions,
+  bannedCatalogNames,
+  wantsNoPitch,
+  doubleOneTrailingEmoji,
+} from "../src/replies.js";
 
 describe("permissions", () => {
   it("allows chatters to generate but not manage the org", () => {
@@ -86,7 +130,11 @@ describe("reply bubbles", () => {
       recommendedAction: "REPLY",
       replyOptions: [
         {
-          messages: ["hmm i see", "well what i think is that your cock is a good size", "I would have a great time on it"],
+          messages: [
+            "hmm i see",
+            "well what i think is that your cock is a good size",
+            "I would have a great time on it",
+          ],
           tone: "PLAYFUL",
           internalReason: "ack then continue",
         },
@@ -109,7 +157,9 @@ describe("reply bubbles", () => {
       funnelStage: "RAPPORT",
       explicitnessLevel: "FLIRTY",
       recommendedAction: "REPLY",
-      replyOptions: [{ text: "hmm i see\nwant the next one?", tone: "PLAYFUL", internalReason: "split" }],
+      replyOptions: [
+        { text: "hmm i see\nwant the next one?", tone: "PLAYFUL", internalReason: "split" },
+      ],
       recommendedProductId: null,
       approvedPrice: null,
       requiresHumanReview: true,
@@ -122,9 +172,12 @@ describe("reply bubbles", () => {
 
   it("splits leftover paragraphs into sentence bubbles", () => {
     expect(
-      splitReplyBubbles("hmm i see. well what i think is that your cock is a good size. I would have a great time on it", {
-        splitSentences: true,
-      }),
+      splitReplyBubbles(
+        "hmm i see. well what i think is that your cock is a good size. I would have a great time on it",
+        {
+          splitSentences: true,
+        },
+      ),
     ).toEqual([
       "hmm i see.",
       "well what i think is that your cock is a good size.",
@@ -144,12 +197,20 @@ describe("operator reject reasons", () => {
   });
 
   it("turns a typed reject reason into a prompt rule with the bad example", async () => {
-    const { operatorRejectLesson, formatOperatorRejectionPrompt } = await import("../src/replies.js");
-    expect(operatorRejectLesson("dont ask the sub/dom question yet", "what turns you on being in charge")).toMatch(
-      /dont ask the sub\/dom question yet/i,
+    const { operatorRejectLesson, formatOperatorRejectionPrompt } =
+      await import("../src/replies.js");
+    expect(
+      operatorRejectLesson(
+        "dont ask the sub/dom question yet",
+        "what turns you on being in charge",
+      ),
+    ).toMatch(/dont ask the sub\/dom question yet/i);
+    expect(operatorRejectLesson("too abrupt, wait for him")).toMatch(
+      /Never repeat this mistake: too abrupt/i,
     );
-    expect(operatorRejectLesson("too abrupt, wait for him")).toMatch(/Never repeat this mistake: too abrupt/i);
-    expect(operatorRejectLesson("stop mentioning the dick clip")).toMatch(/^stop mentioning the dick clip/i);
+    expect(operatorRejectLesson("stop mentioning the dick clip")).toMatch(
+      /^stop mentioning the dick clip/i,
+    );
     const prompt = formatOperatorRejectionPrompt([
       { text: "kneel loser", reason: "dont call fans losers" },
     ]);
@@ -186,13 +247,15 @@ describe("operator reject reasons", () => {
     expect(looksLikeFanInvitesQuestions("What do you wanna know about me?")).toBe(true);
     expect(looksLikeFanInvitesQuestions("what do you want to know about me?")).toBe(true);
     expect(looksLikeInvertedCuriosity("oh? you're curious about me?")).toBe(true);
-    expect(looksLikeNoPitchAsk("stop mentioning the shower set because fan is just interested in conversating")).toBe(
-      true,
-    );
+    expect(
+      looksLikeNoPitchAsk(
+        "stop mentioning the shower set because fan is just interested in conversating",
+      ),
+    ).toBe(true);
     expect(stripUnauthorizedPetNames("i'm 28, good boy 💋")).toBe("i'm 28 💋");
-    expect(stripCatalogMentions("this ppv Shower set for $40 if you want more", ["Shower set"])).not.toMatch(
-      /shower set|\$40/i,
-    );
+    expect(
+      stripCatalogMentions("this ppv Shower set for $40 if you want more", ["Shower set"]),
+    ).not.toMatch(/shower set|\$40/i);
     expect(
       bannedCatalogNames(
         [{ text: "shower set $40", reason: "stop mentioning the shower set" }],
@@ -207,14 +270,18 @@ describe("operator reject reasons", () => {
         },
       ]),
     ).toBe(true);
-    expect(doubleOneTrailingEmoji("oh? curious about my age hmmm? 😏")).toBe("oh? curious about my age hmmm? 😏😏");
+    expect(doubleOneTrailingEmoji("oh? curious about my age hmmm? 😏")).toBe(
+      "oh? curious about my age hmmm? 😏😏",
+    );
     expect(looksLikeAgeAsk("How old are you?")).toBe(true);
     expect(looksLikeAgeAsk("hi how old do i have to be to talk like this")).toBe(false);
     expect(looksLikeAreYouReal("Are you real?")).toBe(true);
     expect(looksLikeAreYouReal("I'm talking to a robot")).toBe(true);
     expect(looksLikeAreYouReal("So you are a bot?")).toBe(true);
     expect(looksLikeInventedAboutHimCallout("I'm a what? And I never said I'm 28")).toBe(true);
-    expect(looksLikeInventedAboutHimCallout("What do you mean 29 is perfect? You just said you're 29")).toBe(true);
+    expect(
+      looksLikeInventedAboutHimCallout("What do you mean 29 is perfect? You just said you're 29"),
+    ).toBe(true);
     expect(looksLikeInventedAboutHimCallout("you just said you're 29")).toBe(false);
     expect(looksLikeInventedAboutHimCallout("Im asking are you single?")).toBe(false);
     expect(looksLikeInventedAboutHimCallout("are you single?")).toBe(false);
@@ -229,7 +296,9 @@ describe("operator reject reasons", () => {
     expect(looksLikeLocationAsk("Where are you from?")).toBe(true);
     expect(creatorCityFromText("Lives in a coastal city, has a rescue cat")).toBe("coastal city");
     const firsts = new Set(
-      ["a", "bb", "hello", "world", "irl-1", "irl-2", "seed-9"].map((seed) => rotateVariants(["a", "b", "c", "d", "e", "f"], seed)[0]),
+      ["a", "bb", "hello", "world", "irl-1", "irl-2", "seed-9"].map(
+        (seed) => rotateVariants(["a", "b", "c", "d", "e", "f"], seed)[0],
+      ),
     );
     expect(firsts.size).toBeGreaterThan(1);
     expect(
@@ -239,10 +308,16 @@ describe("operator reject reasons", () => {
         { authorType: "SUBSCRIBER", body: "Where are you from?" },
       ]),
     ).toBe(false);
-    expect(threadIsOnOfflineAsk([{ authorType: "SUBSCRIBER", body: "So do you do IRL stuff?" }])).toBe(true);
-    expect(stripUnauthorizedPetNames("29 is a great age, loserr. why's it perfect")).not.toMatch(/loser/i);
+    expect(
+      threadIsOnOfflineAsk([{ authorType: "SUBSCRIBER", body: "So do you do IRL stuff?" }]),
+    ).toBe(true);
+    expect(stripUnauthorizedPetNames("29 is a great age, loserr. why's it perfect")).not.toMatch(
+      /loser/i,
+    );
     expect(creatorAgeFromText("Fictional 28-year-old fitness creator")).toBe(28);
-    expect(looksLikeDirectUnlockPitch("unlock the girlcock video for $28 and I'll show you what i mean")).toBe(true);
+    expect(
+      looksLikeDirectUnlockPitch("unlock the girlcock video for $28 and I'll show you what i mean"),
+    ).toBe(true);
     expect(looksLikeAimlessRapport("mmm yeah keep talking\ntell me more babe")).toBe(true);
     expect(looksLikeAimlessRapport("anyway\ni was gonna tell u something")).toBe(false);
     expect(
@@ -298,16 +373,59 @@ describe("catalog eligibility", () => {
   });
 
   it("sells the default video unless context fits another catalog item better", () => {
-    const engagement = { ...base, id: "engagement", name: "Engagement pic", standardPrice: 8, minimumPrice: 8, mediaType: "PHOTO" as const, tags: ["engagement"] };
-    const dick = { ...base, id: "dick", name: "Dick — playing with girlcock", description: "Short girlcock tease.", standardPrice: 19, minimumPrice: 18, mediaType: "VIDEO" as const, tags: ["dick", "girlcock"] };
-    const ass = { ...base, id: "ass", name: "Ass", description: "Ass video.", standardPrice: 25, minimumPrice: 25, mediaType: "VIDEO" as const, tags: ["ass"] };
-    const custom = { ...base, id: "custom", name: "Custom video", description: "He orders a custom.", standardPrice: 80, minimumPrice: 70, mediaType: "CUSTOM" as const, tags: ["custom"] };
+    const engagement = {
+      ...base,
+      id: "engagement",
+      name: "Engagement pic",
+      standardPrice: 8,
+      minimumPrice: 8,
+      mediaType: "PHOTO" as const,
+      tags: ["engagement"],
+    };
+    const dick = {
+      ...base,
+      id: "dick",
+      name: "Dick — playing with girlcock",
+      description: "Short girlcock tease.",
+      standardPrice: 19,
+      minimumPrice: 18,
+      mediaType: "VIDEO" as const,
+      tags: ["dick", "girlcock"],
+    };
+    const ass = {
+      ...base,
+      id: "ass",
+      name: "Ass",
+      description: "Ass video.",
+      standardPrice: 25,
+      minimumPrice: 25,
+      mediaType: "VIDEO" as const,
+      tags: ["ass"],
+    };
+    const custom = {
+      ...base,
+      id: "custom",
+      name: "Custom video",
+      description: "He orders a custom.",
+      standardPrice: 80,
+      minimumPrice: 70,
+      mediaType: "CUSTOM" as const,
+      tags: ["custom"],
+    };
     const products = [engagement, dick, ass, custom];
     expect(matchSellTarget({ products, subscriberTexts: ["hey"] })?.product.id).toBe("engagement");
-    expect(matchSellTarget({ products, subscriberTexts: ["hey"], sequenceProductId: "dick" })?.reason).toBe("SEQUENCE");
-    expect(matchSellTarget({ products, subscriberTexts: ["got any girlcock vids?"] })?.product.id).toBe("dick");
-    expect(matchSellTarget({ products, subscriberTexts: ["show me ur ass"] })?.product.id).toBe("ass");
-    expect(matchSellTarget({ products, subscriberTexts: ["can i order a custom video"] })?.product.id).toBe("custom");
+    expect(
+      matchSellTarget({ products, subscriberTexts: ["hey"], sequenceProductId: "dick" })?.reason,
+    ).toBe("SEQUENCE");
+    expect(
+      matchSellTarget({ products, subscriberTexts: ["got any girlcock vids?"] })?.product.id,
+    ).toBe("dick");
+    expect(matchSellTarget({ products, subscriberTexts: ["show me ur ass"] })?.product.id).toBe(
+      "ass",
+    );
+    expect(
+      matchSellTarget({ products, subscriberTexts: ["can i order a custom video"] })?.product.id,
+    ).toBe("custom");
   });
 });
 
@@ -460,7 +578,9 @@ describe("fan flow pdf", () => {
     expect(beat?.id).toBe("vibe_yes");
     expect(beat?.variants.join("\n")).toMatch(/dive deeper|personal|read you/i);
     expect(beat?.variants.join("\n")).not.toMatch(/how old/i);
-    expect(beat?.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+    expect(beat?.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting/i,
+    );
   });
 
   it("uses the close vs far location lines", async () => {
@@ -489,7 +609,9 @@ describe("fan flow pdf", () => {
     expect(beat?.id).toBe("welcome_bundle");
     expect(beat?.variants.join("\n")).toMatch(/bundle/i);
     expect(beat?.variants.join("\n")).toMatch(/personal|read you|dive deeper/i);
-    expect(beat?.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+    expect(beat?.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting|good boy/i,
+    );
   });
 
   it("answers are-you-single about her instead of owning a mixup about him", async () => {
@@ -500,7 +622,9 @@ describe("fan flow pdf", () => {
     });
     expect(beat?.id).toBe("her_single");
     expect(beat?.variants.join("\n")).toMatch(/im single|no bf|single on here/i);
-    expect(beat?.variants.join("\n")).not.toMatch(/talking about me|that was about me|mixed it up/i);
+    expect(beat?.variants.join("\n")).not.toMatch(
+      /talking about me|that was about me|mixed it up/i,
+    );
   });
 });
 
@@ -524,7 +648,9 @@ describe("conversation flow state machine", () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "im 32 what about you?",
-      recentMessages: [{ authorType: "CHATTER", body: "mmm how old are you? feel curious idk why" }],
+      recentMessages: [
+        { authorType: "CHATTER", body: "mmm how old are you? feel curious idk why" },
+      ],
       creatorAge: 28,
     });
     expect(flow.facts.extra.fan_age).toBe("32");
@@ -563,11 +689,20 @@ describe("conversation flow state machine", () => {
   });
 
   it("skips an already asked age question after a topic change and holds location for a later turn", async () => {
-    const { advanceConversationFlow, serializeFlowState } = await import("../src/conversation-flow.js");
+    const { advanceConversationFlow, serializeFlowState } =
+      await import("../src/conversation-flow.js");
     const first = advanceConversationFlow({
       subscriberText: "anyway whats your favorite color lol",
       recentMessages: [{ authorType: "CHATTER", body: "how old are you?" }],
-      fanNotes: { extra: { flow_step: "ASK_AGE", flow_phase: "NEW_FAN_INTAKE", current_question: "AGE", asked_current_question_count: "1", status_age: "asked" } },
+      fanNotes: {
+        extra: {
+          flow_step: "ASK_AGE",
+          flow_phase: "NEW_FAN_INTAKE",
+          current_question: "AGE",
+          asked_current_question_count: "1",
+          status_age: "asked",
+        },
+      },
     });
     expect(first.next.step).toBe("ASK_LOCATION");
     expect(first.next.stepStatus?.AGE).toBe("skipped");
@@ -593,7 +728,9 @@ describe("conversation flow state machine", () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "both free",
-      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha?" },
+      ],
       existingFan: true,
       fanNotes: { extra: { fan_age: "34", fan_city: "dallas" }, location: "dallas" },
     });
@@ -603,11 +740,15 @@ describe("conversation flow state machine", () => {
   });
 
   it("reacts to not jerking off now without forcing age, and keeps age as the next pending objective", async () => {
-    const { advanceConversationFlow, serializeFlowState } = await import("../src/conversation-flow.js");
+    const { advanceConversationFlow, serializeFlowState } =
+      await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "Well, I'm not jerking off now",
       recentMessages: [
-        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+        {
+          authorType: "CHATTER",
+          body: "how many hands are you typing with, haha? you can be honest with me",
+        },
       ],
       existingFan: true,
     });
@@ -627,7 +768,10 @@ describe("conversation flow state machine", () => {
     const resume = advanceConversationFlow({
       subscriberText: "haha yeah",
       recentMessages: [
-        { authorType: "CHATTER", body: "how many hands are you typing with, haha? you can be honest with me" },
+        {
+          authorType: "CHATTER",
+          body: "how many hands are you typing with, haha? you can be honest with me",
+        },
         { authorType: "SUBSCRIBER", body: "Well, I'm not jerking off now" },
         { authorType: "CHATTER", body: "haha i caught you at the wrong time then" },
       ],
@@ -651,14 +795,18 @@ describe("conversation flow state machine", () => {
     expect(flow.next.step).toBe("ASK_PERSONAL_PERMISSION");
     expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("asked");
     expect(flow.variants.join("\n")).not.toMatch(/how many hands/i);
-    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+    expect(flow.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting/i,
+    );
   });
 
   it("advances after a topic change instead of repeating the vibe question", async () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "anyway whats your favorite color lol",
-      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha?" },
+      ],
     });
     expect(flow.next.step).toBe("ASK_AGE");
     expect(flow.askPending).toBe(false);
@@ -683,7 +831,9 @@ describe("conversation flow state machine", () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
     const flow = advanceConversationFlow({
       subscriberText: "i'm so hard for you rn",
-      recentMessages: [{ authorType: "CHATTER", body: "how many hands are you typing with, haha?" }],
+      recentMessages: [
+        { authorType: "CHATTER", body: "how many hands are you typing with, haha?" },
+      ],
     });
     expect(flow.next.step).toBe("ASK_AGE");
     expect(flow.askPending).toBe(false);
@@ -706,7 +856,10 @@ describe("conversation flow state machine", () => {
     const flow = advanceConversationFlow({
       subscriberText: "lol anyway",
       recentMessages: [
-        { authorType: "CHATTER", body: "what turns you on, being in charge or submitting like a good boy?" },
+        {
+          authorType: "CHATTER",
+          body: "what turns you on, being in charge or submitting like a good boy?",
+        },
       ],
       fanNotes: {
         extra: {
@@ -727,13 +880,14 @@ describe("conversation flow state machine", () => {
     });
     expect(flow.next.step).toBe("SEND_PRODUCT");
     expect(flow.closer).toBeNull();
-    expect(flow.variants.join("\n")).not.toMatch(/being in charge or submitting|how many hands|how old are you/i);
+    expect(flow.variants.join("\n")).not.toMatch(
+      /being in charge or submitting|how many hands|how old are you/i,
+    );
   });
 
   it("reacts to occupation then asks personal permission without the sub/dom question", async () => {
-    const { advanceConversationFlow, serializeFlowState, PERSONAL_PERMISSION_EXAMPLES } = await import(
-      "../src/conversation-flow.js"
-    );
+    const { advanceConversationFlow, serializeFlowState, PERSONAL_PERMISSION_EXAMPLES } =
+      await import("../src/conversation-flow.js");
     expect(new Set(PERSONAL_PERMISSION_EXAMPLES).size).toBeGreaterThan(1);
     const flow = advanceConversationFlow({
       subscriberText: "I'm a carpenter",
@@ -746,8 +900,12 @@ describe("conversation flow state machine", () => {
     expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("asked");
     expect(flow.askPending).toBe(true);
     expect(flow.variants.join("\n")).toMatch(/personal|read you|dive deeper/i);
-    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
-    expect(flow.closer).not.toMatch(/taking control|told what to do|being in charge or submitting|good boy/i);
+    expect(flow.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting|good boy/i,
+    );
+    expect(flow.closer).not.toMatch(
+      /taking control|told what to do|being in charge or submitting|good boy/i,
+    );
     for (const variant of flow.variants) {
       expect(variant).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
     }
@@ -757,7 +915,10 @@ describe("conversation flow state machine", () => {
       recentMessages: [
         { authorType: "CHATTER", body: "what do u do for a living? just curiouss" },
         { authorType: "SUBSCRIBER", body: "I'm a carpenter" },
-        { authorType: "CHATTER", body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?" },
+        {
+          authorType: "CHATTER",
+          body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?",
+        },
       ],
       fanNotes: { extra: { ...serializeFlowState(flow.next), fan_job: "carpenter" } },
     });
@@ -774,7 +935,10 @@ describe("conversation flow state machine", () => {
     const flow = advanceConversationFlow({
       subscriberText: "what?",
       recentMessages: [
-        { authorType: "CHATTER", body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?" },
+        {
+          authorType: "CHATTER",
+          body: "you know, i cant quite read you yet\nmind if i ask you something a little personal?",
+        },
       ],
       fanNotes: {
         extra: {
@@ -815,7 +979,9 @@ describe("conversation flow state machine", () => {
     expect(flow.next.stepStatus?.PERSONAL_PERMISSION).toBe("skipped");
     expect(flow.next.stepStatus?.SUB_DOM).toBe("skipped");
     expect(flow.askPending).toBe(false);
-    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+    expect(flow.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting/i,
+    );
   });
 
   it("holds the sub/dom question when the fan jokes or changes the subject after permission", async () => {
@@ -838,12 +1004,18 @@ describe("conversation flow state machine", () => {
     expect(flow.askPending).toBe(false);
     expect(flow.next.resumeHoldTurns).toBeGreaterThanOrEqual(1);
     expect(flow.next.step).toBe("ASK_SUB_DOM");
-    expect(flow.variants.join("\n")).not.toMatch(/taking control|told what to do|being in charge or submitting/i);
+    expect(flow.variants.join("\n")).not.toMatch(
+      /taking control|told what to do|being in charge or submitting/i,
+    );
   });
 
   it("does not treat jerking off as a vibe hit when the fan says they are not doing that", async () => {
-    const { looksLikeJerking, looksLikeNotJerking, looksLikeStandaloneFiller, repeatsAskedSequenceObjective } =
-      await import("../src/conversation-flow.js");
+    const {
+      looksLikeJerking,
+      looksLikeNotJerking,
+      looksLikeStandaloneFiller,
+      repeatsAskedSequenceObjective,
+    } = await import("../src/conversation-flow.js");
     expect(looksLikeNotJerking("Well, I'm not jerking off now", true)).toBe(true);
     expect(looksLikeJerking("Well, I'm not jerking off now")).toBe(false);
     expect(looksLikeJerking("yeah im jerking off")).toBe(true);
@@ -886,12 +1058,16 @@ describe("conversation flow state machine", () => {
 
   it("lets a dominant fan lead after he says yes to proving himself", async () => {
     const { advanceConversationFlow } = await import("../src/conversation-flow.js");
-    const { looksLikeWrongDominanceFlip, FAN_DOMINANT_FOLLOW_VARIANTS } = await import("../src/replies.js");
+    const { looksLikeWrongDominanceFlip, FAN_DOMINANT_FOLLOW_VARIANTS } =
+      await import("../src/replies.js");
     const flow = advanceConversationFlow({
       subscriberText: "Yes.",
       recentMessages: [
         { authorType: "SUBSCRIBER", body: "I prefer being in charge" },
-        { authorType: "CHATTER", body: "well in that case i just want to see if you can properly do it hehe" },
+        {
+          authorType: "CHATTER",
+          body: "well in that case i just want to see if you can properly do it hehe",
+        },
         { authorType: "CHATTER", body: "so are you going to prove yourself now?" },
       ],
       fanNotes: {
@@ -955,15 +1131,31 @@ describe("confirmed mixup classifier", () => {
 
 describe("sequence ladder", () => {
   it("never prices the next drop at or below the last one", () => {
-    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 0 })).toBe(7);
     expect(
-      sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 1, previousPrice: 7 }),
+      sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 0 }),
+    ).toBe(7);
+    expect(
+      sequenceDropPrice({
+        boughtWelcome: false,
+        spendTier: "LOW",
+        purchasedSequenceCount: 1,
+        previousPrice: 7,
+      }),
     ).toBe(17);
-    expect(sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 0 })).toBe(8);
     expect(
-      sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 1, previousPrice: 8 }),
+      sequenceDropPrice({ boughtWelcome: true, spendTier: "HIGH", purchasedSequenceCount: 0 }),
+    ).toBe(8);
+    expect(
+      sequenceDropPrice({
+        boughtWelcome: true,
+        spendTier: "HIGH",
+        purchasedSequenceCount: 1,
+        previousPrice: 8,
+      }),
     ).toBe(15);
-    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6 })).toBeNull();
+    expect(
+      sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6 }),
+    ).toBeNull();
     let previous = 0;
     for (let i = 0; i < 6; i += 1) {
       const price = sequenceDropPrice({
@@ -975,7 +1167,14 @@ describe("sequence ladder", () => {
       expect(price).toBeGreaterThan(previous);
       previous = price!;
     }
-    expect(sequenceDropPrice({ boughtWelcome: false, spendTier: "LOW", purchasedSequenceCount: 6, previousPrice: previous })).toBeNull();
+    expect(
+      sequenceDropPrice({
+        boughtWelcome: false,
+        spendTier: "LOW",
+        purchasedSequenceCount: 6,
+        previousPrice: previous,
+      }),
+    ).toBeNull();
   });
 
   it("blocks a third locked drop while two sit unpaid", () => {
@@ -1007,9 +1206,11 @@ describe("sequence ladder", () => {
 });
 
 it("CSV import preserves escaped quotes and multiline descriptions", () => {
-  const rows = parseProductCsv('external_id,creator,name,description,content_type,standard_price,minimum_price\n1,Maya,"The ""special"" set","First line\nSecond line",VIDEO,9,9');
+  const rows = parseProductCsv(
+    'external_id,creator,name,description,content_type,standard_price,minimum_price\n1,Maya,"The ""special"" set","First line\nSecond line",VIDEO,9,9',
+  );
   expect(rows).toHaveLength(1);
   expect(rows[0]?.name).toBe('The "special" set');
-  expect(rows[0]?.description).toBe('First line\nSecond line');
+  expect(rows[0]?.description).toBe("First line\nSecond line");
   expect(rows[0]?.errors).toEqual([]);
 });

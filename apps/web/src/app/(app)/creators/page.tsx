@@ -24,7 +24,11 @@ export default async function CreatorsPage() {
   });
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Operate" title="Creators" description="Personas, boundaries and assigned accounts." />
+      <PageHeader
+        eyebrow="Operate"
+        title="Creators"
+        description="Personas, boundaries and assigned accounts."
+      />
       {ctx.role === "AGENCY_OWNER" || ctx.role === "MANAGER" ? <CreateCreatorForm /> : null}
       <div className="grid gap-4 md:grid-cols-2">
         {creators.map((c) => (
@@ -45,7 +49,9 @@ export default async function CreatorsPage() {
           </Link>
         ))}
       </div>
-      {!creators.length ? <EmptyState title="No creators" body="Owners and managers can add a persona." /> : null}
+      {!creators.length ? (
+        <EmptyState title="No creators" body="Owners and managers can add a persona." />
+      ) : null}
     </div>
   );
 }

@@ -27,7 +27,9 @@ export default async function AdminPage() {
     by: ["organizationId"],
     _max: { createdAt: true },
   });
-  const lastMap = new Map(lastByOrg.map((r) => [r.organizationId, r._max.createdAt?.toISOString() ?? null]));
+  const lastMap = new Map(
+    lastByOrg.map((r) => [r.organizationId, r._max.createdAt?.toISOString() ?? null]),
+  );
 
   return (
     <div className="space-y-6">
@@ -36,7 +38,10 @@ export default async function AdminPage() {
         title="Platform admin"
         description="Organizations, usage and provider failures. AI keys live on the AI provider page."
         actions={
-          <Link href="/ai-provider" className="rounded-[10px] border border-white/10 px-3 py-2 text-sm">
+          <Link
+            href="/ai-provider"
+            className="rounded-[10px] border border-white/10 px-3 py-2 text-sm"
+          >
             Open AI provider
           </Link>
         }
@@ -61,7 +66,8 @@ export default async function AdminPage() {
         }))}
       />
       <Card className="text-sm text-white/50">
-        Tenant isolation is enforced in queries. Do not paste live subscriber identifiers into support notes.
+        Tenant isolation is enforced in queries. Do not paste live subscriber identifiers into
+        support notes.
       </Card>
     </div>
   );

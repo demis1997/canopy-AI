@@ -20,7 +20,13 @@ export async function POST(request: Request) {
     funnelStage: "NEW_FAN",
     explicitnessLevel: "SUGGESTIVE",
     recommendedAction: "REPLY",
-    replyOptions: [{ text: rewritten.slice(0, 2000), tone: "PLAYFUL", internalReason: "Welcome rewrite from demo model." }],
+    replyOptions: [
+      {
+        text: rewritten.slice(0, 2000),
+        tone: "PLAYFUL",
+        internalReason: "Welcome rewrite from demo model.",
+      },
+    ],
     recommendedProductId: null,
     approvedPrice: null,
     requiresHumanReview: false,

@@ -26,7 +26,10 @@ export function MediaThumb({
       }`}
     >
       <div className="absolute inset-0 backdrop-blur-[6px]" />
-      <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 30% 20%, white, transparent 50%)" }} />
+      <div
+        className="absolute inset-0 opacity-40"
+        style={{ backgroundImage: "radial-gradient(circle at 30% 20%, white, transparent 50%)" }}
+      />
       <span className="absolute bottom-1.5 left-1.5 rounded bg-black/45 px-1.5 py-0.5 text-[10px] font-medium text-white">
         {labels[kind]}
       </span>

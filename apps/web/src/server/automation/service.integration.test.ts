@@ -9,7 +9,9 @@ describe("automation persistence", () => {
     await prisma.$disconnect();
   });
 
-  it("isolates platform accounts, dedupes messages, locks conversations and emergency-stops", async ({ skip }) => {
+  it("isolates platform accounts, dedupes messages, locks conversations and emergency-stops", async ({
+    skip,
+  }) => {
     try {
       await prisma.$connect();
     } catch (error) {
@@ -109,7 +111,11 @@ describe("automation persistence", () => {
       expect(paused.autonomyMode).toBe("PAUSED");
       await prisma.platformAccount.update({
         where: { id: account.id },
-        data: { autonomyMode: "AUTOPILOT", connectionStatus: "CONNECTED", manualInterventionReason: null },
+        data: {
+          autonomyMode: "AUTOPILOT",
+          connectionStatus: "CONNECTED",
+          manualInterventionReason: null,
+        },
       });
     }
   });

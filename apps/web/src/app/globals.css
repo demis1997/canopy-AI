@@ -15,7 +15,9 @@ body {
 }
 
 body {
-  font-feature-settings: "ss01" on, "cv11" on;
+  font-feature-settings:
+    "ss01" on,
+    "cv11" on;
 }
 
 a {

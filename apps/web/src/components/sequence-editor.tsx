@@ -142,7 +142,11 @@ export function SequenceEditor({
         {canEdit ? (
           <>
             <Button onClick={startNew}>New sequence</Button>
-            <Button variant="secondary" disabled={busy || !creatorId} onClick={() => void loadTemplates()}>
+            <Button
+              variant="secondary"
+              disabled={busy || !creatorId}
+              onClick={() => void loadTemplates()}
+            >
               Load Inflow-style templates
             </Button>
           </>
@@ -155,7 +159,10 @@ export function SequenceEditor({
           <div className="grid gap-3 md:grid-cols-3">
             <div>
               <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </div>
             <div>
               <Label>Kind</Label>
@@ -252,7 +259,10 @@ export function SequenceEditor({
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setForm({ ...form, steps: [...form.steps, emptyStep()] })}>
+            <Button
+              variant="outline"
+              onClick={() => setForm({ ...form, steps: [...form.steps, emptyStep()] })}
+            >
               Add step
             </Button>
             <Button disabled={busy} onClick={() => void save()}>
@@ -273,14 +283,21 @@ export function SequenceEditor({
                 <div className="text-sm font-medium">
                   {row.name} · {row.kind}
                 </div>
-                <div className="text-xs text-white/40">{row.description || `${row.steps.length} steps`}</div>
+                <div className="text-xs text-white/40">
+                  {row.description || `${row.steps.length} steps`}
+                </div>
               </div>
               {canEdit ? (
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => startEdit(row)}>
                     Edit
                   </Button>
-                  <Button size="sm" variant="danger" disabled={busy} onClick={() => void remove(row.id)}>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={busy}
+                    onClick={() => void remove(row.id)}
+                  >
                     Delete
                   </Button>
                 </div>

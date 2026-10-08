@@ -4,10 +4,7 @@ import { personaInputSchema } from "@canopy/shared";
 import { requireOrgUser, jsonError } from "@/lib/session";
 import { hasPermission } from "@canopy/shared";
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
@@ -18,7 +15,8 @@ export async function PATCH(
     });
     if (!creator) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const canManage = hasPermission(ctx.role, "creators.manage");
-    const own = creator.userId === ctx.userId && hasPermission(ctx.role, "creators.edit_own_persona");
+    const own =
+      creator.userId === ctx.userId && hasPermission(ctx.role, "creators.edit_own_persona");
     if (!canManage && !own) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const body = personaInputSchema.parse(await request.json());
     const version = (creator.personas[0]?.version ?? 0) + 1;

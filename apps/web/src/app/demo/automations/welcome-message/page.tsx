@@ -61,7 +61,9 @@ export default function WelcomeMessagePage() {
       "canopy.demo.welcome",
       JSON.stringify({ creatorId, enabled, body, paid, price, productId, previewId, segment }),
     );
-    setNotice("Saved in this browser. Automatic platform delivery requires an authorised platform integration.");
+    setNotice(
+      "Saved in this browser. Automatic platform delivery requires an authorised platform integration.",
+    );
   }
 
   function sendTest() {
@@ -81,19 +83,30 @@ export default function WelcomeMessagePage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Welcome-message builder</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Recreate the familiar new-subscriber greeting workflow. Canopy can draft and attach vault media.
-              Automatic delivery to a live creator platform is not enabled in this demo.
+              Recreate the familiar new-subscriber greeting workflow. Canopy can draft and attach
+              vault media. Automatic delivery to a live creator platform is not enabled in this
+              demo.
             </p>
           </div>
-          {notice ? <div className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-900">{notice}</div> : null}
+          {notice ? (
+            <div className="rounded-md bg-teal-50 px-3 py-2 text-sm text-teal-900">{notice}</div>
+          ) : null}
 
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <label className="flex items-center justify-between text-sm font-medium">
               Enable welcome message
-              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
             </label>
             <label className="mt-4 block text-xs text-slate-500">Creator</label>
-            <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={creatorId} onChange={(e) => setCreatorId(e.target.value)}>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={creatorId}
+              onChange={(e) => setCreatorId(e.target.value)}
+            >
               {demoCreators.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.displayName} · {c.style}
@@ -101,7 +114,11 @@ export default function WelcomeMessagePage() {
               ))}
             </select>
             <label className="mt-4 block text-xs text-slate-500">Subscriber segment</label>
-            <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={segment} onChange={(e) => setSegment(e.target.value)}>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+              value={segment}
+              onChange={(e) => setSegment(e.target.value)}
+            >
               {SEGMENTS.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -109,16 +126,30 @@ export default function WelcomeMessagePage() {
               ))}
             </select>
             <label className="mt-4 block text-xs text-slate-500">Message</label>
-            <textarea className="mt-1 min-h-[120px] w-full rounded-lg border border-slate-200 p-3 text-sm" value={body} onChange={(e) => setBody(e.target.value)} />
-            <button className="mt-2 h-8 rounded-md bg-teal-50 px-3 text-xs font-medium text-teal-800 ring-1 ring-teal-200" disabled={rewriting} onClick={() => void rewrite()}>
+            <textarea
+              className="mt-1 min-h-[120px] w-full rounded-lg border border-slate-200 p-3 text-sm"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+            <button
+              className="mt-2 h-8 rounded-md bg-teal-50 px-3 text-xs font-medium text-teal-800 ring-1 ring-teal-200"
+              disabled={rewriting}
+              onClick={() => void rewrite()}
+            >
               {rewriting ? "Rewriting…" : "AI rewrite"}
             </button>
-            <p className="mt-1 text-[11px] text-slate-400">Demo AI response · same Zod-backed mock used by inbox generation.</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Demo AI response · same Zod-backed mock used by inbox generation.
+            </p>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div>
                 <label className="text-xs text-slate-500">Attach product from vault</label>
-                <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={productId} onChange={(e) => setProductId(e.target.value)}>
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} · ${p.standardPrice}
@@ -128,7 +159,11 @@ export default function WelcomeMessagePage() {
               </div>
               <div>
                 <label className="text-xs text-slate-500">Free preview</label>
-                <select className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm" value={previewId} onChange={(e) => setPreviewId(e.target.value)}>
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 text-sm"
+                  value={previewId}
+                  onChange={(e) => setPreviewId(e.target.value)}
+                >
                   <option value="">None</option>
                   {vault.map((v) => (
                     <option key={v.id} value={v.id}>
@@ -163,23 +198,31 @@ export default function WelcomeMessagePage() {
             {priceError ? <p className="mt-2 text-xs text-red-600">{priceError}</p> : null}
 
             <div className="mt-4 flex gap-2">
-              <button className="h-9 rounded-md bg-teal-600 px-4 text-sm font-medium text-white" onClick={save}>
+              <button
+                className="h-9 rounded-md bg-teal-600 px-4 text-sm font-medium text-white"
+                onClick={save}
+              >
                 Save
               </button>
-              <button className="h-9 rounded-md border border-slate-200 px-4 text-sm" onClick={sendTest}>
+              <button
+                className="h-9 rounded-md border border-slate-200 px-4 text-sm"
+                onClick={sendTest}
+              >
                 Send test to demo
               </button>
             </div>
             <p className="mt-3 text-[11px] text-slate-400">
-              Automatic platform delivery requires an authorised platform integration. This builder never logs into
-              a creator platform or transmits session cookies.
+              Automatic platform delivery requires an authorised platform integration. This builder
+              never logs into a creator platform or transmits session cookies.
             </p>
           </section>
         </div>
 
         <aside className="space-y-3">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fan preview</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Fan preview
+            </div>
             <div className="mt-3 rounded-2xl bg-[#eef1f4] p-3">
               <div className="text-[11px] text-slate-400">{creator.displayName}</div>
               <div className="mt-2 max-w-[85%] rounded-2xl rounded-bl-md bg-white px-3 py-2 text-sm shadow-sm">
@@ -188,7 +231,9 @@ export default function WelcomeMessagePage() {
               {preview ? (
                 <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <MediaThumb kind="FREE_PREVIEW" />
-                  <div className="px-2 py-1 text-[11px] text-slate-500">Free preview · {preview.title}</div>
+                  <div className="px-2 py-1 text-[11px] text-slate-500">
+                    Free preview · {preview.title}
+                  </div>
                 </div>
               ) : null}
               {paid && media ? (
@@ -200,7 +245,11 @@ export default function WelcomeMessagePage() {
                   </div>
                 </div>
               ) : null}
-              {testSent ? <div className="mt-3 text-center text-[11px] text-teal-700">Test copy delivered in demo</div> : null}
+              {testSent ? (
+                <div className="mt-3 text-center text-[11px] text-teal-700">
+                  Test copy delivered in demo
+                </div>
+              ) : null}
             </div>
           </div>
         </aside>

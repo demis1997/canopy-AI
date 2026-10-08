@@ -24,10 +24,15 @@ async function connect() {
   const accountId = arg("account");
   if (!accountId) throw new Error("Pass --account <platformAccountId>");
   const account = await prisma.platformAccount.findUniqueOrThrow({ where: { id: accountId } });
-  if (account.driver === "ONLYFANS_API") throw new Error("Connect API accounts through Products & vault");
+  if (account.driver === "ONLYFANS_API")
+    throw new Error("Connect API accounts through Products & vault");
   const headed = process.env.NODE_ENV !== "production";
   const context = await openHostedOrLocalContext(account.id, headed);
-  platformLog("connect_host", { organizationId: account.organizationId, platformAccountId: account.id }, describeBrowserHost());
+  platformLog(
+    "connect_host",
+    { organizationId: account.organizationId, platformAccountId: account.id },
+    describeBrowserHost(),
+  );
   const page = context.pages()[0] ?? (await context.newPage());
   if (account.driver === "MOCK") {
     await page.goto(pathToFileURL(path.join(import.meta.dirname, "fixture.html")).href);
@@ -42,7 +47,11 @@ async function connect() {
   });
   for (let i = 0; i < 120; i++) {
     const state = await adapter.detectConnectionState();
-    platformLog("connect_poll", { organizationId: account.organizationId, platformAccountId: account.id }, { state });
+    platformLog(
+      "connect_poll",
+      { organizationId: account.organizationId, platformAccountId: account.id },
+      { state },
+    );
     if (state === "CONNECTED") {
       const identity = await adapter.detectAccount();
       await prisma.platformAccount.update({
@@ -74,11 +83,17 @@ async function connect() {
 
 async function workerLoop() {
   let stopping = false;
-  process.once("SIGINT", () => { stopping = true; });
-  process.once("SIGTERM", () => { stopping = true; });
+  process.once("SIGINT", () => {
+    stopping = true;
+  });
+  process.once("SIGTERM", () => {
+    stopping = true;
+  });
   while (!stopping) {
     const flags = readFeatureFlags();
-    const accounts = await prisma.platformAccount.findMany({ where: { autonomyMode: { not: "PAUSED" } } });
+    const accounts = await prisma.platformAccount.findMany({
+      where: { autonomyMode: { not: "PAUSED" } },
+    });
     for (const account of accounts) {
       if (stopping) break;
       let context: Awaited<ReturnType<typeof openHostedOrLocalContext>> | undefined;
@@ -91,23 +106,65 @@ async function workerLoop() {
           adapter = new MockOnlyFansAdapter(createMockInboxState());
         } else {
           if (!flags.browserIntegration) continue;
-          context = await openHostedOrLocalContext(account.id, process.env.NODE_ENV !== "production");
-          const page = context.pages()[0] ?? await context.newPage();
+          context = await openHostedOrLocalContext(
+            account.id,
+            process.env.NODE_ENV !== "production",
+          );
+          const page = context.pages()[0] ?? (await context.newPage());
           await page.goto("https://onlyfans.com/");
           adapter = new PlaywrightOnlyFansAdapter(page, { liveUnverified: true });
         }
-        await syncInbox({ organizationId: account.organizationId, platformAccountId: account.id, adapter });
-        if (account.driver === "ONLYFANS_API" && (!account.lastReceiptSyncAt || Date.now() - account.lastReceiptSyncAt.getTime() > 300_000)) {
-          await syncPlatformReceipts({ organizationId: account.organizationId, platformAccountId: account.id });
+        await syncInbox({
+          organizationId: account.organizationId,
+          platformAccountId: account.id,
+          adapter,
+        });
+        if (
+          account.driver === "ONLYFANS_API" &&
+          (!account.lastReceiptSyncAt || Date.now() - account.lastReceiptSyncAt.getTime() > 300_000)
+        ) {
+          await syncPlatformReceipts({
+            organizationId: account.organizationId,
+            platformAccountId: account.id,
+          });
         }
-        const due = await prisma.automationAction.findMany({ where: { platformAccountId: account.id, status: "SCHEDULED", scheduledFor: { lte: new Date() } }, orderBy: { scheduledFor: "asc" }, take: 20 });
-        for (const action of due) await deliverAction({ organizationId: account.organizationId, actionId: action.id, adapter });
-        await prisma.platformAccount.update({ where: { id: account.id }, data: { lastHeartbeatAt: new Date(), connectionStatus: "CONNECTED", manualInterventionReason: null } });
+        const due = await prisma.automationAction.findMany({
+          where: {
+            platformAccountId: account.id,
+            status: "SCHEDULED",
+            scheduledFor: { lte: new Date() },
+          },
+          orderBy: { scheduledFor: "asc" },
+          take: 20,
+        });
+        for (const action of due)
+          await deliverAction({
+            organizationId: account.organizationId,
+            actionId: action.id,
+            adapter,
+          });
+        await prisma.platformAccount.update({
+          where: { id: account.id },
+          data: {
+            lastHeartbeatAt: new Date(),
+            connectionStatus: "CONNECTED",
+            manualInterventionReason: null,
+          },
+        });
       } catch (error) {
         const reason = error instanceof Error ? error.message : "WORKER_FAILED";
-        platformLog("worker_failed", { organizationId: account.organizationId, platformAccountId: account.id }, { reason });
-        await prisma.platformAccount.update({ where: { id: account.id }, data: { connectionStatus: "DEGRADED", manualInterventionReason: reason.slice(0, 160) } });
-      } finally { await context?.close(); }
+        platformLog(
+          "worker_failed",
+          { organizationId: account.organizationId, platformAccountId: account.id },
+          { reason },
+        );
+        await prisma.platformAccount.update({
+          where: { id: account.id },
+          data: { connectionStatus: "DEGRADED", manualInterventionReason: reason.slice(0, 160) },
+        });
+      } finally {
+        await context?.close();
+      }
     }
     if (!arg("once") && !stopping) await new Promise((r) => setTimeout(r, 30_000));
     else break;
@@ -158,7 +215,9 @@ async function validateSelectors() {
   await adapter.typeMessage("fixture ping");
   await adapter.sendCurrentMessage();
   const verify = await adapter.verifySentMessage("fixture ping");
-  console.log(JSON.stringify({ state, inbox: inbox.length, messages: messages.length, verify }, null, 2));
+  console.log(
+    JSON.stringify({ state, inbox: inbox.length, messages: messages.length, verify }, null, 2),
+  );
   await browser.close();
 }
 

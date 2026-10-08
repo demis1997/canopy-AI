@@ -37,13 +37,18 @@ export default async function EscalationsPage() {
           </div>
           <p className="mt-2 text-sm">{e.summary}</p>
           {e.conversation ? (
-            <Link className="mt-2 inline-block text-xs text-canopy-400" href={`/conversations/${e.conversation.id}`}>
+            <Link
+              className="mt-2 inline-block text-xs text-canopy-400"
+              href={`/conversations/${e.conversation.id}`}
+            >
               {e.conversation.subscriber.displayName} / {e.conversation.creator.displayName}
             </Link>
           ) : null}
         </Card>
       ))}
-      {!rows.length ? <EmptyState title="No escalations" body="Age, consent and pricing blocks appear here." /> : null}
+      {!rows.length ? (
+        <EmptyState title="No escalations" body="Age, consent and pricing blocks appear here." />
+      ) : null}
     </div>
   );
 }

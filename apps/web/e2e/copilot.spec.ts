@@ -6,7 +6,9 @@ test("login, auto-reply, analytics", async ({ page }) => {
   await page.getByLabel("Password").fill("CanopyDemo!2026");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForURL(/dashboard/);
-  await expect(page.getByText("Lumen Demo Agency")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Workspace Lumen Demo Agency", exact: true }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Open chat with Maya" }).click();
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
 

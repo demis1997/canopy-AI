@@ -143,3 +143,27 @@ describe("stale generation and escalation idempotency", () => {
     expect(shouldOpenEscalation(false)).toBe(true);
   });
 });
+
+describe("speaker continuity", () => {
+  it("does not resurrect an answered fan turn when an old trigger is retried", () => {
+    const messages = [
+      { id: "fan-1", authorType: "SUBSCRIBER", body: "how are you?" },
+      { id: "creator-1", authorType: "CHATTER", body: "I'm good" },
+    ];
+    expect(collectPendingFanTurn({ messages, triggerMessageId: "fan-1" }).combinedText).toBe("");
+    expect(collectPendingFanTurn({ messages }).combinedText).toBe("");
+  });
+  it("collects only the actual fan's new words after a creator reply", () => {
+    expect(collectPendingFanTurn({ messages: [
+      { id: "fan-1", authorType: "SUBSCRIBER", body: "how are you?" },
+      { id: "creator-1", authorType: "CHATTER", body: "I'm good" },
+      { id: "fan-2", authorType: "SUBSCRIBER", body: "what are you doing?" },
+    ] }).combinedText).toBe("what are you doing?");
+  });
+});
+
+it("rejects attributing the creator's wellbeing to a fan who only asked how are you", () => {
+  const operational = detectOperationalIntent("how are you?");
+  expect(validateReplyGrounding({ reply: "im good, oh youre good nice", turn: "how are you?", operational, mode: "NATURAL" })).toEqual({ ok: false, code: "SPEAKER_ATTRIBUTION" });
+  expect(validateReplyGrounding({ reply: "im good, how about you?", turn: "how are you?", operational, mode: "NATURAL" }).ok).toBe(true);
+});

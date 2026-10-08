@@ -33,6 +33,15 @@ export type SendVerification = {
   ambiguous: boolean;
   externalMessageId?: string;
   visibleText?: string;
+  sentAt?: string;
+};
+
+export type SendRequest = {
+  text: string;
+  idempotencyKey: string;
+  price?: number;
+  mediaIds?: string[];
+  previewIds?: string[];
 };
 
 export type VaultReference = {
@@ -57,6 +66,7 @@ export class AdapterClosedError extends Error {
 }
 
 export interface OnlyFansAdapter {
+  sendMessage?(request: SendRequest): Promise<SendVerification>;
   detectAccount(): Promise<{ externalAccountId: string | null; displayName: string | null }>;
   detectConnectionState(): Promise<ConnectionState>;
   listInboxConversations(): Promise<InboxConversation[]>;

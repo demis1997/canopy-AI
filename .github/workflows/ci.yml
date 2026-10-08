@@ -1,0 +1,45 @@
+name: Canopy CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: canopy
+          POSTGRES_PASSWORD: canopy
+          POSTGRES_DB: canopy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U canopy -d canopy"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql://canopy:canopy@localhost:5432/canopy?schema=public
+      AUTH_SECRET: canopy-ci-only-secret-do-not-use-in-production
+      APP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      ONLYFANS_BROWSER_INTEGRATION: "false"
+      ONLYFANS_MOCK_PLATFORM: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.4.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - run: pnpm --filter @canopy/web exec playwright install --with-deps chromium
+      - run: pnpm test
+      - run: pnpm build

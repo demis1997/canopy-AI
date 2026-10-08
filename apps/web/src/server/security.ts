@@ -17,12 +17,12 @@ export function rateLimit(key: string, limit = LIMIT): boolean {
   return true;
 }
 
-export async function issueExtensionToken(userId: string) {
+export async function issueExtensionToken(userId: string, organizationId: string) {
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
   const row = await prisma.extensionToken.create({
-    data: { userId, tokenHash, expiresAt },
+    data: { userId, organizationId, tokenHash, expiresAt },
   });
   return { token, expiresAt, id: row.id };
 }
@@ -49,5 +49,8 @@ export async function verifyExtensionToken(token: string) {
     include: { user: { include: { memberships: true } } },
   });
   if (!row || row.revokedAt || row.expiresAt < new Date()) return null;
-  return row.user;
+  if (!row.organizationId) return null;
+  const membership = row.user.memberships.find((m) => m.organizationId === row.organizationId);
+  if (!membership) return null;
+  return { user: row.user, membership };
 }

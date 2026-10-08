@@ -187,7 +187,7 @@ export function evaluateDeliveryGates(input: DeliveryGateInput): DeliveryGateRes
   if (input.autonomyMode === "PAUSED") {
     return { ok: false, reason: "AUTONOMY_FORBIDS_SEND", flags: [...flags, "AUTONOMY"] };
   }
-  if (!input.humanApproved && input.autonomyMode === "COPILOT" && !input.flags.autonomousText) {
+  if (!input.humanApproved && input.autonomyMode === "COPILOT") {
     return { ok: false, reason: "AUTONOMY_FORBIDS_SEND", flags: [...flags, "AUTONOMY"] };
   }
   if (!input.humanApproved && !input.flags.autonomousText) {
@@ -273,7 +273,7 @@ export function routeAutonomy(input: {
   if (input.decision.action === "ESCALATE" || input.decision.action === "DO_NOT_REPLY") {
     return { status: "APPROVAL_REQUIRED", reason: input.decision.reason || input.decision.action };
   }
-  if (!input.flags.autonomousText) {
+  if (input.mode === "COPILOT" || !input.flags.autonomousText) {
     return { status: "APPROVAL_REQUIRED", reason: "COPILOT_OR_FLAG" };
   }
   if (input.decision.action === "SEND_PPV" && !input.flags.autonomousPpv) {
@@ -282,7 +282,7 @@ export function routeAutonomy(input: {
   if (!input.gate.ok) {
     return { status: "APPROVAL_REQUIRED", reason: input.gate.reason };
   }
-  if (input.mode === "COPILOT" || input.mode === "HYBRID" || input.mode === "AUTOPILOT") {
+  if (input.mode === "HYBRID" || input.mode === "AUTOPILOT") {
     return { status: "SCHEDULED", reason: input.mode };
   }
   return { status: "APPROVAL_REQUIRED", reason: "DEFAULT" };

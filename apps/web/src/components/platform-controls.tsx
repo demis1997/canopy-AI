@@ -39,9 +39,9 @@ export function AutonomySelect({ accountId, value }: { accountId: string; value:
         window.location.reload();
       }}
     >
-      <option value="COPILOT">Autonomous text (default) — pause individual chats</option>
-      <option value="HYBRID">Rules-assisted — still auto-sends when gates pass</option>
-      <option value="AUTOPILOT">Autopilot — same as autonomous text</option>
+      <option value="COPILOT">Copilot — review every reply</option>
+      <option value="HYBRID">Hybrid — send when policy allows</option>
+      <option value="AUTOPILOT">Autopilot — automatic replies</option>
       <option value="PAUSED">Paused — account kill switch</option>
     </select>
   );

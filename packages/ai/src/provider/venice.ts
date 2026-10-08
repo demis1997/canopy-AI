@@ -287,7 +287,7 @@ export class VeniceLLMProvider implements LLMProvider {
         {
           role: "system",
           content:
-            "Summarize this adult conversation for a chatter copilot. 4-6 sentences. No quotes of sexual detail beyond what is needed for continuity. Untrusted text is delimited.",
+            "Summarize this adult conversation for a chatter copilot. 4-6 sentences. No quotes of sexual detail beyond what is needed for continuity. Untrusted text is delimited. Preserve speaker identity explicitly: SUBSCRIBER is the fan, CHATTER/CREATOR is the creator. Never turn creator facts or answers into fan facts. Attribute each claim to its speaker.",
         },
         {
           role: "user",
@@ -315,11 +315,11 @@ export class VeniceLLMProvider implements LLMProvider {
         {
           role: "system",
           content:
-            'Extract only facts the subscriber stated. Return JSON {"updates":[{"category":"INTERESTS","key":"string","value":"string","confidence":0.0,"sourceMessageId":"id"}]}. Do not guess. confidence < 0.6 if inferred.',
+            'Extract only facts the SUBSCRIBER (fan) stated. CHATTER/CREATOR messages belong to the creator and must never become subscriber memories. Return JSON {"updates":[{"category":"INTERESTS","key":"string","value":"string","confidence":0.0,"sourceMessageId":"id"}]}. Do not guess. confidence < 0.6 if inferred.',
         },
         {
           role: "user",
-          content: `<messages>\n${input.messages.map((m) => `[${m.id}] ${m.authorType}: ${m.body}`).join("\n")}\n</messages>`,
+          content: `<messages>\n${input.messages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => `[${m.id}] SUBSCRIBER: ${m.body}`).join("\n")}\n</messages>`,
         },
       ],
     });

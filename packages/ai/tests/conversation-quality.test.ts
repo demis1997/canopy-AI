@@ -269,3 +269,16 @@ describe("operational routing still wins", () => {
     ).toBe(false);
   });
 });
+
+describe("prompt speaker identity", () => {
+  it("puts fan questions in user turns and the creator's answer in an assistant turn", () => {
+    const prompt = composeGenerationPrompt(genInput("what are you doing?", { recentMessages: [
+      { authorType: "SUBSCRIBER", body: "how are you?" },
+      { authorType: "CHATTER", body: "I'm good" },
+      { authorType: "SUBSCRIBER", body: "what are you doing?" },
+    ] }));
+    expect(prompt.filter((m) => m.content === "I'm good").map((m) => m.role)).toEqual(["assistant"]);
+    expect(prompt.filter((m) => m.content === "how are you?").map((m) => m.role)).toEqual(["user"]);
+    expect(String(prompt[0]?.content)).toContain("Never attribute your own words");
+  });
+});

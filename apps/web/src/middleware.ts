@@ -10,6 +10,7 @@ export default auth((request) => {
   const { pathname } = request.nextUrl;
   if (
     PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    (pathname === "/api/extension/generate" && request.headers.get("authorization")?.startsWith("Bearer ")) ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"

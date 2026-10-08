@@ -13,6 +13,8 @@ type JobName =
   | "follow-up-suggestions"
   | "retention-delete"
   | "provider-health"
+  | "sync-platform-catalog"
+  | "sync-platform-receipts"
   | "sync-platform-inbox"
   | "process-incoming-message"
   | "generate-automation-decision"
@@ -31,6 +33,7 @@ type JobPayload = {
   platformConversationId?: string;
   triggerExternalMessageId?: string;
   actionId?: string;
+  syncRunId?: string;
 };
 
 let connection: IORedis | null = null;
@@ -94,6 +97,17 @@ export async function enqueueJob(
 }
 
 async function processJob(name: JobName, payload: JobPayload) {
+  if (name === "sync-platform-catalog" && payload.platformAccountId && payload.syncRunId) {
+    const { syncPlatformCatalog } = await import("./platform-catalog");
+    await syncPlatformCatalog({ organizationId: payload.organizationId, platformAccountId: payload.platformAccountId, syncRunId: payload.syncRunId });
+    return;
+  }
+  if (name === "sync-platform-receipts" && payload.platformAccountId) {
+    const { syncPlatformReceipts } = await import("./platform-catalog");
+    await syncPlatformReceipts({ organizationId: payload.organizationId, platformAccountId: payload.platformAccountId });
+    return;
+  }
+
   if (name === "summarize-conversation" && payload.conversationId) {
     const messages = await prisma.message.findMany({
       where: {
@@ -147,7 +161,7 @@ async function processJob(name: JobName, payload: JobPayload) {
       })),
     });
     for (const update of extracted.updates) {
-      if (update.confidence < 0.5) continue;
+      if (update.confidence < 0.5 || !messages.some((m) => m.id === update.sourceMessageId && m.authorType === "SUBSCRIBER")) continue;
       await prisma.subscriberMemory.create({
         data: {
           organizationId: payload.organizationId,
@@ -199,7 +213,7 @@ async function processJob(name: JobName, payload: JobPayload) {
       where: { id: payload.platformAccountId, organizationId: payload.organizationId },
     });
     if (!account) return;
-    if (account.driver !== "MOCK" && !flags.mockPlatform) {
+    if (account.driver !== "MOCK") {
       if (name === "deliver-automation-action" && payload.actionId) {
         await prisma.automationAction.updateMany({
           where: { id: payload.actionId, organizationId: payload.organizationId, status: { in: ["SCHEDULED", "PENDING"] } },

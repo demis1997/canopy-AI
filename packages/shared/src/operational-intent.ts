@@ -252,10 +252,14 @@ export function collectPendingFanTurn(opts: {
   const triggerIndex = opts.triggerMessageId
     ? chronological.findIndex((row) => row.id === opts.triggerMessageId)
     : -1;
-  const cutoff = triggerIndex >= 0 ? chronological.slice(0, triggerIndex + 1) : chronological;
+  // An old trigger cannot resurrect a turn the creator has already answered.
+  const answered = triggerIndex >= 0 && chronological.slice(triggerIndex + 1).some(
+    (row) => row.authorType === "CHATTER" || row.authorType === "CREATOR",
+  );
+  const cutoff = answered ? [] : chronological;
   let lastCreator = -1;
   for (let i = cutoff.length - 1; i >= 0; i -= 1) {
-    if (cutoff[i]!.authorType !== "SUBSCRIBER") {
+    if (cutoff[i]!.authorType === "CHATTER" || cutoff[i]!.authorType === "CREATOR") {
       lastCreator = i;
       break;
     }
@@ -347,6 +351,13 @@ export function validateReplyGrounding(opts: {
   recommendedProductId?: string | null;
 }): GroundingResult {
   const reply = opts.reply.trim();
+  const asksCreatorWellbeing = /\bhow (?:are|r) (?:you|u)\b/i.test(opts.turn);
+  const fanReportedWellbeing = /\b(?:i(?: am|[’']m|m)|im) (?:good|well|fine|okay|ok|great)\b/i.test(opts.turn);
+  const attributesWellbeingToFan = /\b(?:oh|glad|nice|great|good to hear)[^.!?]{0,35}\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)\b/i.test(reply) ||
+    /\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)[^.!?]{0,15}\b(?:nice|glad)\b/i.test(reply);
+  if (asksCreatorWellbeing && !fanReportedWellbeing && attributesWellbeingToFan) {
+    return { ok: false, code: "SPEAKER_ATTRIBUTION" };
+  }
   if (opts.operational.intent === "HUMAN_REQUEST" && reply) {
     return { ok: false, code: "IGNORED_HUMAN_REQUEST" };
   }

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@canopy/database";
 import { acquireConversationLock, emergencyStop, releaseConversationLock } from "./service";
 
 describe("automation persistence", () => {
@@ -12,7 +12,8 @@ describe("automation persistence", () => {
   it("isolates platform accounts, dedupes messages, locks conversations and emergency-stops", async ({ skip }) => {
     try {
       await prisma.$connect();
-    } catch {
+    } catch (error) {
+      if (process.env.CI) throw error;
       skip();
       return;
     }

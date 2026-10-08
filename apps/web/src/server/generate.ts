@@ -161,6 +161,7 @@ export async function addSubscriberMessage(input: {
   conversationId: string;
   text: string;
   chatterId?: string;
+  sentAt?: Date;
 }) {
   const tenant = requireTenant(input.organizationId);
   const db = tenantDb(tenant);
@@ -175,6 +176,7 @@ export async function addSubscriberMessage(input: {
       conversationId: conversation.id,
       authorType: "SUBSCRIBER",
       body: input.text,
+      createdAt: input.sentAt,
     },
   });
   await prisma.conversation.update({
@@ -227,7 +229,7 @@ export async function generateForConversation(input: {
 
   const history = await prisma.message.findMany({
     where: { conversationId: conversation.id, organizationId: tenant.organizationId },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 40,
   });
   const recent = history.reverse();
@@ -237,6 +239,9 @@ export async function generateForConversation(input: {
   });
   const subscriberText = pendingTurn.combinedText;
   const inputMessageIds = pendingTurn.messageIds;
+  if (!subscriberText.trim()) {
+    return { blocked: false as const, generationId: null, replyOptions: [], skippedGeneration: true as const };
+  }
 
   await recordAnalytics({
     organizationId: tenant.organizationId,
@@ -375,6 +380,7 @@ export async function generateForConversation(input: {
       subscriberId: conversation.subscriberId,
       creatorId: conversation.creatorId,
       deletedAt: null,
+      OR: [{ sourceMessageId: null }, { sourceMessage: { authorType: "SUBSCRIBER" } }],
     },
     orderBy: { lastConfirmedAt: "desc" },
     take: 25,
@@ -412,9 +418,11 @@ export async function generateForConversation(input: {
       refunded: false,
       conversation: { creatorId: conversation.creatorId },
     },
-    select: { productId: true, amountCents: true },
+    select: { productId: true, amountCents: true, product: { select: { media: { select: { mediaId: true } } } } },
   });
-  const purchasedProductIds = purchases.map((p) => p.productId);
+  const ownedMediaIds = new Set(purchases.flatMap((p) => p.product.media.map((m) => m.mediaId)));
+  const purchasedProductIds = [...new Set([...purchases.map((p) => p.productId),
+    ...productRows.filter((p) => !p.resaleAllowed && p.media.some((m) => ownedMediaIds.has(m.mediaId))).map((p) => p.id)])];
   const purchasedPpvCount = purchases.length;
   const previousPurchasePrice = Math.max(0, ...purchases.map((p) => p.amountCents / 100));
   const earlyUnpaid = conversation.offers.some(
@@ -443,7 +451,7 @@ export async function generateForConversation(input: {
     discountLimitPercent: p.discountLimitPercent,
     bundlePrice: p.bundlePriceCents != null ? p.bundlePriceCents / 100 : null,
     tags: p.tags,
-    available: p.available,
+    available: p.available && p.sourceAvailable !== false,
     source: p.source,
     timesSold: p.timesSold,
     conversionRate: p.conversionRate,
@@ -747,7 +755,7 @@ export async function generateForConversation(input: {
       mediaType: p.mediaType,
       standardPrice: p.standardPrice,
       allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
-      available: p.available,
+      available: p.available && p.sourceAvailable !== false,
     }));
     let sellMatch = matchSellTarget({
       products: sellable,
@@ -878,7 +886,7 @@ export async function generateForConversation(input: {
         discountLimitPercent: p.discountLimitPercent,
         sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
         allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
-        available: p.available,
+        available: p.available && p.sourceAvailable !== false,
         tags: p.tags,
         mediaType: p.mediaType,
         explicitnessCategory:
@@ -1108,7 +1116,7 @@ export async function generateForConversation(input: {
         secondPrice: p.secondPrice,
         discountLimitPercent: p.discountLimitPercent,
         sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
-        available: p.available,
+        available: p.available && p.sourceAvailable !== false,
         creatorId: p.creatorId,
         resaleAllowed: p.resaleAllowed,
     }));
@@ -1197,7 +1205,7 @@ export async function generateForConversation(input: {
           where: {
             conversationId: conversation.id,
             organizationId: tenant.organizationId,
-            authorType: "SUBSCRIBER",
+            authorType: { in: ["SUBSCRIBER", "CHATTER", "CREATOR"] },
             createdAt: { gt: newestInput.createdAt },
             id: { notIn: inputMessageIds },
           },

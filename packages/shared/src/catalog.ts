@@ -15,6 +15,7 @@ export type CatalogProduct = {
   bundlePrice?: number | null;
   tags: string[];
   available: boolean;
+  sourceAvailable?: boolean;
   source: ProductSource;
   timesSold: number;
   conversionRate: number;
@@ -43,7 +44,7 @@ export function eligibleProducts(input: {
       rejected.push({ product, reason: "WRONG_CREATOR" });
       continue;
     }
-    if (!product.available) {
+    if (!product.available || product.sourceAvailable === false) {
       rejected.push({ product, reason: "UNAVAILABLE" });
       continue;
     }
@@ -129,35 +130,32 @@ export type CsvProductRow = {
   errors: string[];
 };
 
-function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
+function csvRecords(text: string): { records: string[][]; malformed: boolean } {
+  const records: string[][] = []; let row: string[] = []; let field = ""; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
     if (ch === '"') {
-      quoted = !quoted;
-      continue;
-    }
-    if (ch === "," && !quoted) {
-      out.push(cur.trim());
-      cur = "";
-      continue;
-    }
-    cur += ch;
+      if (quoted && text[i + 1] === '"') { field += '"'; i++; }
+      else quoted = !quoted;
+    } else if (ch === "," && !quoted) { row.push(field.trim()); field = ""; }
+    else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(field.trim()); if (row.some(Boolean)) records.push(row); row = []; field = "";
+    } else field += ch;
   }
-  out.push(cur.trim());
-  return out;
+  row.push(field.trim()); if (row.some(Boolean)) records.push(row);
+  return { records, malformed: quoted };
 }
 
 export function parseProductCsv(text: string): CsvProductRow[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 2) return [];
-  const header = splitCsvLine(lines[0]!).map((h) => h.toLowerCase().replace(/\s+/g, "_"));
+  const { records, malformed } = csvRecords(text);
+  if (records.length < 2) return [];
+  const header = records[0]!.map((h) => h.replace(/^\uFEFF/, "").toLowerCase().replace(/\s+/g, "_"));
   const idx = (name: string) => header.indexOf(name);
-  return lines.slice(1).map((line) => {
-    const cols = splitCsvLine(line);
+  return records.slice(1).map((cols) => {
     const errors: string[] = [];
+    if (malformed) errors.push("Unclosed quoted field");
+    if (cols.length !== header.length) errors.push("Column count does not match header");
     const content = (cols[idx("content_type")] ?? "").toUpperCase();
     const standard = Number(cols[idx("standard_price")]);
     const minimum = Number(cols[idx("minimum_price")]);

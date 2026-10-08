@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser, jsonError } from "@/lib/session";
+import { requireUser, requireOrgUser, requirePerm, jsonError } from "@/lib/session";
 import { issueExtensionToken, listExtensionTokens, revokeExtensionToken } from "@/server/security";
 
 export async function GET() {
@@ -24,7 +24,10 @@ export async function GET() {
 export async function POST() {
   try {
     const ctx = await requireUser();
-    const issued = await issueExtensionToken(ctx.userId);
+    const scoped = await requireOrgUser();
+    requirePerm(scoped, "conversations.generate");
+    if (!scoped.tenant) return NextResponse.json({ error: "Organization required" }, { status: 400 });
+    const issued = await issueExtensionToken(ctx.userId, scoped.tenant.organizationId);
     return NextResponse.json({
       ...issued,
       warning: "Store this token in the extension session only. It is not shown again.",

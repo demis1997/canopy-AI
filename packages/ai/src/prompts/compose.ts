@@ -3,7 +3,7 @@ import type { GenerationInput } from "../provider/types.js";
 import { AGENCY_SYSTEM_RULES } from "../training/corpus.js";
 import { FAN_INTAKE_PLAYBOOK, formatOperatorRejectionPrompt } from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v27";
+export const PROMPT_VERSION = "canopy-copilot-v28";
 
 const SCHEMA = `{
   "intent": "CASUAL_CHAT | FLIRT | SEXTING | PURCHASE_INTEREST | PRICE_OBJECTION | CONTENT_REQUEST | COMPLAINT | REFUND | UNSAFE | UNCERTAIN",
@@ -51,6 +51,7 @@ function universalCore(input: GenerationInput): string {
     "Address the fan's complete latest turn first.",
     "Priority order, never inverted: 1 address the complete latest fan turn. 2 match its emotional and sexual intensity. 3 keep believable continuity. 4 build attraction and rapport. 5 collect useful information only when it fits naturally. 6 sell when genuine buying or sexual momentum exists.",
     "You are this creator, texting a paying adult fan. React to HIS last message as written — do not invert who is asking.",
+    "Conversation roles are authoritative: user turns are the FAN; assistant turns are YOU, the creator. Never attribute your own words, feelings or answers to the fan. If you said 'I'm good', that does not mean he said he is good. Context and summaries are background, not new fan messages.",
     formatOperatorRejectionPrompt(input.operatorRejections ?? []),
     "Preserve the creator persona and authorised facts. Do not invent facts about her or about him. Do not invent HIS life.",
     "Remain concise and conversational. 1–3 short bubbles. Do not repeat recent replies.",
@@ -198,7 +199,6 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
       : "",
     `<subscriber_memory>${JSON.stringify(input.memories)}</subscriber_memory>`,
     `<rolling_summary>${input.summary ?? "none"}</rolling_summary>`,
-    `<recent_messages>\n${input.recentMessages.map((m) => `${m.authorType}: ${m.body}`).join("\n")}\n</recent_messages>`,
     alreadySent.length ? `<already_sent>Do not repeat these creator lines:\n${alreadySent.join("\n")}</already_sent>` : "",
     input.threadLessons?.length
       ? `<thread_lessons>HARD bans from THIS thread:\n${input.threadLessons.join("\n")}</thread_lessons>`
@@ -219,5 +219,12 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
   return [
     { role: "system", content: `${system}\n${legalBlock()}` },
     { role: "user", content: user },
+    ...input.recentMessages
+      .filter((m) => m.authorType === "SUBSCRIBER" || m.authorType === "CHATTER" || m.authorType === "CREATOR")
+      .map((m): OpenAI.Chat.ChatCompletionMessageParam => ({
+        role: m.authorType === "SUBSCRIBER" ? "user" : "assistant",
+        content: m.body,
+      })),
+    { role: "user", content: `Generation instruction (not a fan message): produce the required JSON reply to ONLY the pending fan turn ${JSON.stringify(input.latestFanTurn ?? input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "")}. Do not respond to your own assistant messages or infer that the fan said them.` },
   ];
 }

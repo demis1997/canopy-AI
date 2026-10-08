@@ -5,10 +5,13 @@ import { readFeatureFlags } from "@canopy/shared";
 import { MockOnlyFansAdapter, createMockInboxState } from "./mock-adapter";
 import { PlaywrightOnlyFansAdapter } from "./onlyfans-adapter";
 import { describeBrowserHost, openHostedOrLocalContext } from "./browser";
+import { ApiOnlyFansAdapter } from "./onlyfans-api-adapter";
+import { apiClient, syncPlatformReceipts } from "../server/platform-catalog";
 import { deliverAction, processIncoming, syncInbox } from "./runner";
 import { platformLog } from "./logger";
 
 function arg(name: string) {
+  if (name === "once") return process.argv.includes("--once") ? "true" : undefined;
   const index = process.argv.indexOf(`--${name}`);
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
@@ -21,11 +24,12 @@ async function connect() {
   const accountId = arg("account");
   if (!accountId) throw new Error("Pass --account <platformAccountId>");
   const account = await prisma.platformAccount.findUniqueOrThrow({ where: { id: accountId } });
+  if (account.driver === "ONLYFANS_API") throw new Error("Connect API accounts through Products & vault");
   const headed = process.env.NODE_ENV !== "production";
   const context = await openHostedOrLocalContext(account.id, headed);
   platformLog("connect_host", { organizationId: account.organizationId, platformAccountId: account.id }, describeBrowserHost());
   const page = context.pages()[0] ?? (await context.newPage());
-  if (account.driver === "MOCK" || flags.mockPlatform) {
+  if (account.driver === "MOCK") {
     await page.goto(pathToFileURL(path.join(import.meta.dirname, "fixture.html")).href);
   } else {
     await page.goto("https://onlyfans.com/");
@@ -34,7 +38,7 @@ async function connect() {
     );
   }
   const adapter = new PlaywrightOnlyFansAdapter(page, {
-    liveUnverified: account.driver === "BROWSER" && !flags.mockPlatform,
+    liveUnverified: account.driver === "BROWSER",
   });
   for (let i = 0; i < 120; i++) {
     const state = await adapter.detectConnectionState();
@@ -69,36 +73,44 @@ async function connect() {
 }
 
 async function workerLoop() {
-  const flags = readFeatureFlags();
-  const accounts = await prisma.platformAccount.findMany({
-    where: { autonomyMode: { not: "PAUSED" } },
-  });
-  for (const account of accounts) {
-    if (account.driver === "BROWSER" && !flags.browserIntegration) {
-      platformLog("worker_skip_browser", { organizationId: account.organizationId, platformAccountId: account.id });
-      continue;
+  let stopping = false;
+  process.once("SIGINT", () => { stopping = true; });
+  process.once("SIGTERM", () => { stopping = true; });
+  while (!stopping) {
+    const flags = readFeatureFlags();
+    const accounts = await prisma.platformAccount.findMany({ where: { autonomyMode: { not: "PAUSED" } } });
+    for (const account of accounts) {
+      if (stopping) break;
+      let context: Awaited<ReturnType<typeof openHostedOrLocalContext>> | undefined;
+      try {
+        let adapter;
+        if (account.driver === "ONLYFANS_API") {
+          adapter = new ApiOnlyFansAdapter(apiClient(account), account.externalAccountId!);
+        } else if (account.driver === "MOCK") {
+          if (!flags.mockPlatform) continue;
+          adapter = new MockOnlyFansAdapter(createMockInboxState());
+        } else {
+          if (!flags.browserIntegration) continue;
+          context = await openHostedOrLocalContext(account.id, process.env.NODE_ENV !== "production");
+          const page = context.pages()[0] ?? await context.newPage();
+          await page.goto("https://onlyfans.com/");
+          adapter = new PlaywrightOnlyFansAdapter(page, { liveUnverified: true });
+        }
+        await syncInbox({ organizationId: account.organizationId, platformAccountId: account.id, adapter });
+        if (account.driver === "ONLYFANS_API" && (!account.lastReceiptSyncAt || Date.now() - account.lastReceiptSyncAt.getTime() > 300_000)) {
+          await syncPlatformReceipts({ organizationId: account.organizationId, platformAccountId: account.id });
+        }
+        const due = await prisma.automationAction.findMany({ where: { platformAccountId: account.id, status: "SCHEDULED", scheduledFor: { lte: new Date() } }, orderBy: { scheduledFor: "asc" }, take: 20 });
+        for (const action of due) await deliverAction({ organizationId: account.organizationId, actionId: action.id, adapter });
+        await prisma.platformAccount.update({ where: { id: account.id }, data: { lastHeartbeatAt: new Date(), connectionStatus: "CONNECTED", manualInterventionReason: null } });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "WORKER_FAILED";
+        platformLog("worker_failed", { organizationId: account.organizationId, platformAccountId: account.id }, { reason });
+        await prisma.platformAccount.update({ where: { id: account.id }, data: { connectionStatus: "DEGRADED", manualInterventionReason: reason.slice(0, 160) } });
+      } finally { await context?.close(); }
     }
-    if (account.driver === "MOCK" || flags.mockPlatform) {
-      const adapter = new MockOnlyFansAdapter(createMockInboxState());
-      await syncInbox({
-        organizationId: account.organizationId,
-        platformAccountId: account.id,
-        adapter,
-      });
-    } else if (account.driver === "BROWSER" && flags.browserIntegration) {
-      const context = await openHostedOrLocalContext(account.id, process.env.NODE_ENV !== "production");
-      const page = context.pages()[0] ?? (await context.newPage());
-      const adapter = new PlaywrightOnlyFansAdapter(page, { liveUnverified: true });
-      await syncInbox({
-        organizationId: account.organizationId,
-        platformAccountId: account.id,
-        adapter,
-      });
-    }
-    await prisma.platformAccount.update({
-      where: { id: account.id },
-      data: { lastHeartbeatAt: new Date() },
-    });
+    if (!arg("once") && !stopping) await new Promise((r) => setTimeout(r, 30_000));
+    else break;
   }
 }
 

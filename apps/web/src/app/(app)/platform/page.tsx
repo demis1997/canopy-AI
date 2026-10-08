@@ -28,13 +28,13 @@ export default async function PlatformPage() {
       <PageHeader
         eyebrow="Configure"
         title="Platform & extension"
-        description="Human-in-the-loop inbox copilot. Unofficial browser integration is not supported by OnlyFans and can stop working if the site changes. Canopy never stores creator passwords."
+        description="Connect OnlyFansAPI from Products & vault. Copilot mode requires approval for every reply. Canopy stores the provider API key encrypted and never collects creator passwords."
       />
       <ExtensionOnboarding />
       <Card className="text-sm text-white/70">
         Flags: browser={String(flags.browserIntegration)} · autonomous text={String(flags.autonomousText)} ·
-        autonomous PPV={String(flags.autonomousPpv)} · mock={String(flags.mockPlatform)}. Autonomous text is on
-        by default. Pause a single chat from the conversation thread. Account emergency stop still wins.
+        autonomous PPV={String(flags.autonomousPpv)} · mock={String(flags.mockPlatform)}. Automatic sending requires Hybrid or Autopilot mode.
+        Pause a single chat from the conversation thread. Account emergency stop still wins.
       </Card>
       {accounts.map((account) => (
         <Card key={account.id} className="space-y-4">

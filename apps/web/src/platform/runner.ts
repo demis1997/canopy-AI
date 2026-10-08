@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@canopy/database";
 import {
   acquireConversationLock,
   generateAutomationDecision,
   markActionSent,
+  recordDeliveredBubble,
   preflightDelivery,
   releaseConversationLock,
   upsertIncomingPlatformMessage,
@@ -12,18 +14,18 @@ import type { OnlyFansAdapter } from "./types";
 import { AdapterClosedError } from "./types";
 import { platformLog } from "./logger";
 
-export async function syncInbox(input: {
+async function syncInboxUnlocked(input: {
   organizationId: string;
   platformAccountId: string;
   adapter: OnlyFansAdapter;
 }) {
+  const accountRecord = await prisma.platformAccount.findFirstOrThrow({ where: { id: input.platformAccountId, organizationId: input.organizationId } });
   const state = await input.adapter.detectConnectionState();
   await prisma.platformAccount.update({
     where: { id: input.platformAccountId },
     data: {
       connectionStatus: state,
       lastHeartbeatAt: new Date(),
-      lastInboxSyncAt: new Date(),
       manualInterventionReason:
         state === "CHALLENGE_REQUIRED" || state === "LOGIN_REQUIRED"
           ? "Manual intervention required in the creator browser session"
@@ -35,11 +37,15 @@ export async function syncInbox(input: {
     return { state, processed: 0 };
   }
 
+  const identity = await input.adapter.detectAccount();
+  if (!identity.externalAccountId || identity.externalAccountId !== accountRecord.externalAccountId) throw new Error("ACCOUNT_MISMATCH");
   const threads = await input.adapter.listInboxConversations();
   let processed = 0;
   for (const thread of threads) {
     await input.adapter.openConversation(thread.externalConversationId);
-    const messages = await input.adapter.readVisibleMessages();
+    const storedThread = await prisma.platformConversation.findUnique({ where: { platformAccountId_externalConversationId: { platformAccountId: input.platformAccountId, externalConversationId: thread.externalConversationId } } });
+    const messages = (await input.adapter.detectNewMessages(storedThread?.lastSyncedMessageId)).sort((a, b) => Date.parse(a.sentAt) - Date.parse(b.sentAt) || a.externalMessageId.localeCompare(b.externalMessageId, undefined, { numeric: true }));
+    let latestPending: { id: string; externalId: string } | null = null;
     for (const message of messages) {
       const result = await upsertIncomingPlatformMessage({
         organizationId: input.organizationId,
@@ -53,26 +59,24 @@ export async function syncInbox(input: {
         direction: message.direction,
         messageType: message.messageType,
         fromAutomation: false,
+        historical: !storedThread,
       });
-      if (result.created && message.direction === "INBOUND") {
+      if (message.direction === "OUTBOUND") latestPending = null;
+      if (result.created && message.direction === "INBOUND" && message.messageType === "TEXT" &&
+        (storedThread || !accountRecord.authorizedAt || Date.parse(message.sentAt) >= accountRecord.authorizedAt.getTime())) {
         processed += 1;
-        const { enqueueJob } = await import("../server/queue");
-        await enqueueJob(
-          "generate-automation-decision",
-          {
-            organizationId: input.organizationId,
-            platformAccountId: input.platformAccountId,
-            platformConversationId: result.platformConversation.id,
-            triggerExternalMessageId: message.externalMessageId,
-          },
-          {
-            delayMs: 3000,
-            debounceKey: `generate-automation-decision-${result.platformConversation.id}`,
-          },
-        );
+        latestPending = { id: result.platformConversation.id, externalId: message.externalMessageId };
       }
     }
+    if (latestPending) {
+      const { enqueueJob } = await import("../server/queue");
+      await enqueueJob("generate-automation-decision", {
+        organizationId: input.organizationId, platformAccountId: input.platformAccountId,
+        platformConversationId: latestPending.id, triggerExternalMessageId: latestPending.externalId,
+      }, { delayMs: 3000, debounceKey: `generate-automation-decision-${latestPending.id}` });
+    }
   }
+  await prisma.platformAccount.update({ where: { id: input.platformAccountId }, data: { lastInboxSyncAt: new Date() } });
   return { state, processed };
 }
 
@@ -98,13 +102,6 @@ export async function processIncoming(input: {
       platformConversationId: input.platformConversationId,
       triggerExternalMessageId: input.triggerExternalMessageId,
     });
-    if (generated.status === "SCHEDULED") {
-      return deliverAction({
-        organizationId: input.organizationId,
-        actionId: generated.actionId,
-        adapter: input.adapter,
-      });
-    }
     return generated;
   } finally {
     await releaseConversationLock({
@@ -115,11 +112,17 @@ export async function processIncoming(input: {
   }
 }
 
-export async function deliverAction(input: {
+async function deliverActionUnlocked(input: {
   organizationId: string;
   actionId: string;
   adapter: OnlyFansAdapter;
 }) {
+  const claimed = await prisma.automationAction.updateMany({
+    where: { id: input.actionId, organizationId: input.organizationId, status: "SCHEDULED",
+      scheduledFor: { lte: new Date() } },
+    data: { status: "SENDING", attemptCount: { increment: 1 } },
+  });
+  if (!claimed.count) return { sent: false as const, reason: "NOT_DUE_OR_ALREADY_CLAIMED" };
   const preflight = await preflightDelivery({
     organizationId: input.organizationId,
     actionId: input.actionId,
@@ -132,16 +135,18 @@ export async function deliverAction(input: {
     return { sent: false as const, reason: preflight.gate.reason };
   }
   const bubbles = preflight.decision.messages.map((m) => m.trim()).filter(Boolean);
-  if (!bubbles.length) return { sent: false as const, reason: "EMPTY" };
+  if (!bubbles.length) {
+    await prisma.automationAction.update({ where: { id: input.actionId }, data: { status: "FAILED", lastError: "EMPTY" } });
+    return { sent: false as const, reason: "EMPTY" };
+  }
 
-  await prisma.automationAction.update({
-    where: { id: input.actionId },
-    data: { status: "SENDING", attemptCount: { increment: 1 } },
-  });
 
   try {
     const account = await input.adapter.detectAccount();
-    if (account.externalAccountId && preflight.action.platformAccount.externalAccountId) {
+    if (!account.externalAccountId || !preflight.action.platformAccount.externalAccountId) {
+      throw new AdapterClosedError("SELECTOR_FAILURE", "Missing platform account identity");
+    }
+    {
       if (account.externalAccountId !== preflight.action.platformAccount.externalAccountId) {
         throw new AdapterClosedError("SELECTOR_FAILURE", "Wrong platform account in browser");
       }
@@ -151,37 +156,42 @@ export async function deliverAction(input: {
     if (fan.externalFanId !== preflight.action.platformConversation.externalFanId) {
       throw new AdapterClosedError("SELECTOR_FAILURE", "Wrong fan conversation open");
     }
-    let lastVerify: { verified: boolean; ambiguous: boolean; externalMessageId?: string; visibleText?: string } | null =
-      null;
-    for (let i = 0; i < bubbles.length; i += 1) {
-      const text = bubbles[i]!;
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 600));
-      await input.adapter.typeMessage(text);
-      await input.adapter.sendCurrentMessage();
-      lastVerify = await input.adapter.verifySentMessage(text);
-      if (!lastVerify.verified || lastVerify.ambiguous || !lastVerify.externalMessageId) {
-        await prisma.automationAction.update({
-          where: { id: input.actionId },
-          data: { status: "FAILED", lastError: "AMBIGUOUS_DELIVERY" },
-        });
-        await writeAutomationAudit({
-          organizationId: input.organizationId,
-          action: "AUTOMATION_FAIL",
-          entityType: "AutomationAction",
-          entityId: input.actionId,
-          metadata: { reason: "AMBIGUOUS_DELIVERY", bubble: i },
-        });
-        return { sent: false as const, reason: "AMBIGUOUS_DELIVERY" };
-      }
+    const paid = preflight.decision.action === "SEND_PPV";
+    if (paid && !input.adapter.sendMessage) throw new Error("PPV_REQUIRES_VERIFIED_API_DELIVERY");
+    const product = paid ? await prisma.product.findFirst({
+      where: { id: preflight.decision.productId!, organizationId: input.organizationId,
+        creatorId: preflight.action.platformAccount.creatorId, platformAccountId: preflight.action.platformAccountId,
+        available: true, sourceAvailable: true },
+      include: { media: { include: { media: true }, orderBy: { sortOrder: "asc" } }, previews: { include: { media: true }, orderBy: { sortOrder: "asc" } } },
+    }) : null;
+    if (paid && (!product || !product.media.length || product.media.some((m) => !m.media.externalId || !m.media.available))) {
+      throw new Error("UNMAPPED_VAULT");
     }
-    return markActionSent({
-      organizationId: input.organizationId,
-      actionId: input.actionId,
-      externalMessageId: lastVerify!.externalMessageId!,
-      finalText: lastVerify?.visibleText ?? bubbles.join("\n"),
-    });
+    for (let i = 0; i < bubbles.length; i++) {
+      // Re-check takeover, account mode and stale fan turns between bubbles.
+      const gate = await preflightDelivery({ organizationId: input.organizationId, actionId: input.actionId });
+      if (!gate.gate.ok) throw new Error(gate.gate.reason);
+      const text = bubbles[i]!;
+      const attach = paid && i === bubbles.length - 1;
+      let verified;
+      if (input.adapter.sendMessage) {
+        verified = await input.adapter.sendMessage({ text, idempotencyKey: `${input.actionId}-${i}`,
+          ...(attach ? { price: preflight.decision.price!, mediaIds: product!.media.map((m) => m.media.externalId!),
+            previewIds: product!.previews.map((m) => m.media.externalId!) } : {}) });
+      } else {
+        await input.adapter.typeMessage(text);
+        await input.adapter.sendCurrentMessage();
+        verified = await input.adapter.verifySentMessage(text);
+      }
+      if (!verified.verified || verified.ambiguous || !verified.externalMessageId) throw new Error("AMBIGUOUS_DELIVERY");
+      // Persist every bubble with OUTBOUND authorship before another sync/generation can see it.
+      await recordDeliveredBubble({ organizationId: input.organizationId, actionId: input.actionId,
+        externalMessageId: verified.externalMessageId, text, sentAt: verified.sentAt, paid: attach, price: attach ? preflight.decision.price : null });
+    }
+    return markActionSent({ organizationId: input.organizationId, actionId: input.actionId,
+      externalMessageId: "", finalText: bubbles.join("\n") });
   } catch (error) {
-    const reason = error instanceof AdapterClosedError ? error.code : "DELIVERY_FAILED";
+    const reason = error instanceof AdapterClosedError ? error.code : "DELIVERY_FAILED_OR_AMBIGUOUS";
     await prisma.automationAction.update({
       where: { id: input.actionId },
       data: { status: reason === "CHALLENGE_REQUIRED" ? "APPROVAL_REQUIRED" : "FAILED", lastError: reason },
@@ -193,5 +203,35 @@ export async function deliverAction(input: {
       });
     }
     return { sent: false as const, reason };
+  }
+}
+
+async function accountOperation<T>(organizationId: string, accountId: string, run: () => Promise<T>): Promise<T> {
+  const token = randomUUID();
+  const claim = await prisma.platformAccount.updateMany({ where: { id: accountId, organizationId,
+    OR: [{ workerLockUntil: null }, { workerLockUntil: { lt: new Date() } }] },
+    data: { workerLockToken: token, workerLockUntil: new Date(Date.now() + 120_000) } });
+  if (!claim.count) throw new Error("PLATFORM_ACCOUNT_BUSY");
+  // The worker must retain ownership throughout long paginated inbox imports.
+  const renew = setInterval(() => {
+    void prisma.platformAccount.updateMany({ where: { id: accountId, workerLockToken: token },
+      data: { workerLockUntil: new Date(Date.now() + 120_000) } }).catch(() => {});
+  }, 30_000);
+  try { return await run(); }
+  finally { clearInterval(renew); await prisma.platformAccount.updateMany({ where: { id: accountId, workerLockToken: token },
+    data: { workerLockToken: null, workerLockUntil: null } }); }
+}
+
+export async function syncInbox(input: Parameters<typeof syncInboxUnlocked>[0]) {
+  return accountOperation(input.organizationId, input.platformAccountId, () => syncInboxUnlocked(input));
+}
+
+export async function deliverAction(input: Parameters<typeof deliverActionUnlocked>[0]) {
+  const action = await prisma.automationAction.findFirstOrThrow({ where: { id: input.actionId, organizationId: input.organizationId } });
+  try { return await accountOperation(input.organizationId, action.platformAccountId, () => deliverActionUnlocked(input)); }
+  catch (error) {
+    await prisma.automationAction.updateMany({ where: { id: input.actionId, organizationId: input.organizationId, status: "SENDING" },
+      data: { status: "FAILED", lastError: "DELIVERY_FAILED_OR_AMBIGUOUS" } });
+    throw error;
   }
 }

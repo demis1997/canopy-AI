@@ -627,6 +627,11 @@ model Product {
   deliveryRules         String            @default("")
   source                ProductSource     @default(MANUAL)
   externalId            String?
+  importKey             String? @unique
+  platformAccountId     String?
+  sourcePriceCents       Int?
+  sourceAvailable        Boolean @default(true)
+  sourceMetadata         Json?
   timesSold             Int               @default(0)
   conversionRate        Float             @default(0)
   lastSyncedAt          DateTime?
@@ -641,6 +646,7 @@ model Product {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator      Creator      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  platformAccount PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
   offers       Offer[]
   purchases    Purchase[]
   media        ProductMedia[]
@@ -673,6 +679,7 @@ model Purchase {
   subscriberId   String
   productId      String
   amountCents    Int
+  externalReceiptId String? @unique
   refunded       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
@@ -920,6 +927,7 @@ model ExtensionToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
+  organizationId String?
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
@@ -930,6 +938,10 @@ model ExtensionToken {
 }
 
 model MediaAsset {
+  importKey      String? @unique
+  platformAccountId String?
+  sourceMetadata Json?
+  platformAccount PlatformAccount? @relation(fields: [platformAccountId], references: [id], onDelete: SetNull)
   id             String    @id @default(cuid())
   organizationId String
   creatorId      String
@@ -1117,6 +1129,7 @@ enum PlatformConnectionStatus {
 enum PlatformDriver {
   MOCK
   BROWSER
+  ONLYFANS_API
 }
 
 enum PlatformMessageDirection {
@@ -1165,6 +1178,15 @@ model PlatformAccount {
   creatorId                String
   platform                 PlatformKind              @default(ONLYFANS)
   driver                   PlatformDriver            @default(MOCK)
+  providerAccountId        String?
+  encryptedApiKey          String?
+  apiKeyLastFour           String?
+  workerLockUntil          DateTime?
+  workerLockToken          String?
+  syncLockUntil            DateTime?
+  syncLockToken            String?
+  lastCatalogSyncAt        DateTime?
+  lastReceiptSyncAt        DateTime?
   externalAccountId        String?
   displayName              String
   autonomyMode             AutonomyMode              @default(COPILOT)
@@ -1180,6 +1202,10 @@ model PlatformAccount {
   creator       Creator                @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   conversations PlatformConversation[]
   actions       AutomationAction[]
+  products      Product[]
+  mediaAssets   MediaAsset[]
+  syncRuns      CatalogSyncRun[]
+  receipts      PlatformReceipt[]
   policy        AutomationPolicy?
 
   @@unique([organizationId, creatorId, platform])
@@ -1282,4 +1308,38 @@ model AutomationPolicy {
   updatedAt                    DateTime @updatedAt
 
   platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+}
+
+model CatalogSyncRun {
+  id String @id @default(cuid())
+  organizationId String
+  platformAccountId String
+  status String @default("QUEUED")
+  importedMedia Int @default(0)
+  importedProducts Int @default(0)
+  progress Json?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  @@index([organizationId, platformAccountId, createdAt])
+}
+
+model PlatformReceipt {
+  id String @id @default(cuid())
+  organizationId String
+  platformAccountId String
+  externalId String
+  externalFanId String?
+  sourceMessageId String?
+  amountCents Int
+  currency String
+  sourceStatus String
+  sourceType String
+  occurredAt DateTime
+  reconciled Boolean @default(false)
+  createdAt DateTime @default(now())
+  platformAccount PlatformAccount @relation(fields: [platformAccountId], references: [id], onDelete: Cascade)
+  @@unique([platformAccountId, externalId])
+  @@index([organizationId, reconciled])
 }

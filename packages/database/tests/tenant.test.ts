@@ -40,7 +40,8 @@ describe("tenant isolation", () => {
   it("prevents org A from reading org B creators, subscribers, conversations, messages, memories, products, prompts, analytics, and training", async ({ skip }) => {
     try {
       await prisma.$connect();
-    } catch {
+    } catch (error) {
+      if (process.env.CI) throw error;
       skip();
       return;
     }

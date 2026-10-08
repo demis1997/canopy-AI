@@ -12,7 +12,7 @@ import { AdapterClosedError } from "./types";
  */
 const LIVE = {
   loginUrl: /onlyfans\.com\/(login|signin)/i,
-  challenge: '[role="dialog"], text=Verify, text=CAPTCHA, text=2FA',
+  challenge: '[role="dialog"], :text("Verify"), :text("CAPTCHA"), :text("2FA")',
   inbox: '[data-canopy-role="inbox"]',
   conversation: '[data-canopy-role="conversation"]',
   thread: '[data-canopy-role="thread"]',

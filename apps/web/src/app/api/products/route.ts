@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@canopy/database";
 import { parseProductCsv, productInputSchema } from "@canopy/shared";
@@ -7,6 +9,7 @@ export async function GET() {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
+    requirePerm(ctx, "products.manage");
     const products = await prisma.product.findMany({
       where: { organizationId: ctx.tenant.organizationId },
       include: { creator: true, media: true, previews: true },
@@ -62,9 +65,10 @@ export async function PUT(request: Request) {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
     requirePerm(ctx, "products.manage");
-    const { csv } = (await request.json()) as { csv?: string };
+    const { csv } = z.object({ csv: z.string().min(1).max(1_000_000) }).parse(await request.json());
     if (!csv) return NextResponse.json({ error: "CSV required" }, { status: 400 });
     const rows = parseProductCsv(csv);
+    if (rows.length > 5000) return NextResponse.json({ error: "Maximum 5000 rows per import" }, { status: 400 });
     const valid = rows.filter((r) => r.errors.length === 0);
     const creators = await prisma.creator.findMany({
       where: { organizationId: ctx.tenant.organizationId, active: true },
@@ -85,21 +89,28 @@ export async function PUT(request: Request) {
         skipped.push({ name: row.name, reason: `Unknown creator ${row.creator}` });
         continue;
       }
-      const product = await prisma.product.create({
-        data: {
-          organizationId: ctx.tenant.organizationId,
-          creatorId: creator.id,
-          name: row.name,
-          description: row.description,
+      const importKey = `${ctx.tenant.organizationId}:csv:${creator.id}:${row.external_id || createHash("sha256").update(JSON.stringify(row)).digest("hex")}`;
+      const product = await prisma.$transaction(async (tx) => {
+        const data = {
+          name: row.name, description: row.description,
           mediaType: row.content_type as "PHOTO" | "VIDEO" | "AUDIO" | "TEXT" | "BUNDLE" | "CUSTOM",
-          standardPriceCents: Math.round(row.standard_price * 100),
-          minimumPriceCents: Math.round(row.minimum_price * 100),
-          discountLimitPercent: Math.round(row.discount_limit_percent),
-          tags: row.tags,
-          available: row.availability,
-          source: "CSV_IMPORT",
-          externalId: row.external_id || null,
-        },
+          standardPriceCents: Math.round(row.standard_price * 100), minimumPriceCents: Math.round(row.minimum_price * 100),
+          discountLimitPercent: Math.round(row.discount_limit_percent), tags: row.tags,
+          available: row.availability, source: "CSV_IMPORT" as const, externalId: row.external_id || null,
+        };
+        const p = await tx.product.upsert({ where: { importKey },
+          create: { ...data, organizationId: ctx.tenant!.organizationId, creatorId: creator.id, importKey }, update: data });
+        await tx.productMedia.deleteMany({ where: { productId: p.id } });
+        await tx.productPreview.deleteMany({ where: { productId: p.id } });
+        for (const [reference, preview] of [[row.media_reference, false], [row.preview_reference, true]] as const) {
+          if (!reference) continue;
+          const media = await tx.mediaAsset.upsert({ where: { importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}` },
+            create: { importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}`, organizationId: ctx.tenant!.organizationId,
+              creatorId: creator.id, externalId: reference, title: row.name, mediaType: data.mediaType, source: "CSV_IMPORT" }, update: {} });
+          if (preview) await tx.productPreview.upsert({ where: { productId_mediaId: { productId: p.id, mediaId: media.id } }, create: { productId: p.id, mediaId: media.id }, update: {} });
+          else await tx.productMedia.upsert({ where: { productId_mediaId: { productId: p.id, mediaId: media.id } }, create: { productId: p.id, mediaId: media.id }, update: {} });
+        }
+        return p;
       });
       created.push(product.id);
     }

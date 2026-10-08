@@ -43,7 +43,7 @@ export function createMockInboxState(): MockInboxState {
           externalMessageId: "of_msg_1",
           direction: "INBOUND",
           body: "hey, you around?",
-          sentAt: new Date().toISOString(),
+          sentAt: new Date(Date.now() - 1000).toISOString(),
           messageType: "TEXT",
         },
       ],

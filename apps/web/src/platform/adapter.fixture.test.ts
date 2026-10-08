@@ -8,6 +8,7 @@ describe("playwright fixture adapter", () => {
   it("drives the mock HTML inbox through the adapter interface", async ({ skip }) => {
     const browser = await chromium.launch().catch(() => null);
     if (!browser) {
+      if (process.env.CI) throw new Error("Chromium must be installed for CI fixture tests");
       skip();
       return;
     }

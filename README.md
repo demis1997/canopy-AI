@@ -2,7 +2,7 @@
 
 Human-in-the-loop AI chatting and sales copilot for adult-content creators and agencies.
 
-The model **suggests** replies. A human chatter **reviews, edits, and sends**. Canopy never logs into OnlyFans, never bypasses CAPTCHA, never reads platform cookies, and never sends messages on a creator’s behalf.
+The model suggests replies for review. Connected creator accounts can use the OnlyFansAPI provider for catalog imports, inbox sync, and approved delivery. New API connections start in COPILOT mode, where every reply requires review.
 
 Conversations may be processed by the configured **external Venice AI provider**. Canopy does not train a general model on client chats.
 
@@ -56,7 +56,7 @@ This is a pnpm monorepo. In the Vercel project:
 6. After the first deploy, run migrations against that database: `DATABASE_URL=... pnpm db:migrate && DATABASE_URL=... pnpm db:seed`.
 7. Add `LLM_API_KEY` (Venice) and a model ID, or paste the key in **Admin → AI provider** after login.
 
-The OnlyFans browser worker cannot run on Vercel serverless. Leave `ONLYFANS_BROWSER_INTEGRATION=false` in production. Redis is optional; jobs run inline when `REDIS_URL` is unset.
+The OnlyFans browser worker cannot run on Vercel serverless. Leave `ONLYFANS_BROWSER_INTEGRATION=false` in production. Redis is required for catalog imports; other jobs run inline when `REDIS_URL` is unset.
 
 Demo password for every seeded user: `CanopyDemo!2026`
 
@@ -146,11 +146,23 @@ A deterministic safety layer outside the LLM blocks minors, uncertain age, explo
 - **Phase 2** — summaries, memories, funnel, ingestion, pgvector, jobs, eval (schema + workers present; embeddings fill in when an embedding model is configured).
 - **Phase 3** — Manifest V3 extension with demo adapter and isolated production adapter contract.
 - **Phase 4** — CSP, rate limits, audit logs, retention, encryption, Playwright coverage.
-- **Platform automation prototype** — unofficial OnlyFans browser worker. Live selectors are unverified. Autonomous send is off by default.
+- **Platform automation prototype** — unofficial OnlyFans browser worker. Live selectors are unverified. New API accounts require review by default.
 
 ## Platform automation
 
-This is an unofficial browser integration. It is **not** supported by OnlyFans and can stop working if the site changes. Canopy never stores the creator password. Login, 2FA, CAPTCHA and identity checks must be completed by the creator in a local headed browser.
+The preferred integration uses [OnlyFansAPI](https://docs.onlyfansapi.com), a third-party provider. The browser prototype remains optional and requires manual login and challenge completion.
+
+### Connect and import with OnlyFansAPI
+
+1. Use Node 22, install dependencies, and run `pnpm db:generate` and `pnpm db:migrate`. Set a private `APP_ENCRYPTION_KEY`, database URL, and Redis URL on the server.
+2. Start the web app, `pnpm worker` for catalog jobs, and `pnpm platform:worker` for inbox sync and delivery. Workers need a persistent host.
+3. In **Products**, choose the creator and enter the provider API key and connected `acct_...` account ID. Canopy verifies the creator identity and stores the key encrypted.
+4. Import the catalog. Vault media, paid posts, and paid outgoing messages become draft products. Repeat imports preserve your prices and approvals; a complete scan retires missing source offers.
+5. Review media, previews, and prices before approving each product. Review reply actions in **Automation**. COPILOT requires review for every reply; automatic sending requires an explicit mode change and the corresponding global flags.
+
+Only verified provider receipts mark a delivery sent. Ambiguous sends fail for operator review, rather than being automatically resent. Transactions without a source message ID remain unreconciled; Canopy does not guess purchases from matching prices. Old extension tokens must be reissued because tokens now bind to the issuing organization.
+
+Run `pnpm test` and `pnpm build`. CI supplies PostgreSQL and Chromium and requires integration tests to run. Live provider testing requires your connected account and is separate from fixture tests.
 
 ### Flags
 

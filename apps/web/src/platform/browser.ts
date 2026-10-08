@@ -38,7 +38,10 @@ export function describeBrowserHost(): RemoteBrowserHandle {
  * The worker still owns cookies locally to that browser; they are never sent to the Canopy API.
  */
 export async function openHostedOrLocalContext(accountId: string, headed = true): Promise<BrowserContext> {
-  const cdp = process.env.CANOPY_BROWSER_CDP_URL;
+  const mapping: Record<string, string> = JSON.parse(process.env.CANOPY_BROWSER_CDP_URLS ?? "{}");
+  const cdp = mapping[accountId] ?? (process.env.CANOPY_BROWSER_CDP_ACCOUNT_ID === accountId ? process.env.CANOPY_BROWSER_CDP_URL : undefined);
+  if (process.env.CANOPY_BROWSER_CDP_URL && !cdp) throw new Error("CDP endpoint must be bound to this account");
+  if (cdp && Object.values(mapping).filter((url) => url === cdp).length > 1) throw new Error("CDP endpoint cannot be shared across accounts");
   if (cdp) {
     const browser = await chromium.connectOverCDP(cdp);
     return browser.contexts()[0] ?? (await browser.newContext());

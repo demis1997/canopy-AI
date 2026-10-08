@@ -75,9 +75,9 @@ describe("idempotency", () => {
 });
 
 describe("delivery gates", () => {
-  it("blocks emergency-stop / paused; copilot auto-sends when the flag is on", () => {
+  it("blocks paused accounts and requires approval in copilot", () => {
     expect(evaluateDeliveryGates(baseGate({ autonomyMode: "PAUSED" })).ok).toBe(false);
-    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT" })).ok).toBe(true);
+    expect(evaluateDeliveryGates(baseGate({ autonomyMode: "COPILOT" })).ok).toBe(false);
   });
 
   it("allows a human-approved copilot send while still blocking paused accounts", () => {
@@ -175,11 +175,11 @@ describe("autonomy routing", () => {
   const policy = defaultAutomationPolicy();
   const gateOk = { ok: true, reason: "OK", flags: [] };
 
-  it("schedules copilot when autonomous text is on; paused still cancels", () => {
+  it("requires copilot approval even with autonomous text enabled; paused cancels", () => {
     expect(
       routeAutonomy({ mode: "COPILOT", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
         .status,
-    ).toBe("SCHEDULED");
+    ).toBe("APPROVAL_REQUIRED");
     expect(
       routeAutonomy({ mode: "PAUSED", flags, decision: decision(), policy, humanTakeover: false, gate: gateOk })
         .status,

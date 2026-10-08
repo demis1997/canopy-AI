@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@canopy/database";
 import { createMockInboxState, MockOnlyFansAdapter } from "./mock-adapter";
 import { processIncoming, syncInbox } from "./runner";
 
@@ -13,7 +13,8 @@ describe("mock platform end-to-end", () => {
   it("syncs an inbound mock message, generates a decision, and verifies a copilot draft", async ({ skip }) => {
     try {
       await prisma.$connect();
-    } catch {
+    } catch (error) {
+      if (process.env.CI) throw error;
       skip();
       return;
     }

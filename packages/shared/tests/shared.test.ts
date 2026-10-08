@@ -1005,3 +1005,11 @@ describe("sequence ladder", () => {
     ).toBe("b");
   });
 });
+
+it("CSV import preserves escaped quotes and multiline descriptions", () => {
+  const rows = parseProductCsv('external_id,creator,name,description,content_type,standard_price,minimum_price\n1,Maya,"The ""special"" set","First line\nSecond line",VIDEO,9,9');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.name).toBe('The "special" set');
+  expect(rows[0]?.description).toBe('First line\nSecond line');
+  expect(rows[0]?.errors).toEqual([]);
+});

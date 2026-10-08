@@ -53,7 +53,7 @@ This is a pnpm monorepo. In the Vercel project:
 3. Framework: Next.js (detected from `apps/web/vercel.json`).
 4. Add a Postgres database that supports the `vector` extension (Neon / Vercel Postgres). Enable `CREATE EXTENSION IF NOT EXISTS vector;`.
 5. Set the environment variables from `.env.example` (at least `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXTAUTH_URL`, `APP_ENCRYPTION_KEY`, `NEXT_PUBLIC_APP_URL`). Point `AUTH_URL` / `NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL` at the Vercel URL.
-6. After the first deploy, run migrations against that database: `DATABASE_URL=... pnpm db:migrate && DATABASE_URL=... pnpm db:seed`.
+6. Migrations run during the Vercel build and fail the deployment if they cannot complete. Set optional `DIRECT_URL` to the direct connection string from the Neon console; keep `DATABASE_URL` pooled for application traffic. Without `DIRECT_URL`, the migration runner converts Neon’s pooled hostname to its direct counterpart and adds at least a 30-second connection timeout. It retries only `P1001` connection failures, up to three attempts. Seed separately with `pnpm db:seed` when needed.
 7. Add `LLM_API_KEY` (Venice) and a model ID, or paste the key in **Admin → AI provider** after login.
 
 The OnlyFans browser worker cannot run on Vercel serverless. Leave `ONLYFANS_BROWSER_INTEGRATION=false` in production. Redis is required for catalog imports; other jobs run inline when `REDIS_URL` is unset.

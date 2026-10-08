@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -30,6 +31,8 @@ export async function migrate(env, execute, wait, report = () => {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
+    const envFile = fileURLToPath(new URL("../.env", import.meta.url));
+    if (existsSync(envFile)) process.loadEnvFile(envFile);
     process.exitCode = await migrate(process.env, (env) => {
       const result = spawnSync("prisma", ["migrate", "deploy"], { env, encoding: "utf8", stdio: ["inherit", "inherit", "pipe"] });
       if (result.stderr) process.stderr.write(result.stderr);

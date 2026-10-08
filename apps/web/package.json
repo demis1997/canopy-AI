@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
+    "build": "pnpm --filter @canopy/database generate && next build",
     "start": "next start",
     "test": "vitest run",
     "worker": "tsx --env-file-if-exists=.env src/server/jobs/worker.ts",

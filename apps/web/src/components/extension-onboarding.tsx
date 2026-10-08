@@ -35,16 +35,23 @@ export function ExtensionOnboarding() {
           <li>
             Build locally: <code>pnpm --filter @canopy/extension build</code>
           </li>
-          <li>Chrome/Edge → Extensions → Load unpacked → select <code>apps/extension/dist</code></li>
+          <li>
+            Chrome/Edge → Extensions → Load unpacked → select <code>apps/extension/dist</code>
+          </li>
           <li>Issue a session token below and paste it into the extension popup</li>
           <li>
-            Open the mock inbox at <a className="text-canopy-300" href="/demo">/demo</a> — never a live OnlyFans tab for demos
+            Open the mock inbox at{" "}
+            <a className="text-canopy-300" href="/demo">
+              /demo
+            </a>{" "}
+            — never a live OnlyFans tab for demos
           </li>
         </ol>
       </div>
       <p className="text-xs text-white/40">
-        Permissions: storage, sidePanel, activeTab, scripting, and localhost demo URLs only. The extension never
-        stores the application API key or the AI provider key. Generation goes through the Canopy backend.
+        Permissions: storage, sidePanel, activeTab, scripting, and localhost demo URLs only. The
+        extension never stores the application API key or the AI provider key. Generation goes
+        through the Canopy backend.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -52,7 +59,11 @@ export function ExtensionOnboarding() {
             const res = await fetch("/api/extension/token", { method: "POST" });
             const json = await res.json();
             setFresh(json.token ?? null);
-            setStatus(json.token ? "Token issued. Paste it into the extension, then it disappears from this page." : json.error);
+            setStatus(
+              json.token
+                ? "Token issued. Paste it into the extension, then it disappears from this page."
+                : json.error,
+            );
             await refresh();
           }}
         >
@@ -70,9 +81,13 @@ export function ExtensionOnboarding() {
         <div className="text-xs text-white/40">Connected sessions</div>
         <ul className="mt-2 space-y-2 text-sm">
           {tokens.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-white/[0.06] px-3 py-2">
+            <li
+              key={t.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-white/[0.06] px-3 py-2"
+            >
               <span>
-                Issued {new Date(t.issuedAt).toLocaleString()} · expires {new Date(t.expiresAt).toLocaleString()} ·{" "}
+                Issued {new Date(t.issuedAt).toLocaleString()} · expires{" "}
+                {new Date(t.expiresAt).toLocaleString()} ·{" "}
                 {t.active ? "active" : t.revokedAt ? "revoked" : "expired"}
               </span>
               {t.active ? (

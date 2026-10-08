@@ -25,6 +25,9 @@ jobs:
       AUTH_SECRET: canopy-ci-only-secret-do-not-use-in-production
       APP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      AI_API_KEY: ""
+      LLM_API_KEY: ""
+      VENICE_LIVE_TEST: "false"
       ONLYFANS_BROWSER_INTEGRATION: "false"
       ONLYFANS_MOCK_PLATFORM: "true"
     steps:
@@ -41,5 +44,10 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm db:seed
       - run: pnpm --filter @canopy/web exec playwright install --with-deps chromium
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm --filter @canopy/extension build
+      - run: pnpm test:e2e

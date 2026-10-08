@@ -44,7 +44,13 @@ export {
   type StepStatus,
 } from "./conversation-flow.js";
 
-import { looksLikeAreYouReal, looksLikeContentAsk, looksLikePetNamePushback, looksLikeSextAsk, looksLikeTeaseAsk } from "./replies.js";
+import {
+  looksLikeAreYouReal,
+  looksLikeContentAsk,
+  looksLikePetNamePushback,
+  looksLikeSextAsk,
+  looksLikeTeaseAsk,
+} from "./replies.js";
 
 export const FAN_INTAKE_PLAYBOOK = `NEW/EXISTING FAN FLOW — internal state machine. Use a beat only when it naturally follows HIS last message. Never force vibe/hands/age/city/job/sub-dom after a greeting or while a direct question, emotion, or support issue is unanswered. One beat per send. Quoted lines are examples, not mandatory copy.
 PHASE 1 NEW (no history):
@@ -85,12 +91,18 @@ export function shouldRunFanIntake(opts: {
   sequenceKind?: string | null;
 }): boolean {
   const last = opts.subscriberText ?? "";
-  if (looksLikeTeaseAsk(last) || looksLikeAreYouReal(last) || looksLikePetNamePushback(last)) return false;
+  if (looksLikeTeaseAsk(last) || looksLikeAreYouReal(last) || looksLikePetNamePushback(last))
+    return false;
   if (looksLikeContentAsk(last)) return false;
   if ((opts.purchasedPpvCount ?? 0) >= 3) return false;
   if (opts.sequenceKind && opts.sequenceKind !== "STARTER") return false;
   if (opts.intent === "CONTENT_REQUEST" || opts.intent === "PURCHASE_INTEREST") return false;
-  if (opts.intent === "PRICE_OBJECTION" || opts.intent === "COMPLAINT" || opts.intent === "REFUND" || opts.intent === "UNSAFE") {
+  if (
+    opts.intent === "PRICE_OBJECTION" ||
+    opts.intent === "COMPLAINT" ||
+    opts.intent === "REFUND" ||
+    opts.intent === "UNSAFE"
+  ) {
     return false;
   }
   if (opts.intakeComplete && (opts.intent === "SEXTING" || looksLikeSextAsk(last))) return false;

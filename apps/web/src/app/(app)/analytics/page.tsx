@@ -8,7 +8,14 @@ import { formatPct, formatUsdFromCents, loadOrgMetrics, parseWindow } from "@/li
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; creator?: string; chatter?: string; campaign?: string; segment?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    creator?: string;
+    chatter?: string;
+    campaign?: string;
+    segment?: string;
+  }>;
 }) {
   const { allowed, ctx } = await guardOrgPage("analytics.view");
   if (!ctx.tenant) return <AccessDenied title="Select an organization" />;
@@ -17,7 +24,9 @@ export default async function AnalyticsPage({
   const orgId = ctx.tenant.organizationId;
   const window = parseWindow(params);
   const metrics = await loadOrgMetrics(orgId, window);
-  const creators = await prisma.creator.findMany({ where: { organizationId: orgId, active: true } });
+  const creators = await prisma.creator.findMany({
+    where: { organizationId: orgId, active: true },
+  });
   const members = await prisma.organizationMembership.findMany({
     where: { organizationId: orgId, role: { in: ["CHATTER", "MANAGER"] } },
     include: { user: true },
@@ -41,15 +50,29 @@ export default async function AnalyticsPage({
       <form className="grid gap-2 rounded-xl border border-white/[0.06] bg-ink-800/70 p-3 text-xs md:grid-cols-6">
         <label className="space-y-1">
           From
-          <input type="date" name="from" defaultValue={window.from.toISOString().slice(0, 10)} className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2" />
+          <input
+            type="date"
+            name="from"
+            defaultValue={window.from.toISOString().slice(0, 10)}
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          />
         </label>
         <label className="space-y-1">
           To
-          <input type="date" name="to" defaultValue={window.to.toISOString().slice(0, 10)} className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2" />
+          <input
+            type="date"
+            name="to"
+            defaultValue={window.to.toISOString().slice(0, 10)}
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          />
         </label>
         <label className="space-y-1">
           Creator
-          <select name="creator" defaultValue={params.creator ?? ""} className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2">
+          <select
+            name="creator"
+            defaultValue={params.creator ?? ""}
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          >
             <option value="">All</option>
             {creators.map((c) => (
               <option key={c.id} value={c.id}>
@@ -60,7 +83,11 @@ export default async function AnalyticsPage({
         </label>
         <label className="space-y-1">
           Chatter
-          <select name="chatter" defaultValue={params.chatter ?? ""} className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2">
+          <select
+            name="chatter"
+            defaultValue={params.chatter ?? ""}
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          >
             <option value="">All</option>
             {members.map((m) => (
               <option key={m.userId} value={m.userId}>
@@ -71,26 +98,47 @@ export default async function AnalyticsPage({
         </label>
         <label className="space-y-1">
           Campaign
-          <input name="campaign" defaultValue={params.campaign ?? ""} placeholder="Not tagged (demo filter)" className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2" />
+          <input
+            name="campaign"
+            defaultValue={params.campaign ?? ""}
+            placeholder="Not tagged (demo filter)"
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          />
         </label>
         <label className="space-y-1">
           Segment
-          <input name="segment" defaultValue={params.segment ?? ""} placeholder="Subscriber segment" className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2" />
+          <input
+            name="segment"
+            defaultValue={params.segment ?? ""}
+            placeholder="Subscriber segment"
+            className="h-9 w-full rounded-[10px] border border-white/10 bg-ink-900 px-2"
+          />
         </label>
         <button className="h-9 self-end rounded-[10px] bg-leaf px-3 text-bone" type="submit">
           Apply filters
         </button>
       </form>
       {(params.campaign || params.segment) && (
-        <p className="text-xs text-amber-300">Campaign and subscriber segment filters are labelled demo — events are not campaign-tagged yet.</p>
+        <p className="text-xs text-amber-300">
+          Campaign and subscriber segment filters are labelled demo — events are not campaign-tagged
+          yet.
+        </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Revenue influenced" value={formatUsdFromCents(metrics.revenueCents)} />
-        <MetricCard label="Unlock revenue" value={formatUsdFromCents(metrics.revenueCents)} hint={`${metrics.unlocks} purchases`} />
+        <MetricCard
+          label="Unlock revenue"
+          value={formatUsdFromCents(metrics.revenueCents)}
+          hint={`${metrics.unlocks} purchases`}
+        />
         <MetricCard label="Offers sent" value={String(metrics.offers)} />
         <MetricCard label="PPV conversion" value={formatPct(metrics.conversion)} />
         <MetricCard label="Revenue / conversation" value={formatUsdFromCents(metrics.rpc)} />
-        <MetricCard label="AI acceptance" value={formatPct(metrics.acceptance)} hint={`${formatPct(metrics.editRate)} edited`} />
+        <MetricCard
+          label="AI acceptance"
+          value={formatPct(metrics.acceptance)}
+          hint={`${formatPct(metrics.editRate)} edited`}
+        />
         <MetricCard label="Response time" value={`${Math.round(metrics.avgLatencyMs)}ms`} />
         <MetricCard label="Escalation rate" value={formatPct(metrics.escalationRate)} />
       </div>
@@ -118,7 +166,10 @@ export default async function AnalyticsPage({
             </tbody>
           </table>
         ) : (
-          <EmptyState title="No events in range" body="Generate replies or record purchases to populate the series." />
+          <EmptyState
+            title="No events in range"
+            body="Generate replies or record purchases to populate the series."
+          />
         )}
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">

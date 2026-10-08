@@ -10,7 +10,9 @@ describe("mock platform end-to-end", () => {
     await prisma.$disconnect();
   });
 
-  it("syncs an inbound mock message, generates a decision, and verifies a copilot draft", async ({ skip }) => {
+  it("syncs an inbound mock message, generates a decision, and verifies a copilot draft", async ({
+    skip,
+  }) => {
     try {
       await prisma.$connect();
     } catch (error) {
@@ -35,7 +37,10 @@ describe("mock platform end-to-end", () => {
     });
     expect(sync.state).toBe("CONNECTED");
     const stored = await prisma.platformMessage.findFirst({
-      where: { organizationId: account.organizationId, externalMessageId: inbound.externalMessageId },
+      where: {
+        organizationId: account.organizationId,
+        externalMessageId: inbound.externalMessageId,
+      },
     });
     expect(stored).toBeTruthy();
     const action = await prisma.automationAction.findFirst({

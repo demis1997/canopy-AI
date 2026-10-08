@@ -33,7 +33,12 @@ export function AdminOrgTable({ orgs }: { orgs: OrgRow[] }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search organizations" className="max-w-xs" />
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search organizations"
+          className="max-w-xs"
+        />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -74,7 +79,9 @@ export function AdminOrgTable({ orgs }: { orgs: OrgRow[] }) {
                 <td>
                   {o.memberCount} members · {o.generationCount} gens
                 </td>
-                <td className="text-white/50">{o.lastActivity ? new Date(o.lastActivity).toLocaleString() : "—"}</td>
+                <td className="text-white/50">
+                  {o.lastActivity ? new Date(o.lastActivity).toLocaleString() : "—"}
+                </td>
               </tr>
             ))}
           </tbody>

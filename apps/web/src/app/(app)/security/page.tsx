@@ -34,7 +34,10 @@ export default async function SecurityPage() {
             ))}
           </ul>
         ) : (
-          <EmptyState title="No audit events yet" body="Logins, provider changes and sends appear here." />
+          <EmptyState
+            title="No audit events yet"
+            body="Logins, provider changes and sends appear here."
+          />
         )}
       </Card>
     </div>

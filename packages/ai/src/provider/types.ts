@@ -1,9 +1,4 @@
-import type {
-  ExplicitnessLevel,
-  FunnelStage,
-  Intent,
-  Tone,
-} from "@canopy/shared";
+import type { ExplicitnessLevel, FunnelStage, Intent, Tone } from "@canopy/shared";
 import type { GenerationOutput } from "@canopy/shared";
 import type { PricingContext } from "../pricing/concession.js";
 
@@ -153,7 +148,14 @@ export type GenerationInput = {
   inputMessageIds?: string[];
   correctiveRetry?: boolean;
   correctiveCodes?: string[];
-  salesReadiness?: "CONNECTING" | "WARMING" | "FLIRTING" | "SEXUAL_MOMENTUM" | "BUYING_SIGNAL" | "ACTIVE_SALE" | "AFTERCARE";
+  salesReadiness?:
+    | "CONNECTING"
+    | "WARMING"
+    | "FLIRTING"
+    | "SEXUAL_MOMENTUM"
+    | "BUYING_SIGNAL"
+    | "ACTIVE_SALE"
+    | "AFTERCARE";
   latestTurnIntensity?: "NEUTRAL" | "WARM" | "FLIRTY" | "SUGGESTIVE" | "EXPLICIT" | "OFFER";
   intakeOpportunity?: boolean;
   allowPitch?: boolean;

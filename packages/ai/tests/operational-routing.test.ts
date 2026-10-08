@@ -66,7 +66,9 @@ describe("operational reply guards", () => {
     expect(guarded.replyOptions).toEqual([]);
     expect(guarded.recommendedProductId).toBeNull();
     expect(guarded.riskFlags).toContain("AI_SUSPICION");
-    expect(JSON.stringify(guarded).toLowerCase()).not.toMatch(/prove myself|guilt|leave|plenty of fans/);
+    expect(JSON.stringify(guarded).toLowerCase()).not.toMatch(
+      /prove myself|guilt|leave|plenty of fans/,
+    );
   });
 
   it("rejects sexual output for a support message", () => {
@@ -131,8 +133,9 @@ describe("safety still wins over human request", () => {
     const plan = operationalGenerationPlan(detectOperationalIntent("redirect me to a human"));
     expect(plan.skipGenerate).toBe(true);
     expect(plan.skipClassify).toBe(true);
-    expect(evaluateSafety({ adultStatus: "VERIFIED_ADULT", subscriberText: "redirect me to a human" }).allowed).toBe(
-      true,
-    );
+    expect(
+      evaluateSafety({ adultStatus: "VERIFIED_ADULT", subscriberText: "redirect me to a human" })
+        .allowed,
+    ).toBe(true);
   });
 });

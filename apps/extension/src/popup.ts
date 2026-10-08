@@ -66,7 +66,11 @@ document.getElementById("read")?.addEventListener("click", async () => {
   const box = document.getElementById("suggestions")!;
   box.innerHTML = "";
   if (!token || !conversationId) {
-    setStatus(token ? "Read complete. Link a conversation id to generate via Canopy." : "Read complete. Save a session token to generate.");
+    setStatus(
+      token
+        ? "Read complete. Link a conversation id to generate via Canopy."
+        : "Read complete. Save a session token to generate.",
+    );
     return;
   }
   try {
@@ -89,7 +93,11 @@ document.getElementById("read")?.addEventListener("click", async () => {
       });
       box.appendChild(el);
     }
-    setStatus(json.mockMode ? "Suggestions (labelled mock provider)." : "Suggestions ready. Insert, then send yourself.");
+    setStatus(
+      json.mockMode
+        ? "Suggestions (labelled mock provider)."
+        : "Suggestions ready. Insert, then send yourself.",
+    );
   } catch {
     setStatus("Could not reach the Canopy backend.");
   }
@@ -98,7 +106,11 @@ document.getElementById("read")?.addEventListener("click", async () => {
 document.getElementById("insert")?.addEventListener("click", async () => {
   const text = (document.getElementById("draft") as HTMLTextAreaElement).value;
   const result = await send({ type: "CANOPY_INSERT", text });
-  setStatus(result?.ok ? "Inserted into compose box. Click the native send button yourself." : `Insert failed: ${result?.reason ?? "unknown"}`);
+  setStatus(
+    result?.ok
+      ? "Inserted into compose box. Click the native send button yourself."
+      : `Insert failed: ${result?.reason ?? "unknown"}`,
+  );
 });
 
 void refreshInbox();

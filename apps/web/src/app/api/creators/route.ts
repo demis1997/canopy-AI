@@ -46,7 +46,8 @@ export async function POST(request: Request) {
         contentBoundaries: body.persona?.contentBoundaries ?? [],
         claimsNeverToMake: body.persona?.claimsNeverToMake ?? [],
         customContentRules: body.persona?.customContentRules ?? "",
-        offlineMeetingPolicy: body.persona?.offlineMeetingPolicy ?? "Never arrange offline meetings.",
+        offlineMeetingPolicy:
+          body.persona?.offlineMeetingPolicy ?? "Never arrange offline meetings.",
         discountLimitPercent: body.persona?.discountLimitPercent ?? 10,
         escalationRules: body.persona?.escalationRules ?? "",
         approvedExampleMessages: body.persona?.approvedExampleMessages ?? [],

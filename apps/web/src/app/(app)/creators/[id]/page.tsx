@@ -6,11 +6,7 @@ import { guardOrgPage } from "@/lib/page-guard";
 import { AccessDenied, PageHeader } from "@/components/page-chrome";
 import Link from "next/link";
 
-export default async function CreatorDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function CreatorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { allowed, ctx } = await guardOrgPage([
     "creators.view_assigned",
     "creators.manage",

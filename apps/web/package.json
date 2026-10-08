@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "worker": "tsx src/server/worker.ts",
-    "platform:worker": "tsx src/platform/cli.ts worker",
-    "platform:connect": "tsx src/platform/cli.ts connect",
-    "platform:mock-demo": "tsx src/platform/cli.ts mock-demo",
-    "platform:validate-selectors": "tsx src/platform/cli.ts validate-selectors",
-    "test:e2e": "playwright test"
+    "worker": "tsx --env-file-if-exists=.env src/server/jobs/worker.ts",
+    "platform:worker": "tsx --env-file-if-exists=.env src/platform/cli.ts worker",
+    "platform:connect": "tsx --env-file-if-exists=.env src/platform/cli.ts connect",
+    "platform:mock-demo": "tsx --env-file-if-exists=.env src/platform/cli.ts mock-demo",
+    "platform:validate-selectors": "tsx --env-file-if-exists=.env src/platform/cli.ts validate-selectors",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "benchmark:edit-distance": "tsx --expose-gc scripts/benchmark-edit-distance.ts"
   },
   "dependencies": {
     "@canopy/ai": "workspace:*",

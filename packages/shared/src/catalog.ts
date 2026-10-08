@@ -131,26 +131,42 @@ export type CsvProductRow = {
 };
 
 function csvRecords(text: string): { records: string[][]; malformed: boolean } {
-  const records: string[][] = []; let row: string[] = []; let field = ""; let quoted = false;
+  const records: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     if (ch === '"') {
-      if (quoted && text[i + 1] === '"') { field += '"'; i++; }
-      else quoted = !quoted;
-    } else if (ch === "," && !quoted) { row.push(field.trim()); field = ""; }
-    else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (quoted && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else quoted = !quoted;
+    } else if (ch === "," && !quoted) {
+      row.push(field.trim());
+      field = "";
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
       if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(field.trim()); if (row.some(Boolean)) records.push(row); row = []; field = "";
+      row.push(field.trim());
+      if (row.some(Boolean)) records.push(row);
+      row = [];
+      field = "";
     } else field += ch;
   }
-  row.push(field.trim()); if (row.some(Boolean)) records.push(row);
+  row.push(field.trim());
+  if (row.some(Boolean)) records.push(row);
   return { records, malformed: quoted };
 }
 
 export function parseProductCsv(text: string): CsvProductRow[] {
   const { records, malformed } = csvRecords(text);
   if (records.length < 2) return [];
-  const header = records[0]!.map((h) => h.replace(/^\uFEFF/, "").toLowerCase().replace(/\s+/g, "_"));
+  const header = records[0]!.map((h) =>
+    h
+      .replace(/^\uFEFF/, "")
+      .toLowerCase()
+      .replace(/\s+/g, "_"),
+  );
   const idx = (name: string) => header.indexOf(name);
   return records.slice(1).map((cols) => {
     const errors: string[] = [];
@@ -186,7 +202,10 @@ export function parseProductCsv(text: string): CsvProductRow[] {
       standard_price: standard,
       minimum_price: minimum,
       discount_limit_percent: Number.isFinite(discount) ? discount : 10,
-      tags: (cols[idx("tags")] ?? "").split("|").map((t) => t.trim()).filter(Boolean),
+      tags: (cols[idx("tags")] ?? "")
+        .split("|")
+        .map((t) => t.trim())
+        .filter(Boolean),
       media_reference: cols[idx("media_reference")] ?? "",
       preview_reference: cols[idx("preview_reference")] ?? "",
       availability: availabilityRaw !== "false" && availabilityRaw !== "0",
@@ -278,7 +297,11 @@ function sellTokens(text: string, keepShort = false): string[] {
     .filter((w) => (keepShort ? w.length >= 2 : w.length >= 3) && !SELL_STOP.has(w));
 }
 
-function productSellTerms(product: SellableProduct): { name: string[]; tags: string[]; desc: string[] } {
+function productSellTerms(product: SellableProduct): {
+  name: string[];
+  tags: string[];
+  desc: string[];
+} {
   return {
     name: sellTokens(product.name),
     tags: (product.tags ?? []).flatMap((t) => sellTokens(t, true)),
@@ -294,7 +317,8 @@ function scoreSellFit(product: SellableProduct, blob: string): number {
   if (!blob.trim()) return 0;
   const terms = productSellTerms(product);
   let score = 0;
-  const hit = (word: string) => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(blob);
+  const hit = (word: string) =>
+    new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(blob);
   for (const token of terms.name) {
     if (expand(token).some(hit)) score += 4;
   }
@@ -335,7 +359,8 @@ export function boughtWelcomeMessage(input: {
   products?: { id: string; tags?: string[]; name?: string }[];
   purchasedProductIds?: string[];
 }): boolean {
-  if (input.extra?.bought_welcome === "true" || input.extra?.welcome_purchased === "true") return true;
+  if (input.extra?.bought_welcome === "true" || input.extra?.welcome_purchased === "true")
+    return true;
   const purchased = new Set(input.purchasedProductIds ?? []);
   return (input.products ?? []).some((product) => {
     if (!purchased.has(product.id)) return false;
@@ -354,9 +379,11 @@ export function pickSequenceDropProduct(
   const floor = previousPrice ?? 0;
   const higher = available.filter((p) => p.standardPrice > floor + 0.009);
   const pool = higher.length ? higher : available;
-  return [...pool].sort(
-    (a, b) => Math.abs(a.standardPrice - targetPrice) - Math.abs(b.standardPrice - targetPrice),
-  )[0] ?? null;
+  return (
+    [...pool].sort(
+      (a, b) => Math.abs(a.standardPrice - targetPrice) - Math.abs(b.standardPrice - targetPrice),
+    )[0] ?? null
+  );
 }
 
 export function matchSellTarget(input: {
@@ -372,11 +399,7 @@ export function matchSellTarget(input: {
     firstPpvMax: input.firstPpvMax,
   });
   if (!fallback) return null;
-  const blob = [
-    ...input.subscriberTexts,
-    input.notes ?? "",
-    ...(input.memories ?? []),
-  ]
+  const blob = [...input.subscriberTexts, input.notes ?? "", ...(input.memories ?? [])]
     .join(" ")
     .toLowerCase();
   let best = fallback;
@@ -394,6 +417,7 @@ export function matchSellTarget(input: {
   }
   return {
     product: fallback,
-    reason: input.sequenceProductId && fallback.id === input.sequenceProductId ? "SEQUENCE" : "DEFAULT",
+    reason:
+      input.sequenceProductId && fallback.id === input.sequenceProductId ? "SEQUENCE" : "DEFAULT",
   };
 }

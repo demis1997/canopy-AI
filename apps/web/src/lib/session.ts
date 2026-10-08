@@ -51,7 +51,11 @@ export function requirePerm(ctx: SessionContext, permission: Permission) {
 }
 
 export function jsonError(error: unknown) {
-  if (error instanceof ZodError) return NextResponse.json({ error: "Invalid request", issues: error.flatten() }, { status: 400 });
+  if (error instanceof ZodError)
+    return NextResponse.json(
+      { error: "Invalid request", issues: error.flatten() },
+      { status: 400 },
+    );
   if (error instanceof AuthorizationError || error instanceof TenantIsolationError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

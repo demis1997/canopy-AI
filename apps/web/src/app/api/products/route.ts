@@ -32,7 +32,10 @@ export async function POST(request: Request) {
     });
     if (!creator) return NextResponse.json({ error: "Creator not found" }, { status: 404 });
     if (body.minimumPrice > body.standardPrice) {
-      return NextResponse.json({ error: "Minimum price cannot exceed standard price" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Minimum price cannot exceed standard price" },
+        { status: 400 },
+      );
     }
     const product = await prisma.product.create({
       data: {
@@ -68,7 +71,8 @@ export async function PUT(request: Request) {
     const { csv } = z.object({ csv: z.string().min(1).max(1_000_000) }).parse(await request.json());
     if (!csv) return NextResponse.json({ error: "CSV required" }, { status: 400 });
     const rows = parseProductCsv(csv);
-    if (rows.length > 5000) return NextResponse.json({ error: "Maximum 5000 rows per import" }, { status: 400 });
+    if (rows.length > 5000)
+      return NextResponse.json({ error: "Maximum 5000 rows per import" }, { status: 400 });
     const valid = rows.filter((r) => r.errors.length === 0);
     const creators = await prisma.creator.findMany({
       where: { organizationId: ctx.tenant.organizationId, active: true },
@@ -92,23 +96,61 @@ export async function PUT(request: Request) {
       const importKey = `${ctx.tenant.organizationId}:csv:${creator.id}:${row.external_id || createHash("sha256").update(JSON.stringify(row)).digest("hex")}`;
       const product = await prisma.$transaction(async (tx) => {
         const data = {
-          name: row.name, description: row.description,
+          name: row.name,
+          description: row.description,
           mediaType: row.content_type as "PHOTO" | "VIDEO" | "AUDIO" | "TEXT" | "BUNDLE" | "CUSTOM",
-          standardPriceCents: Math.round(row.standard_price * 100), minimumPriceCents: Math.round(row.minimum_price * 100),
-          discountLimitPercent: Math.round(row.discount_limit_percent), tags: row.tags,
-          available: row.availability, source: "CSV_IMPORT" as const, externalId: row.external_id || null,
+          standardPriceCents: Math.round(row.standard_price * 100),
+          minimumPriceCents: Math.round(row.minimum_price * 100),
+          discountLimitPercent: Math.round(row.discount_limit_percent),
+          tags: row.tags,
+          available: row.availability,
+          source: "CSV_IMPORT" as const,
+          externalId: row.external_id || null,
         };
-        const p = await tx.product.upsert({ where: { importKey },
-          create: { ...data, organizationId: ctx.tenant!.organizationId, creatorId: creator.id, importKey }, update: data });
+        const p = await tx.product.upsert({
+          where: { importKey },
+          create: {
+            ...data,
+            organizationId: ctx.tenant!.organizationId,
+            creatorId: creator.id,
+            importKey,
+          },
+          update: data,
+        });
         await tx.productMedia.deleteMany({ where: { productId: p.id } });
         await tx.productPreview.deleteMany({ where: { productId: p.id } });
-        for (const [reference, preview] of [[row.media_reference, false], [row.preview_reference, true]] as const) {
+        for (const [reference, preview] of [
+          [row.media_reference, false],
+          [row.preview_reference, true],
+        ] as const) {
           if (!reference) continue;
-          const media = await tx.mediaAsset.upsert({ where: { importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}` },
-            create: { importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}`, organizationId: ctx.tenant!.organizationId,
-              creatorId: creator.id, externalId: reference, title: row.name, mediaType: data.mediaType, source: "CSV_IMPORT" }, update: {} });
-          if (preview) await tx.productPreview.upsert({ where: { productId_mediaId: { productId: p.id, mediaId: media.id } }, create: { productId: p.id, mediaId: media.id }, update: {} });
-          else await tx.productMedia.upsert({ where: { productId_mediaId: { productId: p.id, mediaId: media.id } }, create: { productId: p.id, mediaId: media.id }, update: {} });
+          const media = await tx.mediaAsset.upsert({
+            where: {
+              importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}`,
+            },
+            create: {
+              importKey: `${ctx.tenant!.organizationId}:csv-media:${creator.id}:${reference}`,
+              organizationId: ctx.tenant!.organizationId,
+              creatorId: creator.id,
+              externalId: reference,
+              title: row.name,
+              mediaType: data.mediaType,
+              source: "CSV_IMPORT",
+            },
+            update: {},
+          });
+          if (preview)
+            await tx.productPreview.upsert({
+              where: { productId_mediaId: { productId: p.id, mediaId: media.id } },
+              create: { productId: p.id, mediaId: media.id },
+              update: {},
+            });
+          else
+            await tx.productMedia.upsert({
+              where: { productId_mediaId: { productId: p.id, mediaId: media.id } },
+              create: { productId: p.id, mediaId: media.id },
+              update: {},
+            });
         }
         return p;
       });

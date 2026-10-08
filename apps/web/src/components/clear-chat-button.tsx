@@ -17,7 +17,11 @@ export function ClearChatButton(props: {
   async function clear(event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    if (!confirm("Clear this chat? Messages and AI suggestions will be deleted. The fan stays in the inbox.")) {
+    if (
+      !confirm(
+        "Clear this chat? Messages and AI suggestions will be deleted. The fan stays in the inbox.",
+      )
+    ) {
       return;
     }
     setBusy(true);

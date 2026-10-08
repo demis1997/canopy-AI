@@ -1,5 +1,3 @@
-const appUrl = "http://localhost:3000";
-
 async function readThread() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return null;
@@ -15,7 +13,8 @@ async function insert(text: string) {
 document.getElementById("save-token")?.addEventListener("click", async () => {
   const token = (document.getElementById("token") as HTMLInputElement).value;
   await chrome.storage.session.set({ canopyToken: token });
-  document.getElementById("status")!.textContent = "Token stored in session storage only (not cookies).";
+  document.getElementById("status")!.textContent =
+    "Token stored in session storage only (not cookies).";
 });
 
 document.getElementById("read")?.addEventListener("click", async () => {

@@ -4,11 +4,7 @@ import { requireOrgUser } from "@/lib/session";
 import { Badge, Card } from "@/components/ui/card";
 import Link from "next/link";
 
-export default async function SubscriberPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function SubscriberPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireOrgUser();
   if (!ctx.tenant) redirect("/admin");
   const { id } = await params;

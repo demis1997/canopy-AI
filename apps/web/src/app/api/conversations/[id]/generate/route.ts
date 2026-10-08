@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { generateRequestSchema } from "@canopy/shared";
-import { prisma } from "@canopy/database";
 import { requireOrgUser, jsonError, requirePerm } from "@/lib/session";
-import { generateForConversation } from "@/server/generate";
-import { assignedCreatorIds } from "@/lib/access";
+import { generateForConversation } from "@/server/generation";
+import { getConversationAccess } from "@/lib/access";
 import { rateLimit } from "@/server/security";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
@@ -18,14 +14,12 @@ export async function POST(
       return NextResponse.json({ error: "Rate limited" }, { status: 429 });
     }
     const { id } = await params;
-    const conversation = await prisma.conversation.findFirst({
-      where: { id, organizationId: ctx.tenant.organizationId },
-    });
-    if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const allowed = await assignedCreatorIds(ctx);
-    if (allowed && !allowed.includes(conversation.creatorId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const access = await getConversationAccess(ctx, id);
+    if (!access.ok)
+      return NextResponse.json(
+        { error: access.status === 404 ? "Not found" : "Forbidden" },
+        { status: access.status },
+      );
     const body = generateRequestSchema.parse({
       conversationId: id,
       ...((await request.json().catch(() => ({}))) as object),

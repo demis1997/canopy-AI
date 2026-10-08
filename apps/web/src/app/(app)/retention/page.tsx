@@ -23,7 +23,8 @@ export default async function RetentionPage() {
         <div>Generations: {policy?.generationRetentionDays ?? 90} days</div>
         <div>Audit: {policy?.auditRetentionDays ?? 365} days</div>
         <p className="pt-2 text-white/50">
-          Subscriber export and deletion are on the subscriber page. Safety rules cannot be disabled.
+          Subscriber export and deletion are on the subscriber page. Safety rules cannot be
+          disabled.
         </p>
       </Card>
     </div>

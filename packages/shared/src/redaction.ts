@@ -1,12 +1,4 @@
-const REDACT_KEYS = [
-  "text",
-  "message",
-  "content",
-  "prompt",
-  "reply",
-  "biography",
-  "memory",
-];
+const REDACT_KEYS = ["text", "message", "content", "prompt", "reply", "biography", "memory"];
 
 export function redactForLogs(value: unknown): unknown {
   if (typeof value === "string") {

@@ -1,12 +1,15 @@
-import { looksLikeAreYouReal, looksLikeContentAsk, looksLikeDirectCreatorQuestion, looksLikeDirectUnlockPitch, looksLikePrematureVideoPitch, looksLikeSextAsk, looksLikeTeaseAsk } from "./replies.js";
+import {
+  looksLikeAreYouReal,
+  looksLikeContentAsk,
+  looksLikeDirectCreatorQuestion,
+  looksLikeDirectUnlockPitch,
+  looksLikePrematureVideoPitch,
+  looksLikeSextAsk,
+  looksLikeTeaseAsk,
+} from "./replies.js";
 
 export type OperationalIntent =
-  | "HUMAN_REQUEST"
-  | "AI_SUSPICION"
-  | "COMPLAINT"
-  | "SUPPORT_REQUEST"
-  | "STOP_AUTOMATION"
-  | "NONE";
+  "HUMAN_REQUEST" | "AI_SUSPICION" | "COMPLAINT" | "SUPPORT_REQUEST" | "STOP_AUTOMATION" | "NONE";
 
 export type ResponseMode = "OPERATIONAL" | "SUPPORT" | "NATURAL" | "FLIRTY" | "EXPLICIT" | "SALES";
 
@@ -64,7 +67,11 @@ const COMPLAINT_ASK =
 function looksLikeHumanRequest(text: string): boolean {
   const t = text.trim();
   if (!t || HUMAN_IDIOM.test(t)) return false;
-  if (/\b(redirect|transfer|connect) me to (a |the )?(human|person|agent|someone|manager|support|moderator|creator)\b/i.test(t)) {
+  if (
+    /\b(redirect|transfer|connect) me to (a |the )?(human|person|agent|someone|manager|support|moderator|creator)\b/i.test(
+      t,
+    )
+  ) {
     return true;
   }
   if (WANT_PERSON.test(t) && (HANDOFF_PHRASE.test(t) || HUMAN_TARGET.test(t))) {
@@ -72,10 +79,18 @@ function looksLikeHumanRequest(text: string): boolean {
   }
   if (HANDOFF_PHRASE.test(t) && HUMAN_TARGET.test(t)) return true;
   if (STOP_BOT.test(t)) return true;
-  if (/\b(speak with the actual (creator|person)|talk to a real (human|person)|let me talk to a real person)\b/i.test(t)) {
+  if (
+    /\b(speak with the actual (creator|person)|talk to a real (human|person)|let me talk to a real person)\b/i.test(
+      t,
+    )
+  ) {
     return true;
   }
-  if (/\b(i('m| am|m) talking to an? (ai|bot|robot).{0,80}(human|person|redirect|transfer))\b/i.test(t)) {
+  if (
+    /\b(i('m| am|m) talking to an? (ai|bot|robot).{0,80}(human|person|redirect|transfer))\b/i.test(
+      t,
+    )
+  ) {
     return true;
   }
   return false;
@@ -91,7 +106,9 @@ function looksLikeAiSuspicion(text: string): boolean {
 
 function looksLikeStopAutomation(text: string): boolean {
   if (looksLikeHumanRequest(text)) return false;
-  return STOP_BOT.test(text) || /\b(stop (messaging|texting|replying) me|leave me alone)\b/i.test(text);
+  return (
+    STOP_BOT.test(text) || /\b(stop (messaging|texting|replying) me|leave me alone)\b/i.test(text)
+  );
 }
 
 function looksLikeSupportRequest(text: string): boolean {
@@ -253,9 +270,11 @@ export function collectPendingFanTurn(opts: {
     ? chronological.findIndex((row) => row.id === opts.triggerMessageId)
     : -1;
   // An old trigger cannot resurrect a turn the creator has already answered.
-  const answered = triggerIndex >= 0 && chronological.slice(triggerIndex + 1).some(
-    (row) => row.authorType === "CHATTER" || row.authorType === "CREATOR",
-  );
+  const answered =
+    triggerIndex >= 0 &&
+    chronological
+      .slice(triggerIndex + 1)
+      .some((row) => row.authorType === "CHATTER" || row.authorType === "CREATOR");
   const cutoff = answered ? [] : chronological;
   let lastCreator = -1;
   for (let i = cutoff.length - 1; i >= 0; i -= 1) {
@@ -277,7 +296,10 @@ export function collectPendingFanTurn(opts: {
   return {
     messageIds: limited.map((row) => row.id),
     messages: limited,
-    combinedText: limited.map((row) => row.body).join("\n").slice(0, maxChars),
+    combinedText: limited
+      .map((row) => row.body)
+      .join("\n")
+      .slice(0, maxChars),
     newestMessageId: limited.at(-1)?.id ?? null,
     oldestMessageId: limited[0]?.id ?? null,
   };
@@ -286,15 +308,21 @@ export function collectPendingFanTurn(opts: {
 export function looksLikeFlirtyTurn(text: string): boolean {
   const t = text.trim();
   if (!t || containsSexualLanguage(t)) return false;
-  if (/^(hey+|hi+|hello|heya|yo|sup)(\s|$|[!?.])/i.test(t) && !/\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t)) {
+  if (
+    /^(hey+|hi+|hello|heya|yo|sup)(\s|$|[!?.])/i.test(t) &&
+    !/\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t)
+  ) {
     return false;
   }
   return /\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t);
 }
 
 export function looksLikePurchaseSignal(text: string): boolean {
-  return /\b(i('ll| will) buy|send it|how much|price|unlock|ppv|want (the|that) (vid|video|clip|pic))\b/i.test(text) ||
-    looksLikeContentAsk(text);
+  return (
+    /\b(i('ll| will) buy|send it|how much|price|unlock|ppv|want (the|that) (vid|video|clip|pic))\b/i.test(
+      text,
+    ) || looksLikeContentAsk(text)
+  );
 }
 
 export function determineResponseMode(opts: {
@@ -311,7 +339,8 @@ export function determineResponseMode(opts: {
   if (opts.operational.intent === "COMPLAINT" || opts.operational.intent === "SUPPORT_REQUEST") {
     return "SUPPORT";
   }
-  if (looksLikeSextAsk(opts.subscriberText) || looksLikeTeaseAsk(opts.subscriberText)) return "EXPLICIT";
+  if (looksLikeSextAsk(opts.subscriberText) || looksLikeTeaseAsk(opts.subscriberText))
+    return "EXPLICIT";
   if (looksLikePurchaseSignal(opts.subscriberText)) return "SALES";
   if (looksLikeFlirtyTurn(opts.subscriberText)) return "FLIRTY";
   return "NATURAL";
@@ -326,14 +355,20 @@ export function containsSexualLanguage(text: string): boolean {
 export function latestTurnAllowsSexual(turn: string, mode: ResponseMode): boolean {
   if (mode === "OPERATIONAL" || mode === "SUPPORT" || mode === "NATURAL") return false;
   if (mode === "FLIRTY") return false;
-  return looksLikeSextAsk(turn) || looksLikeTeaseAsk(turn) || mode === "EXPLICIT" || mode === "SALES";
+  return (
+    looksLikeSextAsk(turn) || looksLikeTeaseAsk(turn) || mode === "EXPLICIT" || mode === "SALES"
+  );
 }
 
 export function isGenerationStale(opts: {
   newestInputMessageId: string | null;
   newerSubscriberMessageId: string | null;
 }): boolean {
-  return Boolean(opts.newestInputMessageId && opts.newerSubscriberMessageId && opts.newerSubscriberMessageId !== opts.newestInputMessageId);
+  return Boolean(
+    opts.newestInputMessageId &&
+    opts.newerSubscriberMessageId &&
+    opts.newerSubscriberMessageId !== opts.newestInputMessageId,
+  );
 }
 
 export type GroundingFailure = {
@@ -352,9 +387,16 @@ export function validateReplyGrounding(opts: {
 }): GroundingResult {
   const reply = opts.reply.trim();
   const asksCreatorWellbeing = /\bhow (?:are|r) (?:you|u)\b/i.test(opts.turn);
-  const fanReportedWellbeing = /\b(?:i(?: am|[’']m|m)|im) (?:good|well|fine|okay|ok|great)\b/i.test(opts.turn);
-  const attributesWellbeingToFan = /\b(?:oh|glad|nice|great|good to hear)[^.!?]{0,35}\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)\b/i.test(reply) ||
-    /\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)[^.!?]{0,15}\b(?:nice|glad)\b/i.test(reply);
+  const fanReportedWellbeing = /\b(?:i(?: am|[’']m|m)|im) (?:good|well|fine|okay|ok|great)\b/i.test(
+    opts.turn,
+  );
+  const attributesWellbeingToFan =
+    /\b(?:oh|glad|nice|great|good to hear)[^.!?]{0,35}\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)\b/i.test(
+      reply,
+    ) ||
+    /\b(?:you(?:[’']re| are|re)|ur) (?:good|well|fine|okay|ok|great)[^.!?]{0,15}\b(?:nice|glad)\b/i.test(
+      reply,
+    );
   if (asksCreatorWellbeing && !fanReportedWellbeing && attributesWellbeingToFan) {
     return { ok: false, code: "SPEAKER_ATTRIBUTION" };
   }
@@ -370,11 +412,24 @@ export function validateReplyGrounding(opts: {
   if (!latestTurnAllowsSexual(opts.turn, opts.mode) && containsSexualLanguage(reply)) {
     return { ok: false, code: "SEXUAL_NOT_ALLOWED" };
   }
-  const pitchingDisabled = opts.mode === "OPERATIONAL" || opts.mode === "SUPPORT" || opts.mode === "NATURAL" || !opts.operational.allowSexual;
-  if (pitchingDisabled && (opts.recommendedProductId || looksLikeDirectUnlockPitch(reply) || looksLikePrematureVideoPitch(reply))) {
+  const pitchingDisabled =
+    opts.mode === "OPERATIONAL" ||
+    opts.mode === "SUPPORT" ||
+    opts.mode === "NATURAL" ||
+    !opts.operational.allowSexual;
+  if (
+    pitchingDisabled &&
+    (opts.recommendedProductId ||
+      looksLikeDirectUnlockPitch(reply) ||
+      looksLikePrematureVideoPitch(reply))
+  ) {
     return { ok: false, code: "PITCH_DISABLED" };
   }
-  if (looksLikeDirectCreatorQuestion(opts.turn) && containsSexualLanguage(reply) && !looksLikeSextAsk(opts.turn)) {
+  if (
+    looksLikeDirectCreatorQuestion(opts.turn) &&
+    containsSexualLanguage(reply) &&
+    !looksLikeSextAsk(opts.turn)
+  ) {
     return { ok: false, code: "IGNORED_QUESTION" };
   }
   return { ok: true };

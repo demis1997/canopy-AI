@@ -6,8 +6,7 @@ export async function guardOrgPage(permission: Permission | Permission[]) {
   const ctx = await requireOrgUser();
   const perms = Array.isArray(permission) ? permission : [permission];
   const allowed = Boolean(
-    ctx.isPlatformAdmin ||
-      (ctx.tenant && perms.some((perm) => hasPermission(ctx.role, perm))),
+    ctx.isPlatformAdmin || (ctx.tenant && perms.some((perm) => hasPermission(ctx.role, perm))),
   );
   return { allowed, ctx };
 }

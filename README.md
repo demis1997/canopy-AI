@@ -1,201 +1,106 @@
 # Canopy
 
-Human-in-the-loop AI chatting and sales copilot for adult-content creators and agencies.
+Canopy is an AI reply and sales copilot for adult-content creators and agencies. It keeps creator personas, fan conversations, approved training, and product catalogs within organizations. Operators can review, edit, reject, or insert suggestions. Model responses are checked against deterministic safety, product, price, and conversation rules.
 
-The model suggests replies for review. Connected creator accounts can use the OnlyFansAPI provider for catalog imports, inbox sync, and approved delivery. New API connections start in COPILOT mode, where every reply requires review.
-
-Conversations may be processed by the configured **external Venice AI provider**. Canopy does not train a general model on client chats.
-
-## Repository audit
-
-This repository was empty at the start of the project. The architecture below is the initial implementation.
+The optional OnlyFansAPI connection imports vault media, paid posts, and paid outgoing messages as draft products, syncs the inbox, and delivers approved messages. New connections use COPILOT mode and require review. The provider is a third party; live account behavior requires separate verification. The browser adapter is an unverified prototype and is disabled by default.
 
 ## Architecture
 
 ```text
-/apps/web            Next.js App Router (UI + API)
-/apps/extension      Manifest V3 side panel + demo adapter
-/packages/database   Prisma schema, tenant helpers, encryption, seed
-/packages/ai         LLMProvider, Venice + mock, safety, prompts, eval
-/packages/shared     Enums, Zod schemas, RBAC, funnel rules
-/packages/config     Shared TypeScript config
+apps/
+  web/                       Next.js App Router UI, HTTP routes, server services
+    src/server/generation/   Generation orchestration, reply selection, edit distance
+    src/server/jobs/         Validated job contracts, Redis transport, focused handlers
+    src/server/automation/   Review, safety gates, action state and delivery persistence
+    src/platform/            OnlyFansAPI/browser/mock adapters and persistent inbox worker
+  extension/                 Chrome Manifest V3 extension and demo adapter
+packages/
+  ai/                        Model providers, prompts, validation, training retrieval and eval
+  database/                  Prisma schema/migrations, tenant helpers and encryption
+  shared/                    Zod schemas, permissions and pure conversation/catalog rules
+  config/                    Optional shared TypeScript configuration
 ```
 
-Tenant isolation is enforced in `packages/database` (`requireTenant` / `tenantDb`). Role checks run on the server. The Venice API key never enters browser or extension bundles.
+See [architecture and execution paths](docs/architecture.md) and [contributing](docs/contributing.md). HTTP routes handle authentication and request validation; server services perform orchestration. The database helpers provide scoped queries, but every new query and job still requires an explicit tenancy review.
 
-### Database models
+## Requirements and setup
 
-User, Organization, OrganizationMembership, Creator, CreatorPersona, CreatorBoundary, ChatterCreatorAssignment, Subscriber, SubscriberMemory, Conversation, Message, ConversationSummary, Product, Offer, Purchase, TrainingDocument, TrainingChunk, PromptTemplate, PromptVersion, Generation, ReplyOption, Escalation, AnalyticsEvent, LLMProviderConfiguration, AuditLog, ApiCredential, DataRetentionPolicy, ExtensionToken.
-
-## Local development
+Use Node 22 (`.nvmrc`), pnpm 9.4.0 (`packageManager`), and Docker Compose for PostgreSQL with pgvector and Redis. Dependencies are locked in `pnpm-lock.yaml`.
 
 ```bash
+corepack enable
+pnpm install --frozen-lockfile
 cp .env.example .env
-cp .env.example apps/web/.env
-cp .env.example packages/database/.env
+```
 
-pnpm install
-docker compose up -d
+Edit `.env` before continuing. Generate separate private values for `AUTH_SECRET` and the 64-character hex `APP_ENCRYPTION_KEY` with `openssl rand -hex 32`. Leave model API keys empty to use the mock provider. Copy the completed local configuration to the two processes that read it:
+
+```bash
+cp .env apps/web/.env
+cp .env packages/database/.env
+docker compose up -d --wait
 pnpm db:generate
 pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [localhost:3000](http://localhost:3000). Seeding creates fictional demo adults and demo logins; use it on a development database. The local demo password is `CanopyDemo!2026`. Example accounts are `owner@demo.canopy`, `chatter1@demo.canopy`, and `admin@canopy.dev`. Do not expose a seeded development database as production.
 
-## Deploy on Vercel
-
-This is a pnpm monorepo. In the Vercel project:
-
-1. Import the GitHub repo.
-2. Set **Root Directory** to `apps/web`.
-3. Framework: Next.js (detected from `apps/web/vercel.json`).
-4. Add a Postgres database that supports the `vector` extension (Neon / Vercel Postgres). Enable `CREATE EXTENSION IF NOT EXISTS vector;`.
-5. Set the environment variables from `.env.example` (at least `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXTAUTH_URL`, `APP_ENCRYPTION_KEY`, `NEXT_PUBLIC_APP_URL`). Point `AUTH_URL` / `NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL` at the Vercel URL.
-6. Migrations run during the Vercel build and fail the deployment if they cannot complete. Set optional `DIRECT_URL` to the direct connection string from the Neon console; keep `DATABASE_URL` pooled for application traffic. Without `DIRECT_URL`, the migration runner converts Neon’s pooled hostname to its direct counterpart and adds at least a 30-second connection timeout. It retries only `P1001` connection failures, up to three attempts. Seed separately with `pnpm db:seed` when needed.
-7. Add `LLM_API_KEY` (Venice) and a model ID, or paste the key in **Admin → AI provider** after login.
-
-The OnlyFans browser worker cannot run on Vercel serverless. Leave `ONLYFANS_BROWSER_INTEGRATION=false` in production. Redis is required for catalog imports; other jobs run inline when `REDIS_URL` is unset.
-
-Demo password for every seeded user: `CanopyDemo!2026`
-
-| Role | Email |
-| --- | --- |
-| Platform admin | admin@canopy.dev |
-| Agency owner | owner@demo.canopy |
-| Manager | manager@demo.canopy |
-| Chatter | chatter1@demo.canopy |
-| Chatter | chatter2@demo.canopy |
-| Creator | maya@demo.canopy |
-| Creator | elena@demo.canopy |
-
-All seed records are labelled **DEMO** and use fictional adults only.
-
-### Venice API key
-
-1. Create a key in the Venice dashboard.
-2. Set `LLM_API_KEY` and optionally `LLM_BASE_URL` (default `https://api.venice.ai/api/v1`).
-3. Sign in as `admin@canopy.dev` → **Admin** or **AI provider**.
-4. Paste the key (it is encrypted at rest and never redisplayed in full).
-5. Click **Load models**. Prefer a listed uncensored Qwen around 24B–35B; store the **exact ID** Venice returned.
-6. Optionally pick a cheaper classification model.
-7. Run **Health check** and **Private test generation**.
-
-If `LLM_API_KEY` is empty, Canopy uses a clearly labelled **mock provider** so the full human-approval workflow still works offline.
-
-### Agency training corpus
-
-Canopy does **not** fine-tune a model. It retrieves approved manuals into the prompt:
-
-- Sexting Script Master Guidelines (20–30 word messages, no time-of-day, tease then PPV)
-- Trans model terminology (only when the creator persona is trans)
-- Chatter training chapters 1–6 (prices, lists, vault/PPV, first chat, ladder, shift)
-
-`AI Chatting FA.pdf` is a founders’ agreement, not chatter training, and is **not** sent to the model.
-
-Mark/Lukas message dashboards contain real fan IDs. Do not commit them. After they are anonymized, paste example pairs into **Training** for manager approval. Re-seed to load the manuals:
+Workers run separately on a persistent host:
 
 ```bash
-pnpm db:seed
+pnpm worker             # BullMQ jobs; reads apps/web/.env
+pnpm platform:worker    # Inbox polling, receipt sync and scheduled delivery
 ```
 
-Live Venice tests:
+Without `REDIS_URL`, supported jobs run inline. Inline processing does not provide delayed execution or queue debounce. Catalog imports require Redis and the background worker. Keep Redis configured for production; producer errors are surfaced instead of silently switching transports.
+
+## Model configuration
+
+Set `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`, or configure the provider in **AI provider** as an authorized user. Supported provider names are `venice`, `openrouter`, and `openai` (OpenAI-compatible endpoints). Use an exact model ID returned by **Load models**. Credentials saved in the application are encrypted and never returned in full.
+
+The older `LLM_*` variables are supported aliases; populated `AI_*` variables take precedence. Stored organization settings take precedence over global settings. Credentials are selected for the exact provider; a Venice environment key is not sent to an OpenRouter endpoint. No matching key means the mock provider is used. Mock generation is for development and review, not evidence that a live model or account works.
+
+Conversation context, persona information, approved training excerpts, and selected memories are sent to the configured external model service. Training retrieval uses approved text and application rules; the presence of pgvector in the schema does not establish a deployed embedding/search pipeline. Never commit real credentials, exported private chats, browser profiles, or customer examples.
+
+## Connect OnlyFansAPI
+
+1. Configure the server encryption key, database, and Redis. Start both workers.
+2. In **Products**, select a creator and enter the provider API key and connected `acct_...` account ID. Canopy verifies the platform creator identity.
+3. Import the catalog. Vault media and priced offers appear as drafts. Reimports preserve operator prices; a completed scan can retire missing source items. An incomplete scan does not retire them.
+4. Review media references, free previews, and prices before approving products. Review actions in **Automation**. COPILOT requires approval for every reply.
+
+Automatic sending also requires the account mode and global flags to permit it. PPV sending defaults off. Verified provider receipts establish delivery; ambiguous sends fail for manual investigation and are not automatically resent. Transactions without a usable source message ID remain unreconciled.
+
+`pnpm platform:worker -- --once` performs one polling iteration. Browser-only connection commands are `pnpm platform:connect -- --account <id>` and `pnpm platform:validate-selectors`. Browser login and challenges require the creator's manual participation. Remote browser endpoints must be dedicated to an account. Do not upload browser profiles or cookie data.
+
+## Tests and checks
 
 ```bash
-VENICE_LIVE_TEST=true pnpm --filter @canopy/ai test
-```
-
-### Browser extension
-
-```bash
+pnpm check                         # Lint, formatting, type checks and workspace tests
+pnpm build                         # Shared/database/AI checks and Next.js production build
 pnpm --filter @canopy/extension build
+pnpm test:e2e                      # Full UI flows; requires seeded PostgreSQL and Chromium
+pnpm eval                          # Synthetic mock evaluation; no live platform sends
 ```
 
-Load `apps/extension/dist` as an unpacked Chrome extension. Open `/demo` for the local messenger adapter. Issue a token from a signed-in session via `POST /api/extension/token`. The extension stores that token in session storage only.
+Install Chromium with `pnpm --filter @canopy/web exec playwright install chromium`. Unit tests use mocks/fixtures. Database and browser fixture tests skip when local services are unavailable; with `CI=1`, unavailable services fail instead. CI supplies PostgreSQL and Chromium and runs the complete checks and UI tests with model keys empty. Live model tests require explicit opt-in and are excluded from routine checks.
 
-### Evaluation suite
+Load `apps/extension/dist` as an unpacked Chrome extension after building. The extension has a demo adapter; issue a short-lived organization-bound token from a signed-in session using `POST /api/extension/token`. Tokens are stored in session storage. Legacy tokens issued before organization binding need to be reissued.
 
-```bash
-pnpm eval
-```
+## Deployment
 
-Never sends messages to a live platform.
+For Vercel, import the repository with **Root Directory** `apps/web`; `apps/web/vercel.json` defines installation and build commands. Set database, auth, encryption, app URL, and optional model credentials in the appropriate Vercel environment. Never copy development secrets into production.
 
-## Scripts
+Migrations run before the web build and failures block deployment. `DIRECT_URL` optionally supplies a migration-only direct PostgreSQL connection; application traffic keeps using `DATABASE_URL`. For Neon, the migration runner otherwise converts the pooled hostname to the direct counterpart, allows at least 30 seconds to connect, and retries only `P1001` up to three attempts. Persistent network, authentication, and SQL errors still fail. PostgreSQL must support pgvector.
 
-```bash
-pnpm test
-pnpm build
-pnpm worker          # BullMQ worker (jobs also run inline without Redis)
-pnpm platform:mock-demo
-pnpm platform:worker
-pnpm platform:connect -- --account <platformAccountId>
-pnpm platform:validate-selectors
-```
+Vercel hosts the web app. It does not run the persistent BullMQ or platform workers: deploy those separately with the same database, Redis, encryption key, and relevant configuration. Review migrations before deploying. No automatic production seed step is provided.
 
-The OnlyFans browser worker is an unofficial prototype. It is disabled by default (`ONLYFANS_BROWSER_INTEGRATION=false`). Live selectors are unverified. See **Platform automation** below.
+## Limitations
 
-## Safeguards
-
-A deterministic safety layer outside the LLM blocks minors, uncertain age, exploitation, non-consent involving real harm, bestiality, sextortion, threats, credential harvesting, and similar cases. Agencies cannot disable it. Ordinary explicit adult language between verified adults is not blocked merely for being explicit.
-
-## Implementation status
-
-- **Phase 1** — working authenticated web MVP (this tree).
-- **Phase 2** — summaries, memories, funnel, ingestion, pgvector, jobs, eval (schema + workers present; embeddings fill in when an embedding model is configured).
-- **Phase 3** — Manifest V3 extension with demo adapter and isolated production adapter contract.
-- **Phase 4** — CSP, rate limits, audit logs, retention, encryption, Playwright coverage.
-- **Platform automation prototype** — unofficial OnlyFans browser worker. Live selectors are unverified. New API accounts require review by default.
-
-## Platform automation
-
-The preferred integration uses [OnlyFansAPI](https://docs.onlyfansapi.com), a third-party provider. The browser prototype remains optional and requires manual login and challenge completion.
-
-### Connect and import with OnlyFansAPI
-
-1. Use Node 22, install dependencies, and run `pnpm db:generate` and `pnpm db:migrate`. Set a private `APP_ENCRYPTION_KEY`, database URL, and Redis URL on the server.
-2. Start the web app, `pnpm worker` for catalog jobs, and `pnpm platform:worker` for inbox sync and delivery. Workers need a persistent host.
-3. In **Products**, choose the creator and enter the provider API key and connected `acct_...` account ID. Canopy verifies the creator identity and stores the key encrypted.
-4. Import the catalog. Vault media, paid posts, and paid outgoing messages become draft products. Repeat imports preserve your prices and approvals; a complete scan retires missing source offers.
-5. Review media, previews, and prices before approving each product. Review reply actions in **Automation**. COPILOT requires review for every reply; automatic sending requires an explicit mode change and the corresponding global flags.
-
-Only verified provider receipts mark a delivery sent. Ambiguous sends fail for operator review, rather than being automatically resent. Transactions without a source message ID remain unreconciled; Canopy does not guess purchases from matching prices. Old extension tokens must be reissued because tokens now bind to the issuing organization.
-
-Run `pnpm test` and `pnpm build`. CI supplies PostgreSQL and Chromium and requires integration tests to run. Live provider testing requires your connected account and is separate from fixture tests.
-
-### Flags
-
-```bash
-ONLYFANS_BROWSER_INTEGRATION=false
-ONLYFANS_AUTONOMOUS_TEXT=true
-ONLYFANS_AUTONOMOUS_PPV=false
-ONLYFANS_MOCK_PLATFORM=true
-CANOPY_BROWSER_PROFILE_ROOT=.canopy-profiles
-```
-
-Autonomous text defaults on. Pause a single conversation from the chat page. Set `ONLYFANS_AUTONOMOUS_TEXT=false` to force suggestions-only globally. PPV send stays off unless `ONLYFANS_AUTONOMOUS_PPV=true`.
-
-### Commands
-
-```bash
-pnpm dev
-pnpm worker
-pnpm platform:mock-demo
-pnpm platform:worker
-pnpm platform:validate-selectors
-pnpm platform:connect -- --account <platformAccountId>
-```
-
-### Manual connect (authorized test account only)
-
-1. Seed or create a `PlatformAccount` for the creator (`pnpm db:seed` creates Maya’s mock account).
-2. Confirm the creator/agency authorized Canopy. Do not connect anyone else’s account.
-3. Set `ONLYFANS_BROWSER_INTEGRATION=true` on the worker machine only.
-4. Run `pnpm platform:connect -- --account <id>` in headed mode.
-5. The creator completes OnlyFans login and 2FA themselves. Canopy does not read or export cookies.
-6. If a challenge appears, automation pauses (`CHALLENGE_REQUIRED`) until the creator finishes it.
-7. Emergency stop is on `/platform`. Pause one chat with **Pause this chat** on the conversation page.
-8. Review actions on `/automation`. Set `ONLYFANS_AUTONOMOUS_TEXT=false` only if you want suggestions-only globally.
-
-Profiles stay under `.canopy-profiles` with mode `0700`. Do not upload them. Prefer OS disk encryption (FileVault). Never put cookies or profile paths in the API or frontend.
+- Live OnlyFansAPI catalog/delivery and external model calls require credentials and authorized account testing.
+- Rate limiting is currently process-local; it is not a distributed limit across Vercel instances.
+- Delivery leases and idempotency reduce races but do not replace manual reconciliation of ambiguous sends.
+- Embedding ingestion, retention deletion, and aggregate jobs are not implemented handlers. Unknown queue names fail explicitly rather than appearing successful.
+- The main generation orchestrator remains substantial because its ordering coordinates safety, context, pricing, persistence, and review. Further changes should follow regression coverage rather than arbitrary file-length limits.

@@ -1,14 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { prisma, requireTenant, type AdultStatus, type Prisma } from "@canopy/database";
 import {
-  prisma,
-  requireTenant,
-  tenantDb,
-  decryptSecret,
-  type AdultStatus,
-  type Prisma,
-} from "@canopy/database";
-import {
-  createLLMProvider,
   evaluateSafety,
   containsPromptInjection,
   validateProductsAndPrices,
@@ -18,13 +10,11 @@ import {
   personaLooksTrans,
   retrieveTrainingMeta,
   pricingContextFrom,
-  type LLMProvider,
   type GenerationInput,
 } from "@canopy/ai";
 import {
   eligibleProducts,
   collectOperatorRejections,
-  operatorRejectLesson,
   operatorRejectLessons,
   creatorAgeFromText,
   creatorCityFromText,
@@ -62,8 +52,11 @@ import {
   analyzePacing,
   type CatalogProduct,
 } from "@canopy/shared";
-import { enqueueJob } from "./queue";
-import { persistOperationalSkip } from "./operational-handoff";
+import { persistOperationalSkip } from "../operational-handoff";
+
+import { recordAnalytics } from "../analytics";
+import { resolveOrganizationProvider } from "../ai-provider";
+import { generateRepliesWithRetry, providerFailureMessage } from "./provider-errors";
 
 const TOKEN_USD_PER_MILLION = 0.5;
 
@@ -76,122 +69,11 @@ function looksLikeRefusal(text: string): boolean {
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, String(item ?? "")]),
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      String(item ?? ""),
+    ]),
   );
-}
-
-async function generateRepliesWithRetry(provider: LLMProvider, input: GenerationInput) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await provider.generateReplies(input);
-    } catch (error) {
-      lastError = error;
-      const code = error instanceof ProviderError ? error.code : "UNKNOWN";
-      if (code === "INVALID_KEY" || code === "UNAUTHORIZED") throw error;
-    }
-  }
-  throw lastError;
-}
-
-function providerFailureMessage(code: string): string {
-  switch (code) {
-    case "TIMEOUT":
-      return "The model took too long. Hit generate again — a page reload is not required.";
-    case "RATE_LIMIT":
-      return "Venice is rate-limiting. Wait a few seconds, then generate again.";
-    case "INVALID_JSON":
-      return "The model returned a messy reply. Hit generate again.";
-    case "UNAVAILABLE":
-      return "Venice was briefly down. Hit generate again.";
-    case "INVALID_KEY":
-      return "The Venice API key was rejected. Check AI provider settings.";
-    case "CIRCUIT_OPEN":
-      return "The provider is cooling down. Generate again in a few seconds.";
-    default:
-      return "The model missed that send. Hit generate again — a reload is not required.";
-  }
-}
-
-export async function recordAnalytics(input: {
-  organizationId: string;
-  type:
-    | "MESSAGE_RECEIVED"
-    | "GENERATION_REQUESTED"
-    | "SUGGESTIONS_PRODUCED"
-    | "SUGGESTION_ACCEPTED"
-    | "SUGGESTION_EDITED"
-    | "FUNNEL_TRANSITION"
-    | "OFFER_PRESENTED"
-    | "PURCHASE"
-    | "REFUND"
-    | "COMPLAINT"
-    | "ESCALATION"
-    | "SAFETY_BLOCK"
-    | "HUMAN_QUALITY_RATING"
-    | "OVERRIDE"
-    | "AUTOMATION_DECISION"
-    | "AUTOMATION_SENT"
-    | "AUTOMATION_ESCALATED";
-  creatorId?: string;
-  chatterId?: string;
-  conversationId?: string;
-  model?: string;
-  playbook?: string;
-  numericValue?: number;
-  metadata?: Record<string, unknown>;
-}) {
-  await prisma.analyticsEvent.create({
-    data: {
-      organizationId: input.organizationId,
-      type: input.type,
-      creatorId: input.creatorId,
-      chatterId: input.chatterId,
-      conversationId: input.conversationId,
-      model: input.model,
-      playbook: input.playbook,
-      numericValue: input.numericValue,
-      metadata: (input.metadata as Prisma.InputJsonValue | undefined) ?? undefined,
-    },
-  });
-}
-
-export async function addSubscriberMessage(input: {
-  organizationId: string;
-  conversationId: string;
-  text: string;
-  chatterId?: string;
-  sentAt?: Date;
-}) {
-  const tenant = requireTenant(input.organizationId);
-  const db = tenantDb(tenant);
-  const conversation = await db.conversations.findFirst({
-    where: { id: input.conversationId },
-  });
-  if (!conversation) throw new Error("Conversation not found");
-
-  const message = await prisma.message.create({
-    data: {
-      organizationId: input.organizationId,
-      conversationId: conversation.id,
-      authorType: "SUBSCRIBER",
-      body: input.text,
-      createdAt: input.sentAt,
-    },
-  });
-  await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: { lastMessageAt: new Date() },
-  });
-  await recordAnalytics({
-    organizationId: input.organizationId,
-    type: "MESSAGE_RECEIVED",
-    creatorId: conversation.creatorId,
-    chatterId: input.chatterId,
-    conversationId: conversation.id,
-    numericValue: 1,
-  });
-  return { conversation, message };
 }
 
 export async function generateForConversation(input: {
@@ -240,7 +122,12 @@ export async function generateForConversation(input: {
   const subscriberText = pendingTurn.combinedText;
   const inputMessageIds = pendingTurn.messageIds;
   if (!subscriberText.trim()) {
-    return { blocked: false as const, generationId: null, replyOptions: [], skippedGeneration: true as const };
+    return {
+      blocked: false as const,
+      generationId: null,
+      replyOptions: [],
+      skippedGeneration: true as const,
+    };
   }
 
   await recordAnalytics({
@@ -418,11 +305,21 @@ export async function generateForConversation(input: {
       refunded: false,
       conversation: { creatorId: conversation.creatorId },
     },
-    select: { productId: true, amountCents: true, product: { select: { media: { select: { mediaId: true } } } } },
+    select: {
+      productId: true,
+      amountCents: true,
+      product: { select: { media: { select: { mediaId: true } } } },
+    },
   });
   const ownedMediaIds = new Set(purchases.flatMap((p) => p.product.media.map((m) => m.mediaId)));
-  const purchasedProductIds = [...new Set([...purchases.map((p) => p.productId),
-    ...productRows.filter((p) => !p.resaleAllowed && p.media.some((m) => ownedMediaIds.has(m.mediaId))).map((p) => p.id)])];
+  const purchasedProductIds = [
+    ...new Set([
+      ...purchases.map((p) => p.productId),
+      ...productRows
+        .filter((p) => !p.resaleAllowed && p.media.some((m) => ownedMediaIds.has(m.mediaId)))
+        .map((p) => p.id),
+    ]),
+  ];
   const purchasedPpvCount = purchases.length;
   const previousPurchasePrice = Math.max(0, ...purchases.map((p) => p.amountCents / 100));
   const earlyUnpaid = conversation.offers.some(
@@ -446,8 +343,7 @@ export async function generateForConversation(input: {
     mediaType: p.mediaType,
     standardPrice: p.standardPriceCents / 100,
     minimumPrice: p.minimumPriceCents / 100,
-    secondPrice:
-      p.secondPriceCents != null ? p.secondPriceCents / 100 : null,
+    secondPrice: p.secondPriceCents != null ? p.secondPriceCents / 100 : null,
     discountLimitPercent: p.discountLimitPercent,
     bundlePrice: p.bundlePriceCents != null ? p.bundlePriceCents / 100 : null,
     tags: p.tags,
@@ -478,32 +374,7 @@ export async function generateForConversation(input: {
   });
   const transPersona = personaLooksTrans(persona);
 
-  const config = await prisma.lLMProviderConfiguration.findFirst({
-    where: { OR: [{ organizationId: tenant.organizationId }, { organizationId: null }] },
-    orderBy: { organizationId: "desc" },
-  });
-
-  const providerName = config?.provider || process.env.AI_PROVIDER || process.env.LLM_PROVIDER || "venice";
-  let apiKey = process.env.AI_API_KEY || process.env.LLM_API_KEY || "";
-  if (!apiKey) {
-    const cred = await prisma.apiCredential.findFirst({
-      where: {
-        provider: { in: [providerName, "venice", "openrouter", "openai"] },
-        OR: [{ organizationId: tenant.organizationId }, { organizationId: null }],
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    if (cred) apiKey = decryptSecret(cred.encryptedKey);
-  }
-
-  const { provider, mode } = createLLMProvider({
-    apiKey,
-    baseURL: config?.baseUrl || process.env.AI_BASE_URL || process.env.LLM_BASE_URL,
-    provider: providerName,
-    defaultModel: config?.generationModel || process.env.AI_MODEL || process.env.LLM_MODEL,
-  });
-
-  const model = config?.generationModel || process.env.AI_MODEL || process.env.LLM_MODEL || "";
+  const { provider, mode, model } = await resolveOrganizationProvider(tenant.organizationId);
   const demoSales = conversation.creator.isDemo;
   const funnelState = {
     stage: conversation.funnelStage,
@@ -567,31 +438,36 @@ export async function generateForConversation(input: {
 
     const allowSexting =
       decision.allowExplicit && (responseMode === "EXPLICIT" || responseMode === "SALES");
-    const retrieved = retrieveTrainingMeta({
-      message: subscriberText,
-      intent: classified.intent,
-      funnelStage: conversation.funnelStage,
-      transPersona,
-      allowSexting,
-      allowPricing: decision.allowPrice || decision.buyingSignals.includes("price"),
-      responseMode,
-      salesReadiness: decision.salesReadiness,
-      extraChunks: [
-        ...persona.approvedExampleMessages.map((content) => ({
-          content,
-          tags: ["approved-example"],
-        })),
-        ...dbChunks.map((c) => ({
-          content: c.content,
-          intent: c.intent,
-          funnelStage: c.funnelStage,
-          tags: [
-            c.documentType.toLowerCase(),
-            ...(/girlcock|tgirl|trans girl|ladycock/i.test(c.content) ? ["trans"] : []),
-          ],
-        })),
-      ],
-    }, responseMode === "NATURAL" || responseMode === "OPERATIONAL" || responseMode === "SUPPORT" ? 4 : 6);
+    const retrieved = retrieveTrainingMeta(
+      {
+        message: subscriberText,
+        intent: classified.intent,
+        funnelStage: conversation.funnelStage,
+        transPersona,
+        allowSexting,
+        allowPricing: decision.allowPrice || decision.buyingSignals.includes("price"),
+        responseMode,
+        salesReadiness: decision.salesReadiness,
+        extraChunks: [
+          ...persona.approvedExampleMessages.map((content) => ({
+            content,
+            tags: ["approved-example"],
+          })),
+          ...dbChunks.map((c) => ({
+            content: c.content,
+            intent: c.intent,
+            funnelStage: c.funnelStage,
+            tags: [
+              c.documentType.toLowerCase(),
+              ...(/girlcock|tgirl|trans girl|ladycock/i.test(c.content) ? ["trans"] : []),
+            ],
+          })),
+        ],
+      },
+      responseMode === "NATURAL" || responseMode === "OPERATIONAL" || responseMode === "SUPPORT"
+        ? 4
+        : 6,
+    );
     const examples = retrieved.examples;
 
     const discardedRows = await prisma.replyOption.findMany({
@@ -653,7 +529,9 @@ export async function generateForConversation(input: {
       .find((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId));
     const unpaidLockedCount = new Set(
       conversation.offers
-        .filter((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId))
+        .filter(
+          (offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId),
+        )
         .map((offer) => offer.productId),
     ).size;
     const lockPolicy = nextLockedDropPolicy({
@@ -678,7 +556,9 @@ export async function generateForConversation(input: {
       boughtWelcome: boughtWelcomeEarly,
       existingFan: isExistingFan({
         funnelStage: conversation.funnelStage,
-        purchasedPpvCount: boughtWelcomeEarly ? Math.max(0, purchasedPpvCount - 1) : purchasedPpvCount,
+        purchasedPpvCount: boughtWelcomeEarly
+          ? Math.max(0, purchasedPpvCount - 1)
+          : purchasedPpvCount,
         priorCreatorMessages: recent.filter((m) => m.authorType !== "SUBSCRIBER").length,
         extra,
         ageKnown: Boolean(extra.fan_age),
@@ -696,7 +576,8 @@ export async function generateForConversation(input: {
         ? { ...extra, ...facts.extra }
         : { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
     if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
-    if (flow.next.fanIsJerking != null) mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
+    if (flow.next.fanIsJerking != null)
+      mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
     logFlowDebug({
       phase: flow.next.phase,
       step: flow.next.step,
@@ -707,7 +588,13 @@ export async function generateForConversation(input: {
       appliedGuard: null,
       replaced: false,
     });
-    if (Object.keys(facts.extra).length || facts.location || facts.dominance || facts.notesAppend || extra.flow_step !== mergedExtra.flow_step) {
+    if (
+      Object.keys(facts.extra).length ||
+      facts.location ||
+      facts.dominance ||
+      facts.notesAppend ||
+      extra.flow_step !== mergedExtra.flow_step
+    ) {
       const nextNotes = [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n").trim();
       await prisma.fanNote.upsert({
         where: {
@@ -777,7 +664,9 @@ export async function generateForConversation(input: {
       } else if (lockPolicy === "FOLLOW_UP") {
         const unpaid = [...conversation.offers]
           .reverse()
-          .find((offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId));
+          .find(
+            (offer) => offer.accepted !== true && !purchasedProductIds.includes(offer.productId),
+          );
         const product = sellable.find((row) => row.id === unpaid?.productId);
         if (product) sellMatch = { product, reason: "SEQUENCE" };
       } else {
@@ -820,7 +709,8 @@ export async function generateForConversation(input: {
           dominance: notesForIntake.dominance,
           boughtWelcome,
         }),
-      }) || looksLikePacingPushback(subscriberText)) &&
+      }) ||
+        looksLikePacingPushback(subscriberText)) &&
       !looksLikeOfflineAsk(subscriberText) &&
       sellMatch?.reason !== "CONTEXT"
         ? { id: flow.beatId, variants: flow.variants, skipPitch: flow.skipPitch }
@@ -831,7 +721,11 @@ export async function generateForConversation(input: {
     if (flow.sellContent && sellMatch?.reason !== "CONTEXT") {
       /* keep sequence/default match for an explicit content request after intake is abandoned */
     }
-    if (responseMode === "OPERATIONAL" || responseMode === "SUPPORT" || responseMode === "NATURAL") {
+    if (
+      responseMode === "OPERATIONAL" ||
+      responseMode === "SUPPORT" ||
+      responseMode === "NATURAL"
+    ) {
       sellMatch = null;
       fanIntake = null;
     }
@@ -893,12 +787,14 @@ export async function generateForConversation(input: {
           productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
       })),
       funnelStage: conversation.funnelStage,
-      playbook: fanIntake ? "FAN_INTAKE_FLOW" : playbookFor(
-        conversation.funnelStage,
-        classified.intent,
-        conversation.unansweredFollowUps,
-        purchasedPpvCount,
-      ),
+      playbook: fanIntake
+        ? "FAN_INTAKE_FLOW"
+        : playbookFor(
+            conversation.funnelStage,
+            classified.intent,
+            conversation.unansweredFollowUps,
+            purchasedPpvCount,
+          ),
       retrievedExamples: examples,
       operatorRejections,
       threadLessons: threadLessons.bans,
@@ -918,14 +814,18 @@ export async function generateForConversation(input: {
         deviation: flow.deviation,
         askPending: Boolean(
           flow.askPending &&
-            decision.intakeOpportunity &&
-            responseMode !== "NATURAL" &&
-            responseMode !== "SUPPORT" &&
-            responseMode !== "OPERATIONAL",
+          decision.intakeOpportunity &&
+          responseMode !== "NATURAL" &&
+          responseMode !== "SUPPORT" &&
+          responseMode !== "OPERATIONAL",
         ),
         pendingQuestion: flow.next.currentQuestion,
         resumeHoldTurns: flow.next.resumeHoldTurns,
-        skipPitch: flow.skipPitch || !decision.allowPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
+        skipPitch:
+          flow.skipPitch ||
+          !decision.allowPitch ||
+          responseMode === "NATURAL" ||
+          responseMode === "SUPPORT",
       },
       boughtWelcome,
       existingFan,
@@ -938,27 +838,32 @@ export async function generateForConversation(input: {
             reason: sellMatch.reason,
           }
         : null,
-      fanNotes: fanNote || facts.notesAppend || facts.location || facts.dominance || Object.keys(facts.extra).length
-        ? {
-            realName: fanNote?.realName ?? "",
-            location: facts.location ?? fanNote?.location ?? "",
-            dominance: facts.dominance ?? fanNote?.dominance ?? "UNKNOWN",
-            preferredTone: fanNote?.preferredTone ?? "",
-            notes: [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n"),
-            extra: mergedExtra,
-            spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
-          }
-        : conversation.subscriber.notes
+      fanNotes:
+        fanNote ||
+        facts.notesAppend ||
+        facts.location ||
+        facts.dominance ||
+        Object.keys(facts.extra).length
           ? {
-              realName: "",
-              location: "",
-              dominance: "UNKNOWN",
-              preferredTone: "",
-              notes: conversation.subscriber.notes,
+              realName: fanNote?.realName ?? "",
+              location: facts.location ?? fanNote?.location ?? "",
+              dominance: facts.dominance ?? fanNote?.dominance ?? "UNKNOWN",
+              preferredTone: fanNote?.preferredTone ?? "",
+              notes: [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n"),
               extra: mergedExtra,
               spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
             }
-          : null,
+          : conversation.subscriber.notes
+            ? {
+                realName: "",
+                location: "",
+                dominance: "UNKNOWN",
+                preferredTone: "",
+                notes: conversation.subscriber.notes,
+                extra: mergedExtra,
+                spend: (creatorSpend._sum.amountCents ?? conversation.subscriber.spendCents) / 100,
+              }
+            : null,
       activeSequence: conversation.activeSequence
         ? {
             name: conversation.activeSequence.name,
@@ -969,7 +874,12 @@ export async function generateForConversation(input: {
                 conversation.activeSequence.steps[conversation.activeSequenceStep] ??
                 conversation.activeSequence.steps[0];
               return step
-                ? { body: step.body, mediaHint: step.mediaHint, priceTier: step.priceTier, productId: step.productId }
+                ? {
+                    body: step.body,
+                    mediaHint: step.mediaHint,
+                    priceTier: step.priceTier,
+                    productId: step.productId,
+                  }
                 : { body: "", mediaHint: "TEXT", priceTier: 1 };
             })(),
             remaining: conversation.activeSequence.steps
@@ -1055,70 +965,80 @@ export async function generateForConversation(input: {
     }
 
     const validateOpts = {
-        creatorId: conversation.creatorId,
-        purchasedProductIds,
-        subscriberText,
-        rejections: operatorRejections,
-        conversationId: conversation.id,
-        dominance: facts.dominance ?? fanNote?.dominance,
-        creatorAge,
-        creatorCity,
-        funnelStage: conversation.funnelStage,
-        fanMessageCount,
-        threadOnOffline,
-        fanIntake: fanIntake?.variants,
-        flowPlan: {
-          mustAnswer: flow.mustAnswer,
-          closer: flow.closer,
-          variants: flow.variants,
-          phase: flow.next.phase,
-          step: flow.next.step,
-          previousStep: flow.previous.step,
-          deviation: flow.deviation,
-          facts: flow.facts.extra,
-          askedObjectives: alreadySentObjectives(recent.map((m) => ({ authorType: m.authorType, body: m.body })), flow.previous),
-          askPending: Boolean(
-            flow.askPending &&
-              decision.intakeOpportunity &&
-              responseMode !== "NATURAL" &&
-              responseMode !== "SUPPORT" &&
-              responseMode !== "OPERATIONAL",
-          ),
-          pendingQuestion: flow.next.currentQuestion,
-          skipPitch: flow.skipPitch || !decision.allowPitch || responseMode === "NATURAL" || responseMode === "SUPPORT",
-        },
-        variantSeed: requestId,
-        recentOutbound: recent.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
-        recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
-        transPersona,
-        threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
-        threadLessons,
-        fanSentPics: fanHasSentPics,
-        sellTarget: sellMatch
-          ? {
-              productId: sellMatch.product.id,
-              name: sellMatch.product.name,
-              price: sellMatch.product.allowedPrice ?? sellMatch.product.standardPrice,
-              reason: sellMatch.reason,
-            }
-          : undefined,
-        operationalIntent: operational.intent,
-        responseMode,
-        salesReadiness: decision.salesReadiness,
-        intakeOpportunity: decision.intakeOpportunity,
+      creatorId: conversation.creatorId,
+      purchasedProductIds,
+      subscriberText,
+      rejections: operatorRejections,
+      conversationId: conversation.id,
+      dominance: facts.dominance ?? fanNote?.dominance,
+      creatorAge,
+      creatorCity,
+      funnelStage: conversation.funnelStage,
+      fanMessageCount,
+      threadOnOffline,
+      fanIntake: fanIntake?.variants,
+      flowPlan: {
+        mustAnswer: flow.mustAnswer,
+        closer: flow.closer,
+        variants: flow.variants,
+        phase: flow.next.phase,
+        step: flow.next.step,
+        previousStep: flow.previous.step,
+        deviation: flow.deviation,
+        facts: flow.facts.extra,
+        askedObjectives: alreadySentObjectives(
+          recent.map((m) => ({ authorType: m.authorType, body: m.body })),
+          flow.previous,
+        ),
+        askPending: Boolean(
+          flow.askPending &&
+          decision.intakeOpportunity &&
+          responseMode !== "NATURAL" &&
+          responseMode !== "SUPPORT" &&
+          responseMode !== "OPERATIONAL",
+        ),
+        pendingQuestion: flow.next.currentQuestion,
+        skipPitch:
+          flow.skipPitch ||
+          !decision.allowPitch ||
+          responseMode === "NATURAL" ||
+          responseMode === "SUPPORT",
+      },
+      variantSeed: requestId,
+      recentOutbound: recent
+        .filter((m) => m.authorType !== "SUBSCRIBER")
+        .slice(-8)
+        .map((m) => m.body),
+      recentMessages: recent.map((m) => ({ authorType: m.authorType, body: m.body })),
+      transPersona,
+      threadBannedPetNames: threadBannedPetNames(recent) || threadLessons.bannedPetNames,
+      threadLessons,
+      fanSentPics: fanHasSentPics,
+      sellTarget: sellMatch
+        ? {
+            productId: sellMatch.product.id,
+            name: sellMatch.product.name,
+            price: sellMatch.product.allowedPrice ?? sellMatch.product.standardPrice,
+            reason: sellMatch.reason,
+          }
+        : undefined,
+      operationalIntent: operational.intent,
+      responseMode,
+      salesReadiness: decision.salesReadiness,
+      intakeOpportunity: decision.intakeOpportunity,
     };
 
     const catalogForValidate = products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        standardPrice: p.standardPrice,
-        minimumPrice: p.minimumPrice,
-        secondPrice: p.secondPrice,
-        discountLimitPercent: p.discountLimitPercent,
-        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
-        available: p.available && p.sourceAvailable !== false,
-        creatorId: p.creatorId,
-        resaleAllowed: p.resaleAllowed,
+      id: p.id,
+      name: p.name,
+      standardPrice: p.standardPrice,
+      minimumPrice: p.minimumPrice,
+      secondPrice: p.secondPrice,
+      discountLimitPercent: p.discountLimitPercent,
+      sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
+      available: p.available && p.sourceAvailable !== false,
+      creatorId: p.creatorId,
+      resaleAllowed: p.resaleAllowed,
     }));
 
     const groundingCodesFor = (output: typeof result.output) =>
@@ -1269,7 +1189,9 @@ export async function generateForConversation(input: {
       generationSkipped: false,
       stale: Boolean(newerSubscriber),
       requestId,
-      ...(process.env.NODE_ENV === "development" ? { debugExplanation: decision.debugExplanation } : {}),
+      ...(process.env.NODE_ENV === "development"
+        ? { debugExplanation: decision.debugExplanation }
+        : {}),
     };
     const generation = await prisma.generation.create({
       data: {
@@ -1307,19 +1229,19 @@ export async function generateForConversation(input: {
       status === "STALE"
         ? []
         : await Promise.all(
-      validated.output.replyOptions.map((opt) =>
-        prisma.replyOption.create({
-          data: {
-            organizationId: tenant.organizationId,
-            generationId: generation.id,
-            text: opt.text,
-            originalText: opt.text,
-            tone: opt.tone,
-            internalReason: opt.internalReason,
-          },
-        }),
-      ),
-    );
+            validated.output.replyOptions.map((opt) =>
+              prisma.replyOption.create({
+                data: {
+                  organizationId: tenant.organizationId,
+                  generationId: generation.id,
+                  text: opt.text,
+                  originalText: opt.text,
+                  tone: opt.tone,
+                  internalReason: opt.internalReason,
+                },
+              }),
+            ),
+          );
 
     if (threadLessons.bans.length) {
       const existing = await prisma.subscriberMemory.findFirst({
@@ -1396,11 +1318,12 @@ export async function generateForConversation(input: {
         tone: o.tone,
         internalReason: o.internalReason,
       })),
-      chatterMessage: validated.output.recommendedAction === "REQUEST_HUMAN_REVIEW"
-        ? plan.chatterMessage || "Human review required."
-        : validated.ok
-          ? ""
-          : "Model suggested an invalid product or price. Offer removed. Human review required.",
+      chatterMessage:
+        validated.output.recommendedAction === "REQUEST_HUMAN_REVIEW"
+          ? plan.chatterMessage || "Human review required."
+          : validated.ok
+            ? ""
+            : "Model suggested an invalid product or price. Offer removed. Human review required.",
       operationalIntent: operational.intent,
       responseMode,
       skippedGeneration: false,
@@ -1430,310 +1353,4 @@ export async function generateForConversation(input: {
       replyOptions: [],
     };
   }
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
-  );
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      m[i]![j] =
-        a[i - 1] === b[j - 1]
-          ? m[i - 1]![j - 1]!
-          : 1 + Math.min(m[i - 1]![j]!, m[i]![j - 1]!, m[i - 1]![j - 1]!);
-    }
-  }
-  return m[a.length]![b.length]!;
-}
-
-async function persistThreadLesson(opts: {
-  organizationId: string;
-  conversationId: string;
-  lesson: string;
-}) {
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: opts.conversationId, organizationId: opts.organizationId },
-    select: { subscriberId: true, creatorId: true },
-  });
-  if (!conversation || !opts.lesson.trim()) return;
-  const existing = await prisma.subscriberMemory.findFirst({
-    where: {
-      organizationId: opts.organizationId,
-      subscriberId: conversation.subscriberId,
-      creatorId: conversation.creatorId,
-      key: "thread_lessons",
-      deletedAt: null,
-    },
-  });
-  const lines = (existing?.value ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (!lines.some((line) => line.toLowerCase() === opts.lesson.toLowerCase())) {
-    lines.push(opts.lesson.trim());
-  }
-  const value = lines.join("\n").slice(0, 4000);
-  if (existing) {
-    await prisma.subscriberMemory.update({
-      where: { id: existing.id },
-      data: { value, confidence: 1, verified: true, lastConfirmedAt: new Date() },
-    });
-    return;
-  }
-  await prisma.subscriberMemory.create({
-    data: {
-      organizationId: opts.organizationId,
-      subscriberId: conversation.subscriberId,
-      creatorId: conversation.creatorId,
-      category: "BOUNDARIES",
-      key: "thread_lessons",
-      value,
-      confidence: 1,
-      verified: true,
-      sensitivity: "INTERNAL",
-    },
-  });
-}
-
-export async function selectReply(input: {
-  organizationId: string;
-  userId: string;
-  conversationId: string;
-  generationId: string;
-  replyOptionId: string;
-  editedText?: string;
-  inserted: boolean;
-  discard?: boolean;
-  rejectReason?: string;
-}) {
-  const tenant = requireTenant(input.organizationId);
-  const option = await prisma.replyOption.findFirst({
-    where: {
-      id: input.replyOptionId,
-      organizationId: tenant.organizationId,
-      generationId: input.generationId,
-    },
-    include: { generation: true },
-  });
-  if (!option || option.generation.conversationId !== input.conversationId) {
-    throw new Error("Reply option not found");
-  }
-
-  if (input.discard) {
-    const reason = input.rejectReason?.trim() || "Not a fit";
-    await prisma.replyOption.update({
-      where: { id: option.id },
-      data: {
-        outcome: "DISCARDED",
-        selectedById: input.userId,
-        internalReason: `${option.internalReason} · rejected: ${reason}`,
-      },
-    });
-    await persistThreadLesson({
-      organizationId: tenant.organizationId,
-      conversationId: input.conversationId,
-      lesson: operatorRejectLesson(reason, option.text),
-    });
-    await recordAnalytics({
-      organizationId: tenant.organizationId,
-      type: "OVERRIDE",
-      conversationId: input.conversationId,
-      chatterId: input.userId,
-      metadata: { reason },
-    });
-    return { discarded: true as const };
-  }
-
-  const nextText = input.editedText ?? option.text;
-  const edited = option.originalText.trim() !== nextText.trim();
-  const distance = levenshtein(option.originalText, nextText);
-  const bubbles = splitReplyBubbles(nextText, { splitSentences: true });
-  const bodies = bubbles.length ? bubbles : [nextText.trim()].filter(Boolean);
-
-  const now = Date.now();
-  const created = [];
-  for (let i = 0; i < bodies.length; i += 1) {
-    created.push(
-      await prisma.message.create({
-        data: {
-          organizationId: tenant.organizationId,
-          conversationId: input.conversationId,
-          authorType: "CHATTER",
-          authorUserId: input.userId,
-          body: bodies[i]!,
-          aiAssisted: true,
-          createdAt: new Date(now + i),
-        },
-      }),
-    );
-  }
-  const message = created[created.length - 1];
-  if (!message) throw new Error("Reply text was empty");
-
-  await prisma.conversation.update({
-    where: { id: input.conversationId },
-    data: { lastMessageAt: new Date() },
-  });
-
-  await prisma.replyOption.update({
-    where: { id: option.id },
-    data: {
-      text: nextText,
-      outcome: input.inserted ? "INSERTED" : edited ? "EDITED" : "SELECTED",
-      editDistance: distance,
-      selectedById: input.userId,
-      messageId: message.id,
-    },
-  });
-
-  const conversation = await prisma.conversation.findFirstOrThrow({
-    where: { id: input.conversationId, organizationId: tenant.organizationId },
-  });
-
-  if (option.generation.funnelStage && option.generation.funnelStage !== conversation.funnelStage) {
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { funnelStage: option.generation.funnelStage },
-    });
-    await recordAnalytics({
-      organizationId: tenant.organizationId,
-      type: "FUNNEL_TRANSITION",
-      creatorId: conversation.creatorId,
-      chatterId: input.userId,
-      conversationId: conversation.id,
-      metadata: { from: conversation.funnelStage, to: option.generation.funnelStage },
-    });
-  }
-
-  if (option.generation.recommendedProductId && option.generation.approvedPriceCents) {
-    await prisma.offer.create({
-      data: {
-        organizationId: tenant.organizationId,
-        conversationId: conversation.id,
-        productId: option.generation.recommendedProductId,
-        priceCents: option.generation.approvedPriceCents,
-      },
-    });
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: {
-        lastOfferAt: new Date(),
-        offerCountToday: { increment: 1 },
-        rapportPriority: false,
-      },
-    });
-    await recordAnalytics({
-      organizationId: tenant.organizationId,
-      type: "OFFER_PRESENTED",
-      creatorId: conversation.creatorId,
-      conversationId: conversation.id,
-      numericValue: option.generation.approvedPriceCents / 100,
-    });
-  }
-
-  await recordAnalytics({
-    organizationId: tenant.organizationId,
-    type: edited ? "SUGGESTION_EDITED" : "SUGGESTION_ACCEPTED",
-    creatorId: conversation.creatorId,
-    chatterId: input.userId,
-    conversationId: conversation.id,
-    numericValue: distance,
-  });
-
-  try {
-    await enqueueJob("summarize-conversation", {
-      organizationId: tenant.organizationId,
-      conversationId: conversation.id,
-    });
-    await enqueueJob("extract-memories", {
-      organizationId: tenant.organizationId,
-      conversationId: conversation.id,
-    });
-  } catch (error) {
-    console.error("background jobs failed after auto-send", error);
-  }
-
-  return {
-    messageId: message.id,
-    messageIds: created.map((m) => m.id),
-    editDistance: distance,
-    edited,
-  };
-}
-
-export async function handleFanTurn(input: {
-  organizationId: string;
-  userId: string;
-  conversationId: string;
-  text: string;
-  autoReply?: boolean;
-  toneOverride?: "PLAYFUL" | "ROMANTIC" | "TEASING" | "DOMINANT" | "SUBMISSIVE" | "DIRECT";
-}) {
-  const { message } = await addSubscriberMessage({
-    organizationId: input.organizationId,
-    conversationId: input.conversationId,
-    text: input.text,
-    chatterId: input.userId,
-  });
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: input.conversationId, organizationId: input.organizationId },
-    select: { mutedAi: true },
-  });
-  await prisma.conversation.update({
-    where: { id: input.conversationId },
-    data: { unansweredFollowUps: 0 },
-  });
-  const muted = Boolean(conversation?.mutedAi);
-  if (muted || input.autoReply === false) {
-    return { subscriberMessageId: message.id, autoSent: false as const, muted };
-  }
-
-  const generation = await generateForConversation({
-    organizationId: input.organizationId,
-    userId: input.userId,
-    conversationId: input.conversationId,
-    toneOverride: input.toneOverride,
-    triggerMessageId: message.id,
-  });
-
-  const option = generation.replyOptions[0];
-  const failed = "failed" in generation && generation.failed === true;
-  const action = "recommendedAction" in generation ? generation.recommendedAction : undefined;
-  const escalated = "escalated" in generation && generation.escalated === true;
-  const skipped = "skippedGeneration" in generation && generation.skippedGeneration === true;
-  const canSend =
-    !generation.blocked &&
-    !failed &&
-    !escalated &&
-    !skipped &&
-    action !== "BLOCK" &&
-    action !== "REQUEST_HUMAN_REVIEW" &&
-    Boolean(option);
-
-  if (!canSend || !option || !generation.generationId) {
-    return {
-      subscriberMessageId: message.id,
-      autoSent: false as const,
-      generation,
-    };
-  }
-
-  const selected = await selectReply({
-    organizationId: input.organizationId,
-    userId: input.userId,
-    conversationId: input.conversationId,
-    generationId: generation.generationId,
-    replyOptionId: option.id,
-    editedText: option.text,
-    inserted: true,
-  });
-
-  return {
-    subscriberMessageId: message.id,
-    autoSent: true as const,
-    sentText: option.text,
-    messageId: selected.messageId,
-    generation,
-  };
 }

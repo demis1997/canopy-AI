@@ -16,7 +16,8 @@ import {
   splitReplyBubbles,
   type FeatureFlags,
 } from "@canopy/shared";
-import { addSubscriberMessage, generateForConversation, recordAnalytics, selectReply } from "../generate";
+import { recordAnalytics } from "../analytics";
+import { addSubscriberMessage, generateForConversation } from "../generation";
 
 export { readFeatureFlags };
 
@@ -290,7 +291,12 @@ export async function upsertIncomingPlatformMessage(input: {
     },
   });
   if (existing) {
-    return { created: false as const, platformConversation, platformMessage: existing, conversation };
+    return {
+      created: false as const,
+      platformConversation,
+      platformMessage: existing,
+      conversation,
+    };
   }
 
   let canopyMessageId: string | undefined;
@@ -352,11 +358,18 @@ export async function generateAutomationDecision(input: {
   const tenant = requireTenant(input.organizationId);
   const account = await prisma.platformAccount.findFirst({
     where: { id: input.platformAccountId, organizationId: tenant.organizationId },
-    include: { policy: true, creator: { include: { personas: { where: { isActive: true }, take: 1 } } } },
+    include: {
+      policy: true,
+      creator: { include: { personas: { where: { isActive: true }, take: 1 } } },
+    },
   });
   if (!account) throw new Error("Platform account not found");
   const platformConversation = await prisma.platformConversation.findFirst({
-    where: { id: input.platformConversationId, organizationId: tenant.organizationId, platformAccountId: account.id },
+    where: {
+      id: input.platformConversationId,
+      organizationId: tenant.organizationId,
+      platformAccountId: account.id,
+    },
     include: { canopyConversation: true },
   });
   if (!platformConversation) throw new Error("Platform conversation not found");
@@ -368,7 +381,8 @@ export async function generateAutomationDecision(input: {
       organizationId: tenant.organizationId,
     },
   });
-  if (!trigger || trigger.direction !== "INBOUND") throw new Error("Inbound trigger message not found");
+  if (!trigger || trigger.direction !== "INBOUND")
+    throw new Error("Inbound trigger message not found");
 
   const key = idempotencyKey({
     platformAccountId: account.id,
@@ -377,7 +391,9 @@ export async function generateAutomationDecision(input: {
     actionType: "SEND_TEXT",
   });
 
-  const existingAction = await prisma.automationAction.findUnique({ where: { idempotencyKey: key } });
+  const existingAction = await prisma.automationAction.findUnique({
+    where: { idempotencyKey: key },
+  });
   if (existingAction) {
     const parsed = automationDecisionSchema.safeParse(existingAction.generatedPayload);
     return {
@@ -458,7 +474,8 @@ export async function generateAutomationDecision(input: {
       failed,
       validationErrors: "validationErrors" in generation ? generation.validationErrors : [],
       riskFlags: "riskFlags" in generation ? generation.riskFlags : [],
-      recommendedAction: "recommendedAction" in generation ? generation.recommendedAction : undefined,
+      recommendedAction:
+        "recommendedAction" in generation ? generation.recommendedAction : undefined,
     });
     const post = evaluateAutomationSafety({
       adultStatus: conversation.adultStatus,
@@ -491,7 +508,8 @@ export async function generateAutomationDecision(input: {
         productId: "recommendedProductId" in generation ? generation.recommendedProductId : null,
         price: "approvedPrice" in generation ? generation.approvedPrice : null,
         confidence,
-        funnelStage: "funnelStage" in generation ? generation.funnelStage : conversation.funnelStage,
+        funnelStage:
+          "funnelStage" in generation ? generation.funnelStage : conversation.funnelStage,
         reason: "GENERATED",
         scheduledDelaySeconds: policy.minimumReplyDelaySeconds,
         safetyFlags: post.flags,
@@ -514,25 +532,24 @@ export async function generateAutomationDecision(input: {
       sentAt: { gt: trigger.sentAt },
     },
   });
-  const canopyNewer =
-    trigger.canopyMessageId
-      ? await prisma.message.findFirst({
-          where: {
-            conversationId: conversation.id,
-            authorType: "SUBSCRIBER",
-            id: { not: trigger.canopyMessageId },
-            createdAt: {
-              gt:
-                (
-                  await prisma.message.findUnique({
-                    where: { id: trigger.canopyMessageId },
-                    select: { createdAt: true },
-                  })
-                )?.createdAt ?? trigger.sentAt,
-            },
+  const canopyNewer = trigger.canopyMessageId
+    ? await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          authorType: "SUBSCRIBER",
+          id: { not: trigger.canopyMessageId },
+          createdAt: {
+            gt:
+              (
+                await prisma.message.findUnique({
+                  where: { id: trigger.canopyMessageId },
+                  select: { createdAt: true },
+                })
+              )?.createdAt ?? trigger.sentAt,
           },
-        })
-      : null;
+        },
+      })
+    : null;
   const refreshedConversation = await prisma.conversation.findFirst({
     where: { id: conversation.id },
     select: { mutedAi: true, funnelStage: true },
@@ -572,7 +589,8 @@ export async function generateAutomationDecision(input: {
     autonomyMode: account.autonomyMode,
     flags,
     humanTakeover: Boolean(refreshedPlatform?.humanTakeover || refreshedConversation?.mutedAi),
-    lockedUntil: refreshedPlatform?.automationLockedUntil ?? platformConversation.automationLockedUntil,
+    lockedUntil:
+      refreshedPlatform?.automationLockedUntil ?? platformConversation.automationLockedUntil,
     newerMessageAfterTrigger: Boolean(newer || canopyNewer),
     alreadySentForTrigger: Boolean(alreadySent),
     messagesSentLastHour: sentLastHour,
@@ -583,7 +601,11 @@ export async function generateAutomationDecision(input: {
     product: product
       ? {
           id: product.id,
-          approvedForAutomation: product.approvedForAutomation && product.available && product.sourceAvailable && product.creatorId === account.creatorId,
+          approvedForAutomation:
+            product.approvedForAutomation &&
+            product.available &&
+            product.sourceAvailable &&
+            product.creatorId === account.creatorId,
           alreadyPurchased: Boolean(purchased),
           platformMediaReference: product.platformMediaReference,
           minimumPriceCents: product.minimumPriceCents,
@@ -669,7 +691,11 @@ export async function preflightDelivery(input: {
     : null;
   const newer = trigger
     ? await prisma.platformMessage.findFirst({
-        where: { platformConversationId: action.platformConversationId, direction: "INBOUND", sentAt: { gt: trigger.sentAt } },
+        where: {
+          platformConversationId: action.platformConversationId,
+          direction: "INBOUND",
+          sentAt: { gt: trigger.sentAt },
+        },
       })
     : null;
   const canopyTrigger = trigger?.canopyMessageId
@@ -769,7 +795,11 @@ export async function preflightDelivery(input: {
     product: product
       ? {
           id: product.id,
-          approvedForAutomation: product.approvedForAutomation && product.available && product.sourceAvailable && product.creatorId === action.platformAccount.creatorId,
+          approvedForAutomation:
+            product.approvedForAutomation &&
+            product.available &&
+            product.sourceAvailable &&
+            product.creatorId === action.platformAccount.creatorId,
           alreadyPurchased: Boolean(purchased),
           platformMediaReference: product.platformMediaReference,
           minimumPriceCents: product.minimumPriceCents,
@@ -782,43 +812,86 @@ export async function preflightDelivery(input: {
 }
 
 export async function recordDeliveredBubble(input: {
-  organizationId: string; actionId: string; externalMessageId: string; text: string;
-  sentAt?: string; paid: boolean; price: number | null;
+  organizationId: string;
+  actionId: string;
+  externalMessageId: string;
+  text: string;
+  sentAt?: string;
+  paid: boolean;
+  price: number | null;
 }) {
   await prisma.$transaction(async (tx) => {
-    const action = await tx.automationAction.findFirstOrThrow({ where: { id: input.actionId, organizationId: input.organizationId }, include: { platformConversation: true } });
-    const existing = await tx.platformMessage.findUnique({ where: { platformConversationId_externalMessageId: {
-      platformConversationId: action.platformConversationId, externalMessageId: input.externalMessageId,
-    } } });
+    const action = await tx.automationAction.findFirstOrThrow({
+      where: { id: input.actionId, organizationId: input.organizationId },
+      include: { platformConversation: true },
+    });
+    const existing = await tx.platformMessage.findUnique({
+      where: {
+        platformConversationId_externalMessageId: {
+          platformConversationId: action.platformConversationId,
+          externalMessageId: input.externalMessageId,
+        },
+      },
+    });
     if (existing) {
-      if (existing.direction !== "OUTBOUND" || existing.body !== input.text) throw new Error("DELIVERY_RECEIPT_MISMATCH");
+      if (existing.direction !== "OUTBOUND" || existing.body !== input.text)
+        throw new Error("DELIVERY_RECEIPT_MISMATCH");
       return;
     }
     const sentAt = input.sentAt ? new Date(input.sentAt) : new Date();
-    const message = await tx.message.create({ data: {
-      organizationId: input.organizationId, conversationId: action.platformConversation.canopyConversationId,
-      authorType: "CHATTER", body: input.text, aiAssisted: true, createdAt: sentAt,
-      isPaid: input.paid, priceCents: input.price == null ? null : Math.round(input.price * 100),
-    } });
-    await tx.platformMessage.create({ data: {
-      organizationId: input.organizationId, platformConversationId: action.platformConversationId,
-      canopyMessageId: message.id, externalMessageId: input.externalMessageId, direction: "OUTBOUND",
-      messageType: input.paid ? "PPV" : "TEXT", body: input.text, sentAt, deliveryStatus: "VERIFIED",
-      metadata: { actionId: action.id },
-    } });
-    await tx.conversation.update({ where: { id: message.conversationId }, data: { lastMessageAt: sentAt } });
+    const message = await tx.message.create({
+      data: {
+        organizationId: input.organizationId,
+        conversationId: action.platformConversation.canopyConversationId,
+        authorType: "CHATTER",
+        body: input.text,
+        aiAssisted: true,
+        createdAt: sentAt,
+        isPaid: input.paid,
+        priceCents: input.price == null ? null : Math.round(input.price * 100),
+      },
+    });
+    await tx.platformMessage.create({
+      data: {
+        organizationId: input.organizationId,
+        platformConversationId: action.platformConversationId,
+        canopyMessageId: message.id,
+        externalMessageId: input.externalMessageId,
+        direction: "OUTBOUND",
+        messageType: input.paid ? "PPV" : "TEXT",
+        body: input.text,
+        sentAt,
+        deliveryStatus: "VERIFIED",
+        metadata: { actionId: action.id },
+      },
+    });
+    await tx.conversation.update({
+      where: { id: message.conversationId },
+      data: { lastMessageAt: sentAt },
+    });
   });
 }
 
 export async function markActionSent(input: {
-  organizationId: string; actionId: string; externalMessageId: string; finalText: string; userId?: string;
+  organizationId: string;
+  actionId: string;
+  externalMessageId: string;
+  finalText: string;
+  userId?: string;
 }) {
   const updated = await prisma.automationAction.updateMany({
-    where: { id: input.actionId, organizationId: input.organizationId, status: "SENDING" }, data: { status: "SENT", lastError: null },
+    where: { id: input.actionId, organizationId: input.organizationId, status: "SENDING" },
+    data: { status: "SENT", lastError: null },
   });
   if (!updated.count) return { ok: false as const, reason: "ACTION_NOT_SENDING" };
-  await writeAutomationAudit({ organizationId: input.organizationId, userId: input.userId,
-    action: "AUTOMATION_SEND", entityType: "AutomationAction", entityId: input.actionId, metadata: { verified: true } });
+  await writeAutomationAudit({
+    organizationId: input.organizationId,
+    userId: input.userId,
+    action: "AUTOMATION_SEND",
+    entityType: "AutomationAction",
+    entityId: input.actionId,
+    metadata: { verified: true },
+  });
   return { ok: true as const };
 }
 
@@ -836,7 +909,8 @@ export async function approveAction(input: {
     include: { platformConversation: true },
   });
   if (!action) throw new Error("Action not found");
-  if (!["APPROVAL_REQUIRED", "PENDING"].includes(action.status)) throw new Error("Action cannot be reviewed in its current state");
+  if (!["APPROVAL_REQUIRED", "PENDING"].includes(action.status))
+    throw new Error("Action cannot be reviewed in its current state");
   if (input.reject) {
     await prisma.automationAction.update({
       where: { id: action.id },
@@ -858,7 +932,10 @@ export async function approveAction(input: {
     data: {
       status: "SCHEDULED",
       scheduledFor: new Date(),
-      finalPayload: { ...decision, messages: input.editedText?.trim() ? [text] : decision.messages },
+      finalPayload: {
+        ...decision,
+        messages: input.editedText?.trim() ? [text] : decision.messages,
+      },
     },
   });
   await writeAutomationAudit({

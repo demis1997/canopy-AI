@@ -6,13 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import type { PersonaInput } from "@canopy/shared";
 
-export function PersonaForm({
-  creatorId,
-  initial,
-}: {
-  creatorId: string;
-  initial: PersonaInput;
-}) {
+export function PersonaForm({ creatorId, initial }: { creatorId: string; initial: PersonaInput }) {
   const [form, setForm] = useState(initial);
   const [status, setStatus] = useState("");
 
@@ -42,7 +36,9 @@ export function PersonaForm({
           <select
             className="mt-1 h-9 w-full rounded-md border border-white/10 bg-ink-900 px-2 text-sm"
             value={form.allowedExplicitness}
-            onChange={(e) => set("allowedExplicitness", e.target.value as PersonaInput["allowedExplicitness"])}
+            onChange={(e) =>
+              set("allowedExplicitness", e.target.value as PersonaInput["allowedExplicitness"])
+            }
           >
             {["FLIRTY", "SUGGESTIVE", "EXPLICIT", "VERY_EXPLICIT"].map((x) => (
               <option key={x}>{x}</option>
@@ -63,11 +59,17 @@ export function PersonaForm({
         </div>
         <div>
           <Label>Favourite colour</Label>
-          <Input value={form.favouriteColor} onChange={(e) => set("favouriteColor", e.target.value)} />
+          <Input
+            value={form.favouriteColor}
+            onChange={(e) => set("favouriteColor", e.target.value)}
+          />
         </div>
         <div>
           <Label>Favourite flowers</Label>
-          <Input value={form.favouriteFlowers} onChange={(e) => set("favouriteFlowers", e.target.value)} />
+          <Input
+            value={form.favouriteFlowers}
+            onChange={(e) => set("favouriteFlowers", e.target.value)}
+          />
         </div>
         <div className="md:col-span-2">
           <Label>Biography</Label>
@@ -75,7 +77,10 @@ export function PersonaForm({
         </div>
         <div className="md:col-span-2">
           <Label>Authorised backstory</Label>
-          <Textarea value={form.authorisedBackstory} onChange={(e) => set("authorisedBackstory", e.target.value)} />
+          <Textarea
+            value={form.authorisedBackstory}
+            onChange={(e) => set("authorisedBackstory", e.target.value)}
+          />
         </div>
         <div className="md:col-span-2">
           <Label>Personality / tone</Label>
@@ -95,7 +100,10 @@ export function PersonaForm({
             onChange={(e) =>
               set(
                 "preferredCompliments",
-                e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
               )
             }
           />
@@ -107,7 +115,10 @@ export function PersonaForm({
             onChange={(e) =>
               set(
                 "frequentlyUsedPhrases",
-                e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
               )
             }
           />
@@ -119,7 +130,10 @@ export function PersonaForm({
             onChange={(e) =>
               set(
                 "preferredExplicitVocabulary",
-                e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
               )
             }
           />
@@ -131,14 +145,20 @@ export function PersonaForm({
             onChange={(e) =>
               set(
                 "claimsNeverToMake",
-                e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
               )
             }
           />
         </div>
         <div className="md:col-span-2">
           <Label>Offline meeting policy</Label>
-          <Input value={form.offlineMeetingPolicy} onChange={(e) => set("offlineMeetingPolicy", e.target.value)} />
+          <Input
+            value={form.offlineMeetingPolicy}
+            onChange={(e) => set("offlineMeetingPolicy", e.target.value)}
+          />
         </div>
       </div>
       <Button onClick={save}>Save persona version</Button>

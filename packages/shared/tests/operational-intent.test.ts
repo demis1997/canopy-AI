@@ -48,16 +48,18 @@ describe("detectOperationalIntent", () => {
   });
 
   it("keeps HUMAN_REQUEST during a sales ask", () => {
-    expect(detectOperationalIntent("how much is the ppv? actually redirect me to a human").intent).toBe(
-      "HUMAN_REQUEST",
-    );
+    expect(
+      detectOperationalIntent("how much is the ppv? actually redirect me to a human").intent,
+    ).toBe("HUMAN_REQUEST");
   });
 });
 
 describe("response mode and grounding", () => {
   it("does not force EXPLICIT from historical context when the latest turn is a question", () => {
     const operational = detectOperationalIntent("how old are you?");
-    expect(determineResponseMode({ operational, subscriberText: "how old are you?" })).toBe("NATURAL");
+    expect(determineResponseMode({ operational, subscriberText: "how old are you?" })).toBe(
+      "NATURAL",
+    );
   });
 
   it("rejects unrelated sexual output for a neutral message", () => {
@@ -83,8 +85,8 @@ describe("response mode and grounding", () => {
         turn: "I need help with my billing issue",
         operational: support,
         mode: "SUPPORT",
-      }).code,
-    ).toBe("SEXUAL_NOT_ALLOWED");
+      }),
+    ).toMatchObject({ ok: false, code: "SEXUAL_NOT_ALLOWED" });
   });
 
   it("forbids any generated reply on a human request", () => {
@@ -95,8 +97,8 @@ describe("response mode and grounding", () => {
         turn: "im talking to an ai redirect me to a human",
         operational,
         mode: "OPERATIONAL",
-      }).code,
-    ).toBe("IGNORED_HUMAN_REQUEST");
+      }),
+    ).toMatchObject({ ok: false, code: "IGNORED_HUMAN_REQUEST" });
   });
 });
 
@@ -130,12 +132,12 @@ describe("collectPendingFanTurn", () => {
 
 describe("stale generation and escalation idempotency", () => {
   it("marks output stale when a newer subscriber message exists", () => {
-    expect(
-      isGenerationStale({ newestInputMessageId: "s1", newerSubscriberMessageId: "s2" }),
-    ).toBe(true);
-    expect(
-      isGenerationStale({ newestInputMessageId: "s1", newerSubscriberMessageId: null }),
-    ).toBe(false);
+    expect(isGenerationStale({ newestInputMessageId: "s1", newerSubscriberMessageId: "s2" })).toBe(
+      true,
+    );
+    expect(isGenerationStale({ newestInputMessageId: "s1", newerSubscriberMessageId: null })).toBe(
+      false,
+    );
   });
 
   it("does not open a second escalation when one is already open", () => {
@@ -154,16 +156,34 @@ describe("speaker continuity", () => {
     expect(collectPendingFanTurn({ messages }).combinedText).toBe("");
   });
   it("collects only the actual fan's new words after a creator reply", () => {
-    expect(collectPendingFanTurn({ messages: [
-      { id: "fan-1", authorType: "SUBSCRIBER", body: "how are you?" },
-      { id: "creator-1", authorType: "CHATTER", body: "I'm good" },
-      { id: "fan-2", authorType: "SUBSCRIBER", body: "what are you doing?" },
-    ] }).combinedText).toBe("what are you doing?");
+    expect(
+      collectPendingFanTurn({
+        messages: [
+          { id: "fan-1", authorType: "SUBSCRIBER", body: "how are you?" },
+          { id: "creator-1", authorType: "CHATTER", body: "I'm good" },
+          { id: "fan-2", authorType: "SUBSCRIBER", body: "what are you doing?" },
+        ],
+      }).combinedText,
+    ).toBe("what are you doing?");
   });
 });
 
 it("rejects attributing the creator's wellbeing to a fan who only asked how are you", () => {
   const operational = detectOperationalIntent("how are you?");
-  expect(validateReplyGrounding({ reply: "im good, oh youre good nice", turn: "how are you?", operational, mode: "NATURAL" })).toEqual({ ok: false, code: "SPEAKER_ATTRIBUTION" });
-  expect(validateReplyGrounding({ reply: "im good, how about you?", turn: "how are you?", operational, mode: "NATURAL" }).ok).toBe(true);
+  expect(
+    validateReplyGrounding({
+      reply: "im good, oh youre good nice",
+      turn: "how are you?",
+      operational,
+      mode: "NATURAL",
+    }),
+  ).toEqual({ ok: false, code: "SPEAKER_ATTRIBUTION" });
+  expect(
+    validateReplyGrounding({
+      reply: "im good, how about you?",
+      turn: "how are you?",
+      operational,
+      mode: "NATURAL",
+    }).ok,
+  ).toBe(true);
 });

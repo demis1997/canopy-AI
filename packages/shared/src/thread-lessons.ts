@@ -26,7 +26,9 @@ export function looksLikeStaleAreYouReal(text: string): boolean {
   );
 }
 
-export function inferThreadLessons(messages: { authorType: string; body: string }[]): ThreadLessons {
+export function inferThreadLessons(
+  messages: { authorType: string; body: string }[],
+): ThreadLessons {
   let answeredAreYouReal = false;
   let bannedPetNames = false;
   let bannedRefunds = false;
@@ -40,15 +42,20 @@ export function inferThreadLessons(messages: { authorType: string; body: string 
       if (looksLikeAreYouReal(body) || looksLikeWhatsWrongFollowup(body)) answeredAreYouReal = true;
       if (looksLikePetNamePushback(body)) bannedPetNames = true;
       if (looksLikeRefundCallout(body)) bannedRefunds = true;
-      if (looksLikeInventedAboutHimCallout(body) || /from the beach|beach fan/i.test(body)) bannedBeach = true;
+      if (looksLikeInventedAboutHimCallout(body) || /from the beach|beach fan/i.test(body))
+        bannedBeach = true;
       if (looksLikeTeaseAsk(body)) heWantsTease = true;
     } else {
-      if (looksLikeStaleAreYouReal(body) || /\b(prove myself|seen me online|havent seen u|complete stranger)\b/i.test(body)) {
+      if (
+        looksLikeStaleAreYouReal(body) ||
+        /\b(prove myself|seen me online|havent seen u|complete stranger)\b/i.test(body)
+      ) {
         answeredAreYouReal = true;
       }
       if (looksLikeRefundTalk(body)) bannedRefunds = true;
       if (looksLikeInventedBeach(body)) bannedBeach = true;
-      if (looksLikeTeaseAsk(body) || looksLikeMetaTease(body)) heWantsTease = heWantsTease || looksLikeMetaTease(body);
+      if (looksLikeTeaseAsk(body) || looksLikeMetaTease(body))
+        heWantsTease = heWantsTease || looksLikeMetaTease(body);
     }
   }
 
@@ -59,7 +66,9 @@ export function inferThreadLessons(messages: { authorType: string; body: string 
     );
   }
   if (bannedPetNames) {
-    bans.push("He told you to stop pet names. Never loser, good boy, baby, or daddy again in this thread.");
+    bans.push(
+      "He told you to stop pet names. Never loser, good boy, baby, or daddy again in this thread.",
+    );
   }
   if (bannedRefunds) {
     bans.push("Do not mention refunds unless he asked for one. A bot complaint is not a refund.");
@@ -73,7 +82,10 @@ export function inferThreadLessons(messages: { authorType: string; body: string 
   return { bans, answeredAreYouReal, bannedPetNames, bannedRefunds, bannedBeach, heWantsTease };
 }
 
-export function mergeThreadLessonMemory(lessons: ThreadLessons, stored?: string | null): ThreadLessons {
+export function mergeThreadLessonMemory(
+  lessons: ThreadLessons,
+  stored?: string | null,
+): ThreadLessons {
   const extra = (stored ?? "")
     .split("\n")
     .map((line) => line.trim())
@@ -93,7 +105,10 @@ export function mergeThreadLessonMemory(lessons: ThreadLessons, stored?: string 
   };
 }
 
-export function shouldSextNotScript(opts: { subscriberText: string; lessons: ThreadLessons }): boolean {
+export function shouldSextNotScript(opts: {
+  subscriberText: string;
+  lessons: ThreadLessons;
+}): boolean {
   const last = opts.subscriberText;
   if (looksLikeTeaseAsk(last) || looksLikeSextAsk(last)) return true;
   if (opts.lessons.heWantsTease && !looksLikeAreYouReal(last) && !looksLikePetNamePushback(last)) {

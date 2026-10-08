@@ -15,7 +15,8 @@
     "reset": "prisma migrate reset --force",
     "seed": "tsx prisma/seed.ts",
     "build": "prisma generate && tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

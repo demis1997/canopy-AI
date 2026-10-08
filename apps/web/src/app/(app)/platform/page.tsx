@@ -32,9 +32,10 @@ export default async function PlatformPage() {
       />
       <ExtensionOnboarding />
       <Card className="text-sm text-white/70">
-        Flags: browser={String(flags.browserIntegration)} · autonomous text={String(flags.autonomousText)} ·
-        autonomous PPV={String(flags.autonomousPpv)} · mock={String(flags.mockPlatform)}. Automatic sending requires Hybrid or Autopilot mode.
-        Pause a single chat from the conversation thread. Account emergency stop still wins.
+        Flags: browser={String(flags.browserIntegration)} · autonomous text=
+        {String(flags.autonomousText)} · autonomous PPV={String(flags.autonomousPpv)} · mock=
+        {String(flags.mockPlatform)}. Automatic sending requires Hybrid or Autopilot mode. Pause a
+        single chat from the conversation thread. Account emergency stop still wins.
       </Card>
       {accounts.map((account) => (
         <Card key={account.id} className="space-y-4">
@@ -42,15 +43,20 @@ export default async function PlatformPage() {
             <div>
               <div className="text-lg font-medium">{account.creator.displayName}</div>
               <div className="text-xs text-white/45">
-                {account.displayName} · {account.driver} · last seen {account.lastHeartbeatAt?.toISOString() ?? "never"}
+                {account.displayName} · {account.driver} · last seen{" "}
+                {account.lastHeartbeatAt?.toISOString() ?? "never"}
               </div>
             </div>
             <EmergencyStopButton accountId={account.id} />
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            <Badge tone={account.connectionStatus === "CONNECTED" ? "good" : "warn"}>{account.connectionStatus}</Badge>
+            <Badge tone={account.connectionStatus === "CONNECTED" ? "good" : "warn"}>
+              {account.connectionStatus}
+            </Badge>
             <Badge>{account.autonomyMode}</Badge>
-            {account.manualInterventionReason ? <Badge tone="bad">{account.manualInterventionReason}</Badge> : null}
+            {account.manualInterventionReason ? (
+              <Badge tone="bad">{account.manualInterventionReason}</Badge>
+            ) : null}
           </div>
           <AutonomySelect accountId={account.id} value={account.autonomyMode} />
           {account.policy ? <PolicyForm accountId={account.id} policy={account.policy} /> : null}
@@ -63,7 +69,9 @@ export default async function PlatformPage() {
                   {action.createdAt.toISOString()}
                 </li>
               ))}
-              {!account.actions.length ? <li>None yet. Review the full queue on /automation.</li> : null}
+              {!account.actions.length ? (
+                <li>None yet. Review the full queue on /automation.</li>
+              ) : null}
             </ul>
           </div>
         </Card>

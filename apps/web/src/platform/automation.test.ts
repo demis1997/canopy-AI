@@ -33,7 +33,9 @@ describe("mock adapter", () => {
     const adapter = new MockOnlyFansAdapter(state);
     await expect(adapter.listInboxConversations()).rejects.toBeInstanceOf(AdapterClosedError);
     state.connectionState = "CHALLENGE_REQUIRED";
-    await expect(adapter.sendCurrentMessage()).rejects.toMatchObject({ code: "CHALLENGE_REQUIRED" });
+    await expect(adapter.sendCurrentMessage()).rejects.toMatchObject({
+      code: "CHALLENGE_REQUIRED",
+    });
   });
 
   it("marks mismatched outgoing text as ambiguous", async () => {

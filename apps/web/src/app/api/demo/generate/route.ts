@@ -16,7 +16,15 @@ const bodySchema = z.object({
   creatorId: z.string(),
   subscriberMessage: z.string(),
   recentMessages: z.array(z.object({ authorType: z.string(), body: z.string() })),
-  funnelStage: z.enum(["NEW_FAN", "RAPPORT", "INTEREST", "OFFER", "OBJECTION", "PURCHASE", "FOLLOW_UP"]),
+  funnelStage: z.enum([
+    "NEW_FAN",
+    "RAPPORT",
+    "INTEREST",
+    "OFFER",
+    "OBJECTION",
+    "PURCHASE",
+    "FOLLOW_UP",
+  ]),
   purchasedProductIds: z.array(z.string()).default([]),
   products: z.array(
     z.object({
@@ -44,7 +52,9 @@ const bodySchema = z.object({
     style: z.string(),
     personality: z.string().optional(),
   }),
-  toneOverride: z.enum(["PLAYFUL", "ROMANTIC", "TEASING", "DOMINANT", "SUBMISSIVE", "DIRECT"]).optional(),
+  toneOverride: z
+    .enum(["PLAYFUL", "ROMANTIC", "TEASING", "DOMINANT", "SUBMISSIVE", "DIRECT"])
+    .optional(),
   concessionAllowed: z.boolean().optional(),
 });
 
@@ -70,7 +80,10 @@ export async function POST(request: Request) {
   });
   const decision = decideConversationTurn({
     subscriberText: body.subscriberMessage,
-    recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
+    recentMessages: [
+      ...body.recentMessages,
+      { authorType: "SUBSCRIBER", body: body.subscriberMessage },
+    ],
   });
   const sellMatch = decision.allowPitch
     ? matchSellTarget({
@@ -98,7 +111,11 @@ export async function POST(request: Request) {
       prohibitedWords: [],
       preferredCompliments: [],
       allowedExplicitness: "SUGGESTIVE",
-      style: body.persona.style.includes("Dominant") ? "DOMINANT" : body.persona.style.includes("Romantic") ? "ROMANTIC" : "PLAYFUL",
+      style: body.persona.style.includes("Dominant")
+        ? "DOMINANT"
+        : body.persona.style.includes("Romantic")
+          ? "ROMANTIC"
+          : "PLAYFUL",
       interests: [],
       contentBoundaries: [],
       claimsNeverToMake: [],
@@ -107,7 +124,10 @@ export async function POST(request: Request) {
       discountLimitPercent: 20,
       approvedExampleMessages: [],
     },
-    recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
+    recentMessages: [
+      ...body.recentMessages,
+      { authorType: "SUBSCRIBER", body: body.subscriberMessage },
+    ],
     memories: [],
     products: eligible.map((p) => ({
       id: p.id,
@@ -122,9 +142,10 @@ export async function POST(request: Request) {
     })),
     funnelStage: body.funnelStage,
     playbook: decision.allowPitch ? "PRESENTING_PPV" : "BUILDING_RAPPORT",
-    retrievedExamples: decision.responseMode === "NATURAL"
-      ? ["Answer the latest turn. At most one question. No sex or PPV."]
-      : ["Tease then name a real catalog item at list price."],
+    retrievedExamples:
+      decision.responseMode === "NATURAL"
+        ? ["Answer the latest turn. At most one question. No sex or PPV."]
+        : ["Tease then name a real catalog item at list price."],
     toneOverride: body.toneOverride,
     pricing: { concessionAllowed: Boolean(body.concessionAllowed), lastOffer: null, ladder: [] },
     sellTarget: sellMatch
@@ -164,8 +185,14 @@ export async function POST(request: Request) {
       creatorId: body.creatorId,
       purchasedProductIds: body.purchasedProductIds,
       subscriberText: body.subscriberMessage,
-      recentMessages: [...body.recentMessages, { authorType: "SUBSCRIBER", body: body.subscriberMessage }],
-      recentOutbound: body.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").slice(-8).map((m) => m.body),
+      recentMessages: [
+        ...body.recentMessages,
+        { authorType: "SUBSCRIBER", body: body.subscriberMessage },
+      ],
+      recentOutbound: body.recentMessages
+        .filter((m) => m.authorType !== "SUBSCRIBER")
+        .slice(-8)
+        .map((m) => m.body),
       fanIntake: decision.intakeOpportunity ? flow.variants : undefined,
       flowPlan: {
         mustAnswer: flow.mustAnswer,
@@ -207,7 +234,7 @@ export async function POST(request: Request) {
     schemaValid: schemaCheck.success,
     eligibleProductIds: eligible.map((p) => p.id),
     rejected: rejected.map((r) => ({ id: r.product.id, reason: r.reason })),
-      suggestions: validated.output.replyOptions.map((opt, i) => ({
+    suggestions: validated.output.replyOptions.map((opt, i) => ({
       id: `sug_${i}`,
       text: opt.text,
       messages: opt.messages,

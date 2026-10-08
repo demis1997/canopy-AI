@@ -1,9 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export function Card({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
@@ -30,7 +27,9 @@ export function Badge({
     accent: "bg-brass/20 text-brass",
   };
   return (
-    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium", tones[tone])}>
+    <span
+      className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium", tones[tone])}
+    >
       {children}
     </span>
   );

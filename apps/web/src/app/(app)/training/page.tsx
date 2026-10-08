@@ -54,7 +54,9 @@ export default async function TrainingPage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-mist">No reject reasons yet. Reject a suggestion and type why.</p>
+          <p className="text-sm text-mist">
+            No reject reasons yet. Reject a suggestion and type why.
+          </p>
         )}
       </Card>
       <div className="grid gap-3">
@@ -62,7 +64,9 @@ export default async function TrainingPage() {
           <Card key={c.id}>
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium">{c.document.title}</div>
-              <Badge tone={c.status === "APPROVED" ? "good" : c.status === "REJECTED" ? "bad" : "warn"}>
+              <Badge
+                tone={c.status === "APPROVED" ? "good" : c.status === "REJECTED" ? "bad" : "warn"}
+              >
                 {c.status}
               </Badge>
             </div>
@@ -71,7 +75,10 @@ export default async function TrainingPage() {
         ))}
       </div>
       {!chunks.length && !rejections.length ? (
-        <EmptyState title="No training chunks" body="Upload anonymized examples for manager approval." />
+        <EmptyState
+          title="No training chunks"
+          body="Upload anonymized examples for manager approval."
+        />
       ) : null}
     </div>
   );

@@ -13,7 +13,11 @@ export default async function TeamPage() {
   });
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Optimize" title="Team" description="Users, roles and performance seats for this agency." />
+      <PageHeader
+        eyebrow="Optimize"
+        title="Team"
+        description="Users, roles and performance seats for this agency."
+      />
       {members.length ? (
         <Card className="p-0">
           <table className="w-full text-sm">
@@ -38,7 +42,10 @@ export default async function TeamPage() {
           </table>
         </Card>
       ) : (
-        <EmptyState title="No members" body="Invite operators from your identity provider workflow." />
+        <EmptyState
+          title="No members"
+          body="Invite operators from your identity provider workflow."
+        />
       )}
     </div>
   );

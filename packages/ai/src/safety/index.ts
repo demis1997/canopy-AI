@@ -22,8 +22,7 @@ const NONCON_PATTERNS: RegExp[] = [
 ];
 
 const BESTIALITY = /\b(animal sex|with (a |my )?(dog|horse|zoo))\b/i;
-const SEXTORTION =
-  /\b(pay (me|or)|send money or i('ll| will) (post|leak|expose)|blackmail)\b/i;
+const SEXTORTION = /\b(pay (me|or)|send money or i('ll| will) (post|leak|expose)|blackmail)\b/i;
 const THREAT = /\b(i('ll| will) (kill|hurt|find you|come to your house))\b/i;
 const VIOLENCE_INSTRUCTIONS = /\b(how to (rape|strangle|chloroform))\b/i;
 const SELF_HARM = /\b(kill myself|suicide|want to die|overdose)\b/i;
@@ -80,7 +79,8 @@ export function evaluateSafety(input: {
       explicitAllowed: false,
       reason: "NON_CONSENSUAL",
       flags,
-      chatterMessage: "Non-consensual or exploitative content. Escalate. Do not continue the scene.",
+      chatterMessage:
+        "Non-consensual or exploitative content. Escalate. Do not continue the scene.",
     };
   }
 
@@ -171,7 +171,7 @@ export function evaluateSafety(input: {
 export function containsPromptInjection(text: string): boolean {
   return (
     /ignore (all|any|previous|prior) instructions/i.test(text) ||
-    /you are now /i.test(text) && /system prompt/i.test(text) ||
+    (/you are now /i.test(text) && /system prompt/i.test(text)) ||
     /<(system|instructions)>/i.test(text)
   );
 }

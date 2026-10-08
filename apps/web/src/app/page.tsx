@@ -22,10 +22,12 @@ export default function HomePage() {
 
       <main className="mx-auto grid max-w-6xl gap-10 px-6 pb-16 pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-center lg:gap-12 lg:pt-16">
         <div>
-          <h1 className="text-5xl font-normal tracking-tight text-bone sm:text-6xl">Cover the inbox.</h1>
+          <h1 className="text-5xl font-normal tracking-tight text-bone sm:text-6xl">
+            Cover the inbox.
+          </h1>
           <p className="mt-5 max-w-md text-[15px] leading-relaxed text-mist">
-            One model. One isolated session. A human still on send. Trained on real agency chats — then
-            reviewed before it goes out.
+            One model. One isolated session. A human still on send. Trained on real agency chats —
+            then reviewed before it goes out.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild>
@@ -110,7 +112,9 @@ function DeskPreview() {
               good. stay there — i saved something for you.
             </div>
             <div className="self-start max-w-[70%] rounded-lg border border-brass/40 bg-ink-950 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-brass">PPV · pending review</div>
+              <div className="text-[10px] uppercase tracking-wide text-brass">
+                PPV · pending review
+              </div>
               <div className="mt-1">Midnight set</div>
               <div className="text-brass">$45</div>
             </div>

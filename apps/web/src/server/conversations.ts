@@ -26,7 +26,10 @@ export async function clearConversationThread(opts: {
 
   try {
     await prisma.platformMessage.updateMany({
-      where: { organizationId: opts.organizationId, canopyMessage: { conversationId: conversation.id } },
+      where: {
+        organizationId: opts.organizationId,
+        canopyMessage: { conversationId: conversation.id },
+      },
       data: { canopyMessageId: null },
     });
   } catch {
@@ -34,7 +37,10 @@ export async function clearConversationThread(opts: {
   }
 
   await prisma.subscriberMemory.updateMany({
-    where: { organizationId: opts.organizationId, sourceMessage: { conversationId: conversation.id } },
+    where: {
+      organizationId: opts.organizationId,
+      sourceMessage: { conversationId: conversation.id },
+    },
     data: { sourceMessageId: null },
   });
   await prisma.message.deleteMany({

@@ -24,9 +24,7 @@ const QWEN_RECOMMENDED = /qwen/i;
 const UNCENSORED_RE = /uncensor|abliterat|unfiltered|nsfw/i;
 const SIZE_RE = /(\d{2,3})\s*b/i;
 
-export function annotateModels(
-  models: { id: string; owned_by?: string }[],
-): AvailableModel[] {
+export function annotateModels(models: { id: string; owned_by?: string }[]): AvailableModel[] {
   return models
     .map((m) => {
       const id = m.id;
@@ -34,8 +32,7 @@ export function annotateModels(
       const params = sizeMatch ? Number(sizeMatch[1]) : null;
       const uncensored = UNCENSORED_RE.test(id);
       const qwenish = QWEN_RECOMMENDED.test(id);
-      const recommended =
-        uncensored && qwenish && params !== null && params >= 24 && params <= 35;
+      const recommended = uncensored && qwenish && params !== null && params >= 24 && params <= 35;
       return {
         id,
         name: m.id,
@@ -71,7 +68,8 @@ export class VeniceLLMProvider implements LLMProvider {
       process.env.AI_BASE_URL ??
       process.env.LLM_BASE_URL ??
       "https://api.venice.ai/api/v1";
-    this.timeoutMs = opts?.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS ?? process.env.LLM_TIMEOUT_MS ?? 60_000);
+    this.timeoutMs =
+      opts?.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS ?? process.env.LLM_TIMEOUT_MS ?? 60_000);
     this.retries = opts?.retries ?? Number(process.env.LLM_MAX_RETRIES ?? 3);
     this.defaultModel = opts?.defaultModel ?? process.env.AI_MODEL ?? process.env.LLM_MODEL ?? "";
     this.fallbackModel = opts?.fallbackModel ?? process.env.AI_FALLBACK_MODEL ?? "";
@@ -164,7 +162,9 @@ export class VeniceLLMProvider implements LLMProvider {
           "UNSAFE",
           "UNCERTAIN",
         ];
-        const raw = String(parsed.intent ?? "").toUpperCase().replace(/[\s-]+/g, "_");
+        const raw = String(parsed.intent ?? "")
+          .toUpperCase()
+          .replace(/[\s-]+/g, "_");
         intent = allowed.includes(raw as Intent) ? (raw as Intent) : "UNCERTAIN";
         confidence = Number(parsed.confidence ?? 0.4);
         if (!Number.isFinite(confidence)) confidence = 0.4;
@@ -192,6 +192,11 @@ export class VeniceLLMProvider implements LLMProvider {
     try {
       return await this.generateWithModel(input, model);
     } catch (error) {
+      if (
+        error instanceof ProviderError &&
+        ["INVALID_KEY", "UNAUTHORIZED", "CIRCUIT_OPEN"].includes(error.code)
+      )
+        throw error;
       if (this.fallbackModel && this.fallbackModel !== model) {
         return this.generateWithModel(input, this.fallbackModel);
       }
@@ -199,7 +204,10 @@ export class VeniceLLMProvider implements LLMProvider {
     }
   }
 
-  private async generateWithModel(input: GenerationInput, model: string): Promise<GenerationResult> {
+  private async generateWithModel(
+    input: GenerationInput,
+    model: string,
+  ): Promise<GenerationResult> {
     const started = Date.now();
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -319,11 +327,14 @@ export class VeniceLLMProvider implements LLMProvider {
         },
         {
           role: "user",
-          content: `<messages>\n${input.messages.filter((m) => m.authorType === "SUBSCRIBER").map((m) => `[${m.id}] SUBSCRIBER: ${m.body}`).join("\n")}\n</messages>`,
+          content: `<messages>\n${input.messages
+            .filter((m) => m.authorType === "SUBSCRIBER")
+            .map((m) => `[${m.id}] SUBSCRIBER: ${m.body}`)
+            .join("\n")}\n</messages>`,
         },
       ],
     });
-    let updates: MemoryExtractionResult["updates"] = [];
+    let updates: MemoryExtractionResult["updates"];
     try {
       updates = JSON.parse(completion.text).updates ?? [];
     } catch {
@@ -345,7 +356,9 @@ export class VeniceLLMProvider implements LLMProvider {
   }> {
     const isRetryable = (error: unknown) => {
       const mapped = mapProviderError(error, opts.requestId);
-      return mapped.code === "TIMEOUT" || mapped.code === "RATE_LIMIT" || mapped.code === "UNAVAILABLE";
+      return (
+        mapped.code === "TIMEOUT" || mapped.code === "RATE_LIMIT" || mapped.code === "UNAVAILABLE"
+      );
     };
     try {
       const completion = await this.breaker.exec(() =>

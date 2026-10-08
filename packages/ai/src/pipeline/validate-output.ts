@@ -49,7 +49,6 @@ import {
   normalizeReplyBubbles,
   TOS_OFFLINE_VARIANTS,
   TOS_OFFLINE_FOLLOWUP_VARIANTS,
-  PET_NAME_PUSHBACK_FALLBACK,
   PET_NAME_PUSHBACK_VARIANTS,
   ABOUT_HIM_VARIANTS,
   looksLikeAimlessRapport,
@@ -79,7 +78,10 @@ import {
 } from "@canopy/shared";
 
 function stripFences(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+  return text
+    .replace(/```json\s*/gi, "")
+    .replace(/```/g, "")
+    .trim();
 }
 
 export function extractJsonObject(text: string): string {
@@ -141,7 +143,11 @@ function replaceAllOptions(
 }
 
 function scrubOfflineAsks(output: GenerationOutput): GenerationOutput {
-  if (!output.replyOptions.some((o) => containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak))) {
+  if (
+    !output.replyOptions.some(
+      (o) => containsMeetSpeak(o.text) || o.messages.some(containsMeetSpeak),
+    )
+  ) {
     return output;
   }
   return replaceAllOptions(output, TOS_OFFLINE_VARIANTS);
@@ -195,7 +201,14 @@ export type ReplyGuardExtras = {
   threadOnOffline?: boolean;
   fanIntake?: string[];
   flowPlan?: {
-    mustAnswer?: "relationship" | "creator-age" | "creator-location" | "how-are-you" | "about-him" | "what-doing" | null;
+    mustAnswer?:
+      | "relationship"
+      | "creator-age"
+      | "creator-location"
+      | "how-are-you"
+      | "about-him"
+      | "what-doing"
+      | null;
     closer?: string | null;
     variants?: string[];
     phase?: string;
@@ -222,7 +235,12 @@ export type ReplyGuardExtras = {
     heWantsTease?: boolean;
   };
   fanSentPics?: boolean;
-  sellTarget?: { productId: string; name: string; price: number; reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE" };
+  sellTarget?: {
+    productId: string;
+    name: string;
+    price: number;
+    reason?: "CONTEXT" | "DEFAULT" | "SEQUENCE";
+  };
   operationalIntent?: OperationalIntent;
   responseMode?: ResponseMode;
   salesReadiness?: string;
@@ -245,12 +263,17 @@ function ensureFlowCloser(
   if (!needle) return output;
   return mapOptionTexts(output, (text) => {
     if (text.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length)))) return text;
-    if (closerObjective && text.split("\n").some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)) {
+    if (
+      closerObjective &&
+      text.split("\n").some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)
+    ) {
       return text;
     }
     const bubbles = text.split("\n").filter(Boolean);
     const closerBubbles = closer.split("\n").filter(Boolean);
-    return [...bubbles.slice(0, Math.max(1, 3 - closerBubbles.length)), ...closerBubbles].slice(0, 3).join("\n");
+    return [...bubbles.slice(0, Math.max(1, 3 - closerBubbles.length)), ...closerBubbles]
+      .slice(0, 3)
+      .join("\n");
   });
 }
 
@@ -266,11 +289,7 @@ function flowStripObjectives(extras?: ReplyGuardExtras): FlowQuestion[] {
   const step = extras?.flowPlan?.step;
   const extraStrip: FlowQuestion[] =
     step === "ASK_PERSONAL_PERMISSION" || pending === "PERSONAL_PERMISSION" ? ["SUB_DOM"] : [];
-  return [
-    ...asked,
-    ...(!askPending && pending ? [pending] : []),
-    ...extraStrip,
-  ];
+  return [...asked, ...(!askPending && pending ? [pending] : []), ...extraStrip];
 }
 
 function pendingCloser(extras?: ReplyGuardExtras): string | null | undefined {
@@ -280,21 +299,31 @@ function pendingCloser(extras?: ReplyGuardExtras): string | null | undefined {
   return stripRepeatedObjectivesAndFiller(closer, flowStripObjectives(extras)) || null;
 }
 
-function applySequenceRecovery(output: GenerationOutput, extras?: ReplyGuardExtras): GenerationOutput {
+function applySequenceRecovery(
+  output: GenerationOutput,
+  extras?: ReplyGuardExtras,
+): GenerationOutput {
   const askPending = extras?.flowPlan?.askPending !== false;
   const strip = flowStripObjectives(extras);
-  const rawCloser = askPending ? extras?.flowPlan?.closer ?? null : null;
+  const rawCloser = askPending ? (extras?.flowPlan?.closer ?? null) : null;
   const safeCloser = rawCloser ? stripRepeatedObjectivesAndFiller(rawCloser, strip) || null : null;
   const closerObjective = safeCloser ? sequenceObjectiveOf(safeCloser) : null;
   return mapOptionTexts(output, (text) => {
     const cleaned = stripRepeatedObjectivesAndFiller(text, strip);
     const bubbles = cleaned.split("\n").filter(Boolean);
     if (!safeCloser) return cleaned;
-    if (closerObjective && bubbles.some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)) return cleaned;
+    if (
+      closerObjective &&
+      bubbles.some((bubble) => sequenceObjectiveOf(bubble) === closerObjective)
+    )
+      return cleaned;
     const needle = safeCloser.split("\n").filter(Boolean).at(-1)?.toLowerCase() ?? "";
-    if (needle && cleaned.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length)))) return cleaned;
+    if (needle && cleaned.toLowerCase().includes(needle.slice(0, Math.min(18, needle.length))))
+      return cleaned;
     const closerBubbles = safeCloser.split("\n").filter((line) => !looksLikeStandaloneFiller(line));
-    return [...bubbles.slice(0, Math.max(0, 3 - closerBubbles.length)), ...closerBubbles].slice(0, 3).join("\n");
+    return [...bubbles.slice(0, Math.max(0, 3 - closerBubbles.length)), ...closerBubbles]
+      .slice(0, 3)
+      .join("\n");
   });
 }
 
@@ -320,10 +349,10 @@ export function applyReplyGuards(
   const rejectedDrafts = (extras?.rejections ?? []).map((row) => row.text).filter(Boolean);
   const bannedRepeats = [...recent, ...rejectedDrafts];
   const recentMessages =
-    extras?.recentMessages ??
-    recent.map((body) => ({ authorType: "CREATOR", body }));
+    extras?.recentMessages ?? recent.map((body) => ({ authorType: "CREATOR", body }));
   const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
-  const swap = (current: GenerationOutput, pool: string[]) => replaceAllOptions(current, pool, seed, recent);
+  const swap = (current: GenerationOutput, pool: string[]) =>
+    replaceAllOptions(current, pool, seed, recent);
 
   const route = extras?.operationalIntent
     ? { intent: extras.operationalIntent }
@@ -435,7 +464,10 @@ export function applyReplyGuards(
       repairPool?.[0] && answersAgeAsk(repairPool[0], extras?.creatorAge ?? null)
         ? repairPool
         : ageReplyVariants(extras?.creatorAge ?? null);
-    if (!answersAgeAsk(firstText(next), extras?.creatorAge ?? null) || looksLikeMixupApology(firstText(next))) {
+    if (
+      !answersAgeAsk(firstText(next), extras?.creatorAge ?? null) ||
+      looksLikeMixupApology(firstText(next))
+    ) {
       next = swap(next, pool);
       replaced = true;
       reason = "age-fallback";
@@ -447,7 +479,9 @@ export function applyReplyGuards(
   } else if (
     hits["about-him"] &&
     (looksLikeMixupApology(firstText(next)) ||
-      next.replyOptions.some((o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity)))
+      next.replyOptions.some(
+        (o) => looksLikeInvertedCuriosity(o.text) || o.messages.some(looksLikeInvertedCuriosity),
+      ))
   ) {
     next = swap(next, ABOUT_HIM_VARIANTS);
     applied = "fan-flow";
@@ -467,7 +501,10 @@ export function applyReplyGuards(
     applied = "confirmed-mixup";
     replaced = true;
     reason = "unconfirmed-mixup-clarify";
-  } else if (hits["waiting-reveal"] && (looksLikeTellHook(firstText(next)) || !repairPool?.length)) {
+  } else if (
+    hits["waiting-reveal"] &&
+    (looksLikeTellHook(firstText(next)) || !repairPool?.length)
+  ) {
     const pool = (repairPool ?? []).filter((text) => !looksLikeTellHook(text));
     next = swap(next, pool.length ? pool : teasePool);
     applied = "fan-flow";
@@ -485,7 +522,10 @@ export function applyReplyGuards(
     reason = "fan-flow-repair";
   } else if (extras?.threadOnOffline) {
     matched.push("offline-followup");
-    next = swap(next, looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS);
+    next = swap(
+      next,
+      looksLikeSexualPivot(subscriberText) ? SOFT_TEASE_VARIANTS : TOS_OFFLINE_FOLLOWUP_VARIANTS,
+    );
     applied = "offline";
     replaced = true;
     reason = "offline-followup";
@@ -505,11 +545,19 @@ export function applyReplyGuards(
     !locked &&
     !looksLikeAreYouReal(subscriberText) &&
     !looksLikeWhatsWrongFollowup(subscriberText) &&
-    next.replyOptions.some((o) => looksLikeStaleAreYouReal(o.text) || o.messages.some(looksLikeStaleAreYouReal))
+    next.replyOptions.some(
+      (o) => looksLikeStaleAreYouReal(o.text) || o.messages.some(looksLikeStaleAreYouReal),
+    )
   ) {
     next = swap(
       next,
-      noSexual ? naturalPool : sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      noSexual
+        ? naturalPool
+        : sextNow
+          ? teasePool
+          : extras?.fanIntake?.length
+            ? extras.fanIntake
+            : RAPPORT_ONLY_VARIANTS,
     );
     replaced = true;
     reason = "stale-are-you-real";
@@ -529,21 +577,25 @@ export function applyReplyGuards(
     !locked &&
     !looksLikeRefundAsk(subscriberText) &&
     !looksLikeRefundCallout(subscriberText) &&
-    next.replyOptions.some((o) => looksLikeRefundTalk(o.text) || o.messages.some(looksLikeRefundTalk))
+    next.replyOptions.some(
+      (o) => looksLikeRefundTalk(o.text) || o.messages.some(looksLikeRefundTalk),
+    )
   ) {
-    next = swap(
-      next,
-      REFUND_CALLOUT_VARIANTS,
-    );
+    next = swap(next, REFUND_CALLOUT_VARIANTS);
     replaced = true;
     reason = "refund-leak";
   }
 
   if (
     !locked &&
-    next.replyOptions.some((o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach))
+    next.replyOptions.some(
+      (o) => looksLikeInventedBeach(o.text) || o.messages.some(looksLikeInventedBeach),
+    )
   ) {
-    next = swap(next, noSexual ? naturalPool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS);
+    next = swap(
+      next,
+      noSexual ? naturalPool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+    );
     replaced = true;
     reason = "invented-beach-output";
   }
@@ -553,20 +605,25 @@ export function applyReplyGuards(
   }
 
   const draftRepeats =
-    next.replyOptions.some((o) => bannedRepeats.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r)))) ||
-    next.replyOptions.some((o) => repeatsRecentBubbles(o.text, bannedRepeats));
+    next.replyOptions.some((o) =>
+      bannedRepeats.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))),
+    ) || next.replyOptions.some((o) => repeatsRecentBubbles(o.text, bannedRepeats));
   if (!applied && draftRepeats) {
-    const repeatedRejected = next.replyOptions.some(
-      (o) => rejectedDrafts.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))),
+    const repeatedRejected = next.replyOptions.some((o) =>
+      rejectedDrafts.some((r) => tooSimilar(o.text, r) || o.messages.some((m) => tooSimilar(m, r))),
     );
-    const tellLoop = next.replyOptions.some((o) => looksLikeTellHook(o.text)) || looksLikeWaitingForReveal(subscriberText);
+    const tellLoop =
+      next.replyOptions.some((o) => looksLikeTellHook(o.text)) ||
+      looksLikeWaitingForReveal(subscriberText);
     const fresh = pickFreshVariants(
       noSexual ? naturalPool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
       bannedRepeats,
       extras?.variantSeed,
     ).filter((text) => !looksLikeTellHook(text) || !tellLoop);
     const pool = noSexual
-      ? (fresh.length ? fresh : naturalPool)
+      ? fresh.length
+        ? fresh
+        : naturalPool
       : looksLikeTeaseAsk(subscriberText) || tellLoop
         ? teasePool
         : fresh.length
@@ -581,22 +638,29 @@ export function applyReplyGuards(
   if (rejectedDrafts.length) {
     next = mapOptionTexts(next, (text, i) =>
       rejectedDrafts.some((draft) => tooSimilar(text, draft))
-        ? (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!
+        ? (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
+            i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
+          ]!
         : text,
     );
   }
 
   const lastUs =
-    [...recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")?.body ?? "";
+    [...recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")?.body ??
+    "";
   const dominance = extras?.dominance ?? extras?.flowPlan?.facts?.fan_dominance;
-  const inferredDominant = (dominance ?? "").toUpperCase() === "DOMINANT" || (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(subscriberText));
+  const inferredDominant =
+    (dominance ?? "").toUpperCase() === "DOMINANT" ||
+    (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(subscriberText));
   if (
     !locked &&
     !noSexual &&
     next.replyOptions.some(
       (o) =>
         looksLikeWrongDominanceFlip(o.text, inferredDominant ? "DOMINANT" : dominance) ||
-        o.messages.some((m) => looksLikeWrongDominanceFlip(m, inferredDominant ? "DOMINANT" : dominance)),
+        o.messages.some((m) =>
+          looksLikeWrongDominanceFlip(m, inferredDominant ? "DOMINANT" : dominance),
+        ),
     )
   ) {
     const pool =
@@ -613,10 +677,18 @@ export function applyReplyGuards(
       (o) => looksLikePrematureVideoPitch(o.text) || o.messages.some(looksLikePrematureVideoPitch),
     );
     if (pitched) {
-      const pool = (repairPool ?? []).filter((text) => !looksLikeTellHook(text) && !looksLikePrematureVideoPitch(text));
+      const pool = (repairPool ?? []).filter(
+        (text) => !looksLikeTellHook(text) && !looksLikePrematureVideoPitch(text),
+      );
       next = swap(
         next,
-        pool.length ? pool : noSexual ? naturalPool : inferredDominant ? FAN_DOMINANT_FOLLOW_VARIANTS : teasePool,
+        pool.length
+          ? pool
+          : noSexual
+            ? naturalPool
+            : inferredDominant
+              ? FAN_DOMINANT_FOLLOW_VARIANTS
+              : teasePool,
       );
       replaced = true;
       reason = "skip-pitch";
@@ -626,7 +698,8 @@ export function applyReplyGuards(
       recommendedProductId: null,
       approvedPrice: null,
       recommendedAction:
-        next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+        next.recommendedAction === "PRESENT_OFFER" ||
+        next.recommendedAction === "ESCALATE_EXPLICITNESS"
           ? "REPLY"
           : next.recommendedAction,
     };
@@ -646,11 +719,13 @@ export function applyReplyGuards(
     facts: flow?.facts,
   });
 
-  if (!petNamesAllowed({
-    subscriberText,
-    dominance: extras?.dominance,
-    threadBanned: extras?.threadBannedPetNames || extras?.threadLessons?.bannedPetNames,
-  })) {
+  if (
+    !petNamesAllowed({
+      subscriberText,
+      dominance: extras?.dominance,
+      threadBanned: extras?.threadBannedPetNames || extras?.threadLessons?.bannedPetNames,
+    })
+  ) {
     next = mapOptionTexts(next, (text) => stripUnauthorizedPetNames(text));
   }
 
@@ -668,7 +743,11 @@ export function applyReplyGuards(
         noPitch || (next.recommendedProductId != null && idsToDrop.has(next.recommendedProductId));
       next = mapOptionTexts(next, (text, i) => {
         const stripped = stripCatalogMentions(text, namesToStrip);
-        return stripped.trim() ? stripped : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!;
+        return stripped.trim()
+          ? stripped
+          : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
+              i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
+            ]!;
       });
       if (dropProduct) {
         next = {
@@ -676,7 +755,8 @@ export function applyReplyGuards(
           recommendedProductId: null,
           approvedPrice: null,
           recommendedAction:
-            next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+            next.recommendedAction === "PRESENT_OFFER" ||
+            next.recommendedAction === "ESCALATE_EXPLICITNESS"
               ? "REPLY"
               : next.recommendedAction,
         };
@@ -684,7 +764,9 @@ export function applyReplyGuards(
     }
   }
 
-  const catalogNames = catalog.map((p) => catalogDisplayName(p.name ?? "")).filter((n) => n.length >= 3);
+  const catalogNames = catalog
+    .map((p) => catalogDisplayName(p.name ?? ""))
+    .filter((n) => n.length >= 3);
   if (
     pitchIsTooEarly({
       funnelStage: extras?.funnelStage,
@@ -695,14 +777,19 @@ export function applyReplyGuards(
   ) {
     next = mapOptionTexts(next, (text, i) => {
       const stripped = stripCatalogMentions(text, catalogNames);
-      return stripped.trim() ? stripped : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length]!;
+      return stripped.trim()
+        ? stripped
+        : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
+            i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
+          ]!;
     });
     next = {
       ...next,
       recommendedProductId: null,
       approvedPrice: null,
       recommendedAction:
-        next.recommendedAction === "PRESENT_OFFER" || next.recommendedAction === "ESCALATE_EXPLICITNESS"
+        next.recommendedAction === "PRESENT_OFFER" ||
+        next.recommendedAction === "ESCALATE_EXPLICITNESS"
           ? "REPLY"
           : next.recommendedAction,
     };
@@ -713,11 +800,19 @@ export function applyReplyGuards(
     !looksLikeAreYouReal(subscriberText) &&
     !looksLikeOfflineAsk(subscriberText) &&
     !looksLikeTeaseAsk(subscriberText) &&
-    next.replyOptions.some((o) => looksLikeAimlessRapport(o.text) || o.messages.some(looksLikeAimlessRapport))
+    next.replyOptions.some(
+      (o) => looksLikeAimlessRapport(o.text) || o.messages.some(looksLikeAimlessRapport),
+    )
   ) {
     next = swap(
       next,
-      noSexual ? naturalPool : sextNow ? teasePool : extras?.fanIntake?.length ? extras.fanIntake : RAPPORT_ONLY_VARIANTS,
+      noSexual
+        ? naturalPool
+        : sextNow
+          ? teasePool
+          : extras?.fanIntake?.length
+            ? extras.fanIntake
+            : RAPPORT_ONLY_VARIANTS,
     );
   }
 
@@ -778,7 +873,7 @@ export function validateProductsAndPrices(
     discountLimitPercent?: number;
   }[],
   discountLimitPercent = 10,
-  concessionAllowed = false,
+  _concessionAllowed = false,
   opts?: {
     creatorId?: string;
     purchasedProductIds?: string[];
@@ -856,10 +951,7 @@ export function validateProductsAndPrices(
         riskFlags: [...next.riskFlags, "WRONG_CREATOR"],
         recommendedAction: "REQUEST_HUMAN_REVIEW",
       };
-    } else if (
-      opts?.purchasedProductIds?.includes(product.id) &&
-      !product.resaleAllowed
-    ) {
+    } else if (opts?.purchasedProductIds?.includes(product.id) && !product.resaleAllowed) {
       errors.push("ALREADY_PURCHASED");
       next = {
         ...next,
@@ -923,14 +1015,24 @@ export function validateProductsAndPrices(
     next = { ...next, approvedPrice: null, requiresHumanReview: true };
   }
 
-  const inventedInText = next.replyOptions.some((opt) =>
-    /\$\s*\d+/.test(opt.text) &&
-    !catalog.some((p) => opt.text.includes(String(p.standardPrice))),
+  const inventedInText = next.replyOptions.some(
+    (opt) =>
+      /\$\s*\d+/.test(opt.text) && !catalog.some((p) => opt.text.includes(String(p.standardPrice))),
   );
-  if (inventedInText && next.recommendedProductId === null && /\$\s*\d+/.test(next.replyOptions.map((o) => o.text).join(" "))) {
-    const prices = next.replyOptions.flatMap((o) => [...o.text.matchAll(/\$\s*(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])));
+  if (
+    inventedInText &&
+    next.recommendedProductId === null &&
+    /\$\s*\d+/.test(next.replyOptions.map((o) => o.text).join(" "))
+  ) {
+    const prices = next.replyOptions.flatMap((o) =>
+      [...o.text.matchAll(/\$\s*(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])),
+    );
     const allowed = new Set(
-      catalog.flatMap((p) => [p.standardPrice, p.minimumPrice, p.secondPrice ?? defaultSecondPrice(p.standardPrice, p.minimumPrice)]),
+      catalog.flatMap((p) => [
+        p.standardPrice,
+        p.minimumPrice,
+        p.secondPrice ?? defaultSecondPrice(p.standardPrice, p.minimumPrice),
+      ]),
     );
     if (prices.some((p) => ![...allowed].some((a) => Math.abs(a - p) < 0.05))) {
       errors.push("INVENTED_PRICE_IN_TEXT");

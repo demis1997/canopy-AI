@@ -23,7 +23,9 @@ export default async function OrgSettingsPage() {
         <div>Type: {org.type}</div>
         <div>Status: {org.status}</div>
         <div>Seats: {org.seatLimit}</div>
-        {org.isDemo ? <div className="text-amber-300 md:col-span-2">This workspace is labelled DEMO data.</div> : null}
+        {org.isDemo ? (
+          <div className="text-amber-300 md:col-span-2">This workspace is labelled DEMO data.</div>
+        ) : null}
       </Card>
     </div>
   );

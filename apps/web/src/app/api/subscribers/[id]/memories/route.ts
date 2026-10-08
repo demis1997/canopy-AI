@@ -3,10 +3,7 @@ import { prisma } from "@canopy/database";
 import { memoryUpdateSchema } from "@canopy/shared";
 import { requireOrgUser, jsonError, requirePerm } from "@/lib/session";
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });

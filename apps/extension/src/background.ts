@@ -6,7 +6,10 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() =>
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "CANOPY_FORWARD" && sender.tab?.id) {
-    chrome.tabs.sendMessage(sender.tab.id, message.payload).then(sendResponse).catch(() => sendResponse({ ok: false }));
+    chrome.tabs
+      .sendMessage(sender.tab.id, message.payload)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
   return false;

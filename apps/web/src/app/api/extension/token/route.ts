@@ -26,7 +26,8 @@ export async function POST() {
     const ctx = await requireUser();
     const scoped = await requireOrgUser();
     requirePerm(scoped, "conversations.generate");
-    if (!scoped.tenant) return NextResponse.json({ error: "Organization required" }, { status: 400 });
+    if (!scoped.tenant)
+      return NextResponse.json({ error: "Organization required" }, { status: 400 });
     const issued = await issueExtensionToken(ctx.userId, scoped.tenant.organizationId);
     return NextResponse.json({
       ...issued,

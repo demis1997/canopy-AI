@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma, encryptSecret, lastFour, decryptSecret } from "@canopy/database";
+import { prisma, encryptSecret, lastFour } from "@canopy/database";
 import { createLLMProvider, readProviderEnv, ProviderError } from "@canopy/ai";
 import { requireUser, jsonError, requirePerm } from "@/lib/session";
-import { maskSecret } from "@canopy/shared";
+import { getProviderConfiguration, resolveProviderCredential } from "@/server/ai-provider";
 
 async function requireAdmin() {
   const ctx = await requireUser();
@@ -18,51 +18,22 @@ function inferProvider(baseUrl: string, explicit?: string) {
   return "venice";
 }
 
-async function resolveApiKey(
-  organizationId: string | null,
-  providerName: string,
-  pasted?: string,
-) {
-  if (pasted) return pasted;
-  const stored = await prisma.apiCredential.findFirst({
-    where: {
-      organizationId: organizationId ?? null,
-      provider: { in: [providerName, "venice", "openrouter", "openai"] },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  if (stored) return decryptSecret(stored.encryptedKey);
-  return process.env.AI_API_KEY || process.env.LLM_API_KEY || "";
-}
-
 export async function GET() {
   try {
     const ctx = await requireAdmin();
     const env = readProviderEnv();
-    const config = await prisma.lLMProviderConfiguration.findFirst({
-      where: ctx.organizationId
-        ? { OR: [{ organizationId: ctx.organizationId }, { organizationId: null }] }
-        : { organizationId: null },
-      orderBy: { organizationId: "desc" },
-    });
+    const config = await getProviderConfiguration(ctx.organizationId);
     const providerName = config?.provider || env.name;
-    const cred = await prisma.apiCredential.findFirst({
-      where: {
-        provider: { in: [providerName, "venice", "openrouter", "openai"] },
-        organizationId: ctx.organizationId ?? null,
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    const envKey = process.env.AI_API_KEY || process.env.LLM_API_KEY;
+    const credential = await resolveProviderCredential(ctx.organizationId, providerName);
     return NextResponse.json({
       config,
       provider: providerName,
       generationModel: config?.generationModel || env.model || "",
       classificationModel: config?.classificationModel || "",
       baseUrl: config?.baseUrl || env.baseURL,
-      keyLastFour: cred?.keyLastFour ?? (envKey ? lastFour(envKey) : null),
-      maskedKey: cred ? `••••${cred.keyLastFour}` : envKey ? maskSecret(envKey) : null,
-      mockMode: !envKey && !cred,
+      keyLastFour: credential.keyLastFour,
+      maskedKey: credential.keyLastFour ? `••••${credential.keyLastFour}` : null,
+      mockMode: !credential.apiKey,
       lastHealthOk: config?.lastHealthOk ?? null,
       lastLatencyMs: config?.lastLatencyMs ?? null,
     });
@@ -88,7 +59,11 @@ export async function POST(request: Request) {
 
     const baseURL = body.baseUrl || env.baseURL || "https://api.venice.ai/api/v1";
     const providerName = inferProvider(baseURL, body.provider ?? env.name);
-    const apiKey = await resolveApiKey(ctx.organizationId, providerName, body.apiKey);
+    const { apiKey } = await resolveProviderCredential(
+      ctx.organizationId,
+      providerName,
+      body.apiKey,
+    );
 
     if (body.action === "save") {
       if (body.apiKey) {
@@ -198,7 +173,9 @@ export async function POST(request: Request) {
         discountLimitPercent: 0,
         approvedExampleMessages: [],
       },
-      recentMessages: [{ authorType: "SUBSCRIBER", body: "Reply with a one-sentence hello for a health check." }],
+      recentMessages: [
+        { authorType: "SUBSCRIBER", body: "Reply with a one-sentence hello for a health check." },
+      ],
       memories: [],
       products: [],
       funnelStage: "RAPPORT",

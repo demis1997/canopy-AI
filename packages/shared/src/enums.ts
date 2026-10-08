@@ -1,10 +1,4 @@
-export const ROLES = [
-  "PLATFORM_ADMIN",
-  "AGENCY_OWNER",
-  "MANAGER",
-  "CHATTER",
-  "CREATOR",
-] as const;
+export const ROLES = ["PLATFORM_ADMIN", "AGENCY_OWNER", "MANAGER", "CHATTER", "CREATOR"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ORGANIZATION_STATUSES = ["ACTIVE", "SUSPENDED", "DELETED"] as const;
@@ -22,21 +16,10 @@ export const ADULT_STATUSES = [
 ] as const;
 export type AdultStatus = (typeof ADULT_STATUSES)[number];
 
-export const EXPLICITNESS_LEVELS = [
-  "FLIRTY",
-  "SUGGESTIVE",
-  "EXPLICIT",
-  "VERY_EXPLICIT",
-] as const;
+export const EXPLICITNESS_LEVELS = ["FLIRTY", "SUGGESTIVE", "EXPLICIT", "VERY_EXPLICIT"] as const;
 export type ExplicitnessLevel = (typeof EXPLICITNESS_LEVELS)[number];
 
-export const PERSONA_STYLES = [
-  "DOMINANT",
-  "SUBMISSIVE",
-  "ROMANTIC",
-  "PLAYFUL",
-  "DIRECT",
-] as const;
+export const PERSONA_STYLES = ["DOMINANT", "SUBMISSIVE", "ROMANTIC", "PLAYFUL", "DIRECT"] as const;
 export type PersonaStyle = (typeof PERSONA_STYLES)[number];
 
 export const FUNNEL_STAGES = [
@@ -94,25 +77,13 @@ export const TONES = [
 ] as const;
 export type Tone = (typeof TONES)[number];
 
-export const MEDIA_TYPES = [
-  "PHOTO",
-  "VIDEO",
-  "AUDIO",
-  "TEXT",
-  "BUNDLE",
-  "CUSTOM",
-] as const;
+export const MEDIA_TYPES = ["PHOTO", "VIDEO", "AUDIO", "TEXT", "BUNDLE", "CUSTOM"] as const;
 export type MediaType = (typeof MEDIA_TYPES)[number];
 
 export const APPROVAL_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
-export const ESCALATION_STATUSES = [
-  "OPEN",
-  "IN_REVIEW",
-  "RESOLVED",
-  "DISMISSED",
-] as const;
+export const ESCALATION_STATUSES = ["OPEN", "IN_REVIEW", "RESOLVED", "DISMISSED"] as const;
 export type EscalationStatus = (typeof ESCALATION_STATUSES)[number];
 
 export const ESCALATION_REASONS = [
@@ -145,12 +116,7 @@ export const ESCALATION_REASONS = [
 ] as const;
 export type EscalationReason = (typeof ESCALATION_REASONS)[number];
 
-export const SENSITIVITY_LEVELS = [
-  "PUBLIC",
-  "INTERNAL",
-  "SENSITIVE",
-  "HIGHLY_SENSITIVE",
-] as const;
+export const SENSITIVITY_LEVELS = ["PUBLIC", "INTERNAL", "SENSITIVE", "HIGHLY_SENSITIVE"] as const;
 export type SensitivityLevel = (typeof SENSITIVITY_LEVELS)[number];
 
 export const MEMORY_CATEGORIES = [
@@ -247,13 +213,7 @@ export const GENERATION_STATUSES = [
 ] as const;
 export type GenerationStatus = (typeof GENERATION_STATUSES)[number];
 
-export const REPLY_OUTCOMES = [
-  "PENDING",
-  "SELECTED",
-  "EDITED",
-  "DISCARDED",
-  "INSERTED",
-] as const;
+export const REPLY_OUTCOMES = ["PENDING", "SELECTED", "EDITED", "DISCARDED", "INSERTED"] as const;
 export type ReplyOutcome = (typeof REPLY_OUTCOMES)[number];
 
 export const AUDIT_ACTIONS = [

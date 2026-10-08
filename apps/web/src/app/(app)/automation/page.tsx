@@ -21,7 +21,12 @@ export default async function AutomationReviewPage() {
     }),
     prisma.platformAccount.findMany({
       where: { organizationId: ctx.tenant.organizationId },
-      select: { id: true, autonomyMode: true, displayName: true, creator: { select: { displayName: true } } },
+      select: {
+        id: true,
+        autonomyMode: true,
+        displayName: true,
+        creator: { select: { displayName: true } },
+      },
     }),
   ]);
   const triggers = await prisma.platformMessage.findMany({
@@ -49,20 +54,24 @@ export default async function AutomationReviewPage() {
         </Card>
         <Card>
           <div className="text-sm font-medium">Approval queue</div>
-          <p className="mt-1 text-sm text-white/50">Low-confidence or safety-flagged replies still wait for a human.</p>
+          <p className="mt-1 text-sm text-white/50">
+            Low-confidence or safety-flagged replies still wait for a human.
+          </p>
         </Card>
         <Card>
           <div className="text-sm font-medium">Account stop</div>
           <p className="mt-1 text-sm text-white/50">
-            Emergency stop / PAUSED halts every creator account. MOCK driver never contacts OnlyFans.
+            Emergency stop / PAUSED halts every creator account. MOCK driver never contacts
+            OnlyFans.
           </p>
         </Card>
       </div>
       <Card className="text-sm text-white/60">
-        Per-account kill switch is PAUSED / Emergency stop. Allowed creators, operating hours, max actions/hour,
-        cooldown, minimum confidence, price ceiling, forbidden topics and escalation triggers live on each account
-        policy under Platform. Autonomous text is on unless ONLYFANS_AUTONOMOUS_TEXT=false. Pause a single
-        conversation with “Pause this chat”. Account PAUSED / Emergency stop still stops everything.
+        Per-account kill switch is PAUSED / Emergency stop. Allowed creators, operating hours, max
+        actions/hour, cooldown, minimum confidence, price ceiling, forbidden topics and escalation
+        triggers live on each account policy under Platform. Autonomous text is on unless
+        ONLYFANS_AUTONOMOUS_TEXT=false. Pause a single conversation with “Pause this chat”. Account
+        PAUSED / Emergency stop still stops everything.
       </Card>
       {accounts.length ? (
         <Card>
@@ -82,14 +91,21 @@ export default async function AutomationReviewPage() {
         return (
           <Card key={action.id} className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={action.status === "FAILED" ? "bad" : action.status === "SENT" ? "good" : "warn"}>
+              <Badge
+                tone={
+                  action.status === "FAILED" ? "bad" : action.status === "SENT" ? "good" : "warn"
+                }
+              >
                 {action.status}
               </Badge>
               <Badge>{action.actionType}</Badge>
-              {action.platformConversation.humanTakeover ? <Badge tone="warn">Human takeover</Badge> : null}
+              {action.platformConversation.humanTakeover ? (
+                <Badge tone="warn">Human takeover</Badge>
+              ) : null}
             </div>
             <div className="text-sm text-white/70">
-              {action.platformAccount.creator.displayName} · {action.platformConversation.externalFanDisplayName}
+              {action.platformAccount.creator.displayName} ·{" "}
+              {action.platformConversation.externalFanDisplayName}
             </div>
             <div className="text-xs text-white/45">Trigger (fan)</div>
             <p className="text-sm">{trigger?.body ?? "—"}</p>
@@ -111,7 +127,12 @@ export default async function AutomationReviewPage() {
           </Card>
         );
       })}
-      {!actions.length ? <EmptyState title="No automation actions yet" body="Queued, approved and dry-run actions appear here." /> : null}
+      {!actions.length ? (
+        <EmptyState
+          title="No automation actions yet"
+          body="Queued, approved and dry-run actions appear here."
+        />
+      ) : null}
     </div>
   );
 }

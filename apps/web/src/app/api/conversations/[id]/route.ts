@@ -10,10 +10,7 @@ import { jsonError, requireOrgUser, requirePerm } from "@/lib/session";
 import { assignedCreatorIds } from "@/lib/access";
 import { clearConversationThread } from "@/server/conversations";
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await requireOrgUser();
     if (!ctx.tenant) return NextResponse.json({ error: "No organization" }, { status: 400 });
@@ -77,7 +74,8 @@ export async function PATCH(
           conversation: { creatorId: conversation.creatorId },
         },
       });
-      const kind = followUpPhase(nextCount, purchaseCount) === "AFTERCARE" ? "AFTERCARE" : "FOLLOW_UP";
+      const kind =
+        followUpPhase(nextCount, purchaseCount) === "AFTERCARE" ? "AFTERCARE" : "FOLLOW_UP";
       const sequence = await prisma.sequence.findFirst({
         where: {
           organizationId: ctx.tenant.organizationId,
@@ -176,7 +174,9 @@ export async function PATCH(
         where: { canopyConversationId: conversation.id, organizationId: ctx.tenant.organizationId },
         data: {
           humanTakeover: body.mutedAi,
-          automationLockedUntil: body.mutedAi ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) : null,
+          automationLockedUntil: body.mutedAi
+            ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+            : null,
         },
       });
     }

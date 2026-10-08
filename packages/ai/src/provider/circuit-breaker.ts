@@ -1,6 +1,7 @@
 function isBreakerFailure(error: unknown): boolean {
   const err = error as { status?: number; code?: string };
-  if (err?.code === "CIRCUIT_OPEN" || err?.code === "TIMEOUT" || err?.code === "INVALID_JSON") return false;
+  if (err?.code === "CIRCUIT_OPEN" || err?.code === "TIMEOUT" || err?.code === "INVALID_JSON")
+    return false;
   if (typeof err?.status === "number" && err.status >= 500) return true;
   return err?.code === "UNAVAILABLE" || err?.code === "RATE_LIMIT";
 }

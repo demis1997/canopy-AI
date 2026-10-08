@@ -29,7 +29,10 @@ async function createOrg(formData: FormData) {
   "use server";
   const ctx = await requireOrgUser();
   const name = z.string().min(2).parse(formData.get("name"));
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 40);
   const org = await prisma.organization.create({
     data: {
       name,

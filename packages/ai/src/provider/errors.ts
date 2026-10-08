@@ -29,7 +29,11 @@ export function mapProviderError(error: unknown, requestId: string): ProviderErr
   if (err?.code === "CIRCUIT_OPEN" || /circuit breaker/i.test(err?.message ?? "")) {
     return new ProviderError("Provider cooling down", "CIRCUIT_OPEN", 503, requestId);
   }
-  if (err?.name === "AbortError" || err?.code === "ETIMEDOUT" || err?.code === "UND_ERR_CONNECT_TIMEOUT") {
+  if (
+    err?.name === "AbortError" ||
+    err?.code === "ETIMEDOUT" ||
+    err?.code === "UND_ERR_CONNECT_TIMEOUT"
+  ) {
     return new ProviderError("Provider timed out", "TIMEOUT", 408, requestId);
   }
   if (
@@ -41,7 +45,12 @@ export function mapProviderError(error: unknown, requestId: string): ProviderErr
     return new ProviderError("Provider unavailable", "UNAVAILABLE", 503, requestId);
   }
   if (err?.status === 401 || err?.status === 403) {
-    return new ProviderError("Invalid or unauthorized API key", "INVALID_KEY", err.status, requestId);
+    return new ProviderError(
+      "Invalid or unauthorized API key",
+      "INVALID_KEY",
+      err.status,
+      requestId,
+    );
   }
   if (err?.status === 429) {
     return new ProviderError("Provider rate limited", "RATE_LIMIT", 429, requestId);

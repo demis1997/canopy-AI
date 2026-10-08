@@ -2,7 +2,6 @@ import type { FanDominance } from "./crm.js";
 import { AFTERCARE_AFTER_PURCHASES, assessSpendLikelihood } from "./crm.js";
 import {
   ABOUT_HIM_VARIANTS,
-  ageReplyVariants,
   looksLikeAgeAsk,
   looksLikeContentAsk,
   looksLikeFanInvitesQuestions,
@@ -21,7 +20,9 @@ import {
 } from "./replies.js";
 
 export const PERSONAL_PERMISSION_EXAMPLES = [
-  ["you know, i cant quite read you yet", "mind if i ask you something a little personal?"].join("\n"),
+  ["you know, i cant quite read you yet", "mind if i ask you something a little personal?"].join(
+    "\n",
+  ),
   "can i ask you something before we dive deeper?",
   "youre kinda hard to read.. is it ok if i ask u something personal",
   "i was gonna ask you something a little personal, that cool?",
@@ -249,7 +250,9 @@ export function looksLikeNotJerking(text: string, vibeContext = false): boolean 
   if (/\b(not jerking|aint jerking|aren'?t jerking)\b/i.test(text)) return true;
   if (
     vibeContext &&
-    /\b(not (right )?now|not rn|maybe later|later|not at the moment|caught me at (a |the )?bad time)\b/i.test(text)
+    /\b(not (right )?now|not rn|maybe later|later|not at the moment|caught me at (a |the )?bad time)\b/i.test(
+      text,
+    )
   ) {
     return true;
   }
@@ -297,7 +300,9 @@ export function sequenceObjectiveOf(text: string): FlowQuestion | null {
   return null;
 }
 
-export function askedSequenceObjectives(messages: { authorType: string; body: string }[]): FlowQuestion[] {
+export function askedSequenceObjectives(
+  messages: { authorType: string; body: string }[],
+): FlowQuestion[] {
   const found: FlowQuestion[] = [];
   for (const message of messages) {
     if (message.authorType === "SUBSCRIBER") continue;
@@ -316,7 +321,10 @@ export function alreadySentObjectives(
   for (const question of FLOW_QUESTIONS) {
     const status = previous.stepStatus?.[question];
     if (
-      (status === "asked" || status === "answered" || status === "skipped" || status === "completed") &&
+      (status === "asked" ||
+        status === "answered" ||
+        status === "skipped" ||
+        status === "completed") &&
       !sent.includes(question)
     ) {
       sent.push(question);
@@ -354,7 +362,8 @@ export function questionAlreadyAsked(
 ): boolean {
   if (!question) return false;
   const status = state.stepStatus?.[question];
-  if (status === "asked" || status === "answered" || status === "skipped" || status === "completed") return true;
+  if (status === "asked" || status === "answered" || status === "skipped" || status === "completed")
+    return true;
   return asked(OBJECTIVE_QUESTION_PATTERNS[question], messages);
 }
 
@@ -366,7 +375,9 @@ export function looksLikePermissionGrant(text: string): boolean {
   return (
     /\b(sure|yeah|yea|yes|yep|yup|ok|okay|alright|aite|go ahead|go for it|ask( away| me)?|do it|why not|i don'?t mind|idm|ofc|of course|fine|hit me|cool)\b/i.test(
       t,
-    ) && !looksLikeWontAnswer(t) && !looksLikeUncomfortablePersonal(t)
+    ) &&
+    !looksLikeWontAnswer(t) &&
+    !looksLikeUncomfortablePersonal(t)
   );
 }
 
@@ -391,7 +402,11 @@ export function shouldHoldForNaturalResume(opts: {
 }): boolean {
   const last = opts.subscriberText;
   if (opts.deviation === "IGNORED" || opts.deviation === "REFUSED") return true;
-  if (opts.currentQuestion === "VIBE" && looksLikeNotJerking(last, true) && !looksLikeDirectHandsAnswer(last)) {
+  if (
+    opts.currentQuestion === "VIBE" &&
+    looksLikeNotJerking(last, true) &&
+    !looksLikeDirectHandsAnswer(last)
+  ) {
     return true;
   }
   return false;
@@ -404,7 +419,11 @@ export function shouldResumePendingObjective(opts: {
 }): boolean {
   if (opts.mustAnswer) return false;
   if (opts.holdTurns <= 0) return false;
-  if (looksLikeSextAsk(opts.subscriberText) || looksLikeTeaseAsk(opts.subscriberText) || looksLikeContentAsk(opts.subscriberText)) {
+  if (
+    looksLikeSextAsk(opts.subscriberText) ||
+    looksLikeTeaseAsk(opts.subscriberText) ||
+    looksLikeContentAsk(opts.subscriberText)
+  ) {
     return false;
   }
   return false;
@@ -435,7 +454,10 @@ export function looksLikeInterestingJob(text: string): boolean {
 }
 
 export function looksLikeAsksBack(text: string): boolean {
-  return /\b(hbu|wbu|what about you|how about you|and you|you\??)\s*$/i.test(text) || /\b(hbu|wbu|what about you|how about you)\b/i.test(text);
+  return (
+    /\b(hbu|wbu|what about you|how about you|and you|you\??)\s*$/i.test(text) ||
+    /\b(hbu|wbu|what about you|how about you)\b/i.test(text)
+  );
 }
 
 export function looksLikeHowAreAsk(text: string): boolean {
@@ -462,7 +484,8 @@ export function isExistingFan(input: {
   if (input.extra?.phase1_done === "true") return true;
   if ((input.purchasedPpvCount ?? 0) > 0) return true;
   if (input.ageKnown || input.cityKnown || input.jobKnown) return true;
-  if ((input.priorCreatorMessages ?? 0) >= 2 && (input.funnelStage ?? "NEW_FAN") !== "NEW_FAN") return true;
+  if ((input.priorCreatorMessages ?? 0) >= 2 && (input.funnelStage ?? "NEW_FAN") !== "NEW_FAN")
+    return true;
   return false;
 }
 
@@ -470,12 +493,18 @@ function asked(re: RegExp, messages: { authorType: string; body: string }[]): bo
   return messages.some((m) => m.authorType !== "SUBSCRIBER" && re.test(m.body));
 }
 
-function notesBlob(notes?: { location?: string; notes?: string; extra?: Record<string, string> } | null): string {
+function notesBlob(
+  notes?: { location?: string; notes?: string; extra?: Record<string, string> } | null,
+): string {
   if (!notes) return "";
   return `${notes.location ?? ""} ${notes.notes ?? ""} ${Object.values(notes.extra ?? {}).join(" ")}`.toLowerCase();
 }
 
-function hasNote(blob: string, extra: Record<string, string> | undefined, key: "age" | "city" | "job"): boolean {
+function hasNote(
+  blob: string,
+  extra: Record<string, string> | undefined,
+  key: "age" | "city" | "job",
+): boolean {
   if (extra?.[`fan_${key}`] || extra?.[key]) return true;
   if (key === "age") return /\b(fan_age|age\s*[:=]\s*\d{2})\b/i.test(blob);
   if (key === "city") return /\b(fan_city|lives in|from [a-z]{3,})\b/i.test(blob);
@@ -484,7 +513,10 @@ function hasNote(blob: string, extra: Record<string, string> | undefined, key: "
 
 function looksCloseToCreator(text: string, creatorCity: string | null): boolean {
   if (/\b(close|nearby|same (city|town|state)|not far|around here)\b/i.test(text)) return true;
-  if (creatorCity && new RegExp(`\\b${creatorCity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) {
+  if (
+    creatorCity &&
+    new RegExp(`\\b${creatorCity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)
+  ) {
     return true;
   }
   return false;
@@ -503,7 +535,11 @@ export function extractFanFacts(input: {
   let dominance: FanDominance | undefined;
   const q = input.currentQuestion;
   const ageMatch = last.match(/\b(1[89]|[2-6]\d)\b/);
-  if ((q === "AGE" || asked(/how old are you/i, input.recentMessages)) && ageMatch && !looksLikeAgeAsk(last)) {
+  if (
+    (q === "AGE" || asked(/how old are you/i, input.recentMessages)) &&
+    ageMatch &&
+    !looksLikeAgeAsk(last)
+  ) {
     extra.fan_age = ageMatch[1]!;
     notes.push(`age: ${ageMatch[1]}`);
   } else if (q === "AGE" && ageMatch) {
@@ -513,7 +549,10 @@ export function extractFanFacts(input: {
   if (q === "LOCATION" || asked(/where are you from/i, input.recentMessages)) {
     const city = last
       .replace(/[?!.,]/g, " ")
-      .replace(/\b(im|i'm|i am|from|in|near|live|around|the|what about you|wbu|hbu|where do you live)\b/gi, " ")
+      .replace(
+        /\b(im|i'm|i am|from|in|near|live|around|the|what about you|wbu|hbu|where do you live)\b/gi,
+        " ",
+      )
       .trim()
       .split(/\s+/)
       .filter((w) => w.length >= 3)
@@ -526,7 +565,11 @@ export function extractFanFacts(input: {
     }
   }
   if (q === "JOB" || asked(/what do u do for a living|for a living/i, input.recentMessages)) {
-    const job = last.replace(/[?!]/g, "").replace(/\b(wbu|hbu|what about you)\b/gi, "").trim().slice(0, 80);
+    const job = last
+      .replace(/[?!]/g, "")
+      .replace(/\b(wbu|hbu|what about you)\b/gi, "")
+      .trim()
+      .slice(0, 80);
     if (job.length >= 3 && !looksLikeWontAnswer(job) && !looksLikeRelationshipAsk(job)) {
       extra.fan_job = job;
       notes.push(`job: ${job}`);
@@ -534,7 +577,9 @@ export function extractFanFacts(input: {
   }
   if (q === "SUB_DOM" || asked(OBJECTIVE_QUESTION_PATTERNS.SUB_DOM, input.recentMessages)) {
     if (/\b(both|switch|either|depends)\b/i.test(last)) dominance = "SWITCH";
-    else if (/\b(submit|submissive|good boy|you in charge|u in charge|you take charge)\b/i.test(last)) {
+    else if (
+      /\b(submit|submissive|good boy|you in charge|u in charge|you take charge)\b/i.test(last)
+    ) {
       dominance = "SUBMISSIVE";
     } else if (/\b(in charge|dominat|im the dom|i'?m dom|i like (to )?control)\b/i.test(last)) {
       dominance = "DOMINANT";
@@ -565,7 +610,8 @@ function phaseFor(step: FlowStep, state: ConversationFlowState, override?: FlowP
   if (override) return override;
   if (step === "AFTERCARE") return "AFTERCARE";
   if (step === "ASK_PERSONAL_PERMISSION" || step === "ASK_SUB_DOM") return "SUB_DOM_TRANSITION";
-  if (step === "WARMUP" || step === "SEND_PRODUCT" || step === "FOLLOW_UP_PRODUCT") return "SELLING_SEQUENCE";
+  if (step === "WARMUP" || step === "SEND_PRODUCT" || step === "FOLLOW_UP_PRODUCT")
+    return "SELLING_SEQUENCE";
   if (step === "ASK_WHAT_HE_WANTS") return state.phase;
   return state.fanType === "EXISTING" ? "EXISTING_FAN_INTAKE" : state.phase;
 }
@@ -593,9 +639,11 @@ function goTo(
 }
 
 function intakeLocked(state: ConversationFlowState, field: "age" | "location" | "job"): boolean {
-  const question: FlowQuestion = field === "age" ? "AGE" : field === "location" ? "LOCATION" : "JOB";
+  const question: FlowQuestion =
+    field === "age" ? "AGE" : field === "location" ? "LOCATION" : "JOB";
   const status = state.stepStatus?.[question];
-  if (status === "asked" || status === "answered" || status === "skipped" || status === "completed") return true;
+  if (status === "asked" || status === "answered" || status === "skipped" || status === "completed")
+    return true;
   return Boolean(state.skipped?.[field]);
 }
 
@@ -618,7 +666,10 @@ function afterIntake(state: ConversationFlowState): ConversationFlowState {
     if (perm === "completed" || perm === "answered") {
       return goTo(state, "ASK_SUB_DOM", { spendingAssessment, phase: "SUB_DOM_TRANSITION" });
     }
-    return goTo(state, "ASK_PERSONAL_PERMISSION", { spendingAssessment, phase: "SUB_DOM_TRANSITION" });
+    return goTo(state, "ASK_PERSONAL_PERMISSION", {
+      spendingAssessment,
+      phase: "SUB_DOM_TRANSITION",
+    });
   }
   if (state.welcomePurchased && state.warmupStep < 5) {
     return goTo(state, "WARMUP", { spendingAssessment, phase: "SELLING_SEQUENCE" });
@@ -629,7 +680,11 @@ function afterIntake(state: ConversationFlowState): ConversationFlowState {
   return goTo(state, "SEND_PRODUCT", { spendingAssessment, phase: "SELLING_SEQUENCE" });
 }
 
-function afterVibe(state: ConversationFlowState, jerking: boolean, vibeStatus: StepStatus = "completed"): ConversationFlowState {
+function afterVibe(
+  state: ConversationFlowState,
+  jerking: boolean,
+  vibeStatus: StepStatus = "completed",
+): ConversationFlowState {
   const next = {
     ...state,
     fanIsJerking: jerking,
@@ -698,7 +753,11 @@ export function hydrateFlowState(input: FanIntakeInput): ConversationFlowState {
   const blob = notesBlob(input.fanNotes);
   const welcomePurchased = Boolean(input.boughtWelcome || extra.bought_welcome === "true");
   const fanType: "NEW" | "EXISTING" = input.existingFan ? "EXISTING" : "NEW";
-  const dominanceRaw = (input.fanNotes?.dominance ?? extra.fan_dominance ?? "UNKNOWN").toUpperCase();
+  const dominanceRaw = (
+    input.fanNotes?.dominance ??
+    extra.fan_dominance ??
+    "UNKNOWN"
+  ).toUpperCase();
   const dominance: FanDominance =
     dominanceRaw === "SUBMISSIVE" || dominanceRaw === "DOMINANT" || dominanceRaw === "SWITCH"
       ? dominanceRaw
@@ -716,14 +775,18 @@ export function hydrateFlowState(input: FanIntakeInput): ConversationFlowState {
     askedCurrentQuestionCount: 0,
     welcomePurchased,
     fanType,
-    fanIsJerking: extra.fan_jerking === "true" ? true : extra.fan_jerking === "false" ? false : null,
+    fanIsJerking:
+      extra.fan_jerking === "true" ? true : extra.fan_jerking === "false" ? false : null,
     dominance,
     intake: {
       age: Number.isFinite(age) ? age : hasNote(blob, extra, "age") ? 0 : undefined,
       location: location || (hasNote(blob, extra, "city") ? input.fanNotes?.location : undefined),
       job: job || (hasNote(blob, extra, "job") ? extra.fan_job : undefined),
     },
-    spendingAssessment: extra.spending_assessment === "HIGH" || extra.spending_assessment === "LOW" ? extra.spending_assessment : undefined,
+    spendingAssessment:
+      extra.spending_assessment === "HIGH" || extra.spending_assessment === "LOW"
+        ? extra.spending_assessment
+        : undefined,
     warmupStep: Number(extra.warmup_step ?? 0) || 0,
     productsSent,
     productsPurchased,
@@ -740,7 +803,13 @@ export function hydrateFlowState(input: FanIntakeInput): ConversationFlowState {
   if (base.intake.age === 0) delete base.intake.age;
 
   if (productsPurchased >= AFTERCARE_AFTER_PURCHASES) {
-    return { ...base, phase: "AFTERCARE", step: "AFTERCARE", currentQuestion: undefined, askedCurrentQuestionCount: 0 };
+    return {
+      ...base,
+      phase: "AFTERCARE",
+      step: "AFTERCARE",
+      currentQuestion: undefined,
+      askedCurrentQuestionCount: 0,
+    };
   }
 
   const savedStep = parseStep(extra.flow_step);
@@ -774,11 +843,13 @@ export function hydrateFlowState(input: FanIntakeInput): ConversationFlowState {
     return goTo(base, "ASK_HOW_ARE_YOU", { phase: "EXISTING_FAN_INTAKE" });
   }
   if (asked(/how many hands/i, us)) return goTo(base, "VIBE_CHECK");
-  if (asked(/how old are you/i, us) && !base.intake.age && !base.skipped?.age) return goTo(base, "ASK_AGE");
+  if (asked(/how old are you/i, us) && !base.intake.age && !base.skipped?.age)
+    return goTo(base, "ASK_AGE");
   if (asked(/where are you from/i, us) && !base.intake.location && !base.skipped?.location) {
     return goTo(base, "ASK_LOCATION");
   }
-  if (asked(/for a living/i, us) && !base.intake.job && !base.skipped?.job) return goTo(base, "ASK_JOB");
+  if (asked(/for a living/i, us) && !base.intake.job && !base.skipped?.job)
+    return goTo(base, "ASK_JOB");
   if (asked(OBJECTIVE_QUESTION_PATTERNS.PERSONAL_PERMISSION, us) && dominance === "UNKNOWN") {
     return goTo(base, "ASK_PERSONAL_PERMISSION", { phase: "SUB_DOM_TRANSITION" });
   }
@@ -812,10 +883,6 @@ function vibeLine(state: ConversationFlowState): string {
   return state.fanType === "EXISTING"
     ? ["how many hands are you typing with, haha?", "you can be honest with me"].join("\n")
     : "how many hands are you typing with?";
-}
-
-function ageLine(): string {
-  return ["mmm how old are you?", "feel curious idk why"].join("\n");
 }
 
 function locationLine(): string {
@@ -889,7 +956,8 @@ function directMustAnswer(text: string, current: FlowQuestion | undefined): Flow
   if (looksLikeWhatDoing(text) || looksLikeWhatLike(text)) return "what-doing";
   if (current === "HOW_ARE_YOU" && looksLikeHowAreAsk(text)) return "how-are-you";
   if (current === "AGE" && looksLikeAsksBack(text)) return "creator-age";
-  if (current === "LOCATION" && (looksLikeAsksBack(text) || looksLikeLocationAsk(text))) return "creator-location";
+  if (current === "LOCATION" && (looksLikeAsksBack(text) || looksLikeLocationAsk(text)))
+    return "creator-location";
   return null;
 }
 
@@ -912,18 +980,26 @@ function leadForMustAnswer(
       closer,
     );
   }
-  if (must === "creator-location") return withCloser(locationReplyVariants(input.creatorCity ?? null), closer);
+  if (must === "creator-location")
+    return withCloser(locationReplyVariants(input.creatorCity ?? null), closer);
   if (must === "about-him") return withCloser(ABOUT_HIM_VARIANTS, closer);
   if (must === "how-are-you") {
     if (nextState.fanType === "EXISTING") {
       return withCloser(
-        [["oh ive been great and its good to see you here", "really happy that were talking now"].join("\n")],
+        [
+          [
+            "oh ive been great and its good to see you here",
+            "really happy that were talking now",
+          ].join("\n"),
+        ],
         closer,
       );
     }
     return withCloser(
       [
-        ["im doing great actually", "was about to get ready to go to the gym and saw u here"].join("\n"),
+        ["im doing great actually", "was about to get ready to go to the gym and saw u here"].join(
+          "\n",
+        ),
         ["good tbh", "was getting ready for the gym and saw u"].join("\n"),
       ],
       closer,
@@ -1005,7 +1081,13 @@ function recoverPastAsked(
   mustAnswer: FlowMustAnswer,
   input: FanIntakeInput,
   last: string,
-): { next: ConversationFlowState; closer: string | null; variants: string[]; beatId: string; skipPitch: boolean } {
+): {
+  next: ConversationFlowState;
+  closer: string | null;
+  variants: string[];
+  beatId: string;
+  skipPitch: boolean;
+} {
   const question = previous.currentQuestion;
   const holdTurns = previous.resumeHoldTurns ?? 0;
   const resume = shouldResumePendingObjective({ holdTurns, subscriberText: last, mustAnswer });
@@ -1016,7 +1098,9 @@ function recoverPastAsked(
       return {
         next: held,
         closer: null,
-        variants: mustAnswer ? leadForMustAnswer(mustAnswer, input, previous.step, nextBase, false) : [],
+        variants: mustAnswer
+          ? leadForMustAnswer(mustAnswer, input, previous.step, nextBase, false)
+          : [],
         beatId: mustAnswer ? beatIdFor(previous.step, mustAnswer) : stateBeat(previous.step, false),
         skipPitch: true,
       };
@@ -1026,7 +1110,11 @@ function recoverPastAsked(
     return {
       next,
       closer,
-      variants: mustAnswer ? leadForMustAnswer(mustAnswer, input, previous.step, next) : closer ? [closer] : [],
+      variants: mustAnswer
+        ? leadForMustAnswer(mustAnswer, input, previous.step, next)
+        : closer
+          ? [closer]
+          : [],
       beatId: mustAnswer ? beatIdFor(previous.step, mustAnswer) : stateBeat(previous.step, false),
       skipPitch: true,
     };
@@ -1052,7 +1140,9 @@ function recoverPastAsked(
   const rawCloser = closerFor(askedNext.step, askedNext);
   const closerObjective = rawCloser ? sequenceObjectiveOf(rawCloser) : null;
   const closer =
-    rawCloser && closerObjective && alreadySentObjectives(input.recentMessages, previous).includes(closerObjective)
+    rawCloser &&
+    closerObjective &&
+    alreadySentObjectives(input.recentMessages, previous).includes(closerObjective)
       ? null
       : rawCloser;
   const variants = mustAnswer
@@ -1065,7 +1155,10 @@ function recoverPastAsked(
     closer,
     variants,
     beatId: mustAnswer ? beatIdFor(askedNext.step, mustAnswer) : stateBeat(askedNext.step, false),
-    skipPitch: Boolean(closer) && askedNext.step !== "SEND_PRODUCT" && askedNext.step !== "FOLLOW_UP_PRODUCT",
+    skipPitch:
+      Boolean(closer) &&
+      askedNext.step !== "SEND_PRODUCT" &&
+      askedNext.step !== "FOLLOW_UP_PRODUCT",
   };
 }
 
@@ -1087,7 +1180,11 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
     },
     dominance: facts.dominance ?? previous.dominance,
     fanIsJerking:
-      facts.extra.fan_jerking === "true" ? true : facts.extra.fan_jerking === "false" ? false : previous.fanIsJerking,
+      facts.extra.fan_jerking === "true"
+        ? true
+        : facts.extra.fan_jerking === "false"
+          ? false
+          : previous.fanIsJerking,
   };
   const mustAnswer = directMustAnswer(last, previous.currentQuestion);
   const refused =
@@ -1118,14 +1215,37 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
 
   if (previous.productsPurchased >= AFTERCARE_AFTER_PURCHASES) {
     const next = goTo(nextBase, "AFTERCARE", { phase: "AFTERCARE" });
-    return finish(previous, next, deviation, mustAnswer, facts, input, AFTERCARE_QUOTES[0] ?? null, AFTERCARE_QUOTES, "aftercare", true);
+    return finish(
+      previous,
+      next,
+      deviation,
+      mustAnswer,
+      facts,
+      input,
+      AFTERCARE_QUOTES[0] ?? null,
+      AFTERCARE_QUOTES,
+      "aftercare",
+      true,
+    );
   }
 
   if (looksLikeContentAsk(last) && previous.askedCurrentQuestionCount >= 2) {
     const next = goTo(nextBase, previous.unpaidProductId ? "FOLLOW_UP_PRODUCT" : "SEND_PRODUCT", {
       phase: "SELLING_SEQUENCE",
     });
-    return finish(previous, next, "IGNORED", mustAnswer, facts, input, null, [], "content", false, true);
+    return finish(
+      previous,
+      next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      null,
+      [],
+      "content",
+      false,
+      true,
+    );
   }
 
   if (refused) {
@@ -1138,7 +1258,11 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
       skipped,
       stepStatus:
         previous.currentQuestion === "PERSONAL_PERMISSION"
-          ? { ...nextBase.stepStatus, PERSONAL_PERMISSION: "skipped" as const, SUB_DOM: "skipped" as const }
+          ? {
+              ...nextBase.stepStatus,
+              PERSONAL_PERMISSION: "skipped" as const,
+              SUB_DOM: "skipped" as const,
+            }
           : nextBase.stepStatus,
     };
     const onward =
@@ -1148,17 +1272,33 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
           ? goTo(skippedState, missingIntakeStep(skippedState) ?? "ASK_LOCATION")
           : previous.currentQuestion === "LOCATION"
             ? goTo(skippedState, missingIntakeStep(skippedState) ?? "ASK_JOB")
-            : previous.currentQuestion === "JOB" || previous.currentQuestion === "PERSONAL_PERMISSION"
+            : previous.currentQuestion === "JOB" ||
+                previous.currentQuestion === "PERSONAL_PERMISSION"
               ? afterIntake(skippedState)
               : afterVibe(skippedState, false);
     const held = holdPending(onward);
     const variants = mustAnswer
       ? leadForMustAnswer(mustAnswer, input, onward.step, onward, false)
       : ["ok no rush", "ok ok no rush", "lol fair"];
-    return finish(previous, held, "REFUSED", mustAnswer, facts, input, null, [], "pacing", true, false, variants);
+    return finish(
+      previous,
+      held,
+      "REFUSED",
+      mustAnswer,
+      facts,
+      input,
+      null,
+      [],
+      "pacing",
+      true,
+      false,
+      variants,
+    );
   }
 
-  const lastUs = [...input.recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")?.body ?? "";
+  const lastUs =
+    [...input.recentMessages].reverse().find((message) => message.authorType !== "SUBSCRIBER")
+      ?.body ?? "";
   if (looksLikeWaitingForReveal(last)) {
     const variants = [
       ["ok", "i keep thinking about my mouth on u", "i shot something filthy earlier"].join("\n"),
@@ -1166,7 +1306,9 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
     ];
     return finish(
       previous,
-      goTo(nextBase, previous.unpaidProductId ? "FOLLOW_UP_PRODUCT" : "SEND_PRODUCT", { phase: "SELLING_SEQUENCE" }),
+      goTo(nextBase, previous.unpaidProductId ? "FOLLOW_UP_PRODUCT" : "SEND_PRODUCT", {
+        phase: "SELLING_SEQUENCE",
+      }),
       extraOnAnswer ? "ANSWERED_PLUS_EXTRA" : "ANSWERED",
       mustAnswer,
       facts,
@@ -1182,7 +1324,9 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
   if (looksLikeProveYourselfAsk(lastUs) && looksLikeAffirm(last)) {
     return finish(
       previous,
-      goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", { phase: "SELLING_SEQUENCE" }),
+      goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", {
+        phase: "SELLING_SEQUENCE",
+      }),
       "ANSWERED",
       mustAnswer,
       facts,
@@ -1198,7 +1342,9 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
   if (looksLikeSurrenderAsk(lastUs) && looksLikeAffirm(last)) {
     return finish(
       previous,
-      goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", { phase: "SELLING_SEQUENCE" }),
+      goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", {
+        phase: "SELLING_SEQUENCE",
+      }),
       "ANSWERED",
       mustAnswer,
       facts,
@@ -1214,7 +1360,10 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
 
   if (previous.step === "ASK_HOW_ARE_YOU" || previous.step === "ANSWER_HOW_ARE_YOU") {
     const askBack = looksLikeHowAreAsk(last);
-    if (previous.step === "ASK_HOW_ARE_YOU" && input.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").length === 0) {
+    if (
+      previous.step === "ASK_HOW_ARE_YOU" &&
+      input.recentMessages.filter((m) => m.authorType !== "SUBSCRIBER").length === 0
+    ) {
       if (mustAnswer) {
         return finish(
           previous,
@@ -1244,25 +1393,21 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         true,
         false,
         nextBase.fanType === "EXISTING"
-          ? [
-              ["hey", "how have you been"].join("\n"),
-              ["hey", "how u been"].join("\n"),
-            ]
+          ? [["hey", "how have you been"].join("\n"), ["hey", "how u been"].join("\n")]
           : [
               [`heyy ${firstName(input.subscriberName)}`, "how are you"].join("\n"),
               [`heyy ${firstName(input.subscriberName)}`, "hows it going"].join("\n"),
             ],
       );
     }
-    const answered = holdPending(goTo(nextBase, "ANSWER_HOW_ARE_YOU", {
-      phase: nextBase.fanType === "EXISTING" ? "EXISTING_FAN_INTAKE" : "NEW_FAN_INTAKE",
-    }));
+    const answered = holdPending(
+      goTo(nextBase, "ANSWER_HOW_ARE_YOU", {
+        phase: nextBase.fanType === "EXISTING" ? "EXISTING_FAN_INTAKE" : "NEW_FAN_INTAKE",
+      }),
+    );
     const answerVariants = askBack
       ? leadForMustAnswer("how-are-you", input, "ANSWER_HOW_ARE_YOU", answered, false)
-      : [
-          "heyy im good just relaxing a little",
-          "im good actually just taking it easy for a bit",
-        ];
+      : ["heyy im good just relaxing a little", "im good actually just taking it easy for a bit"];
     return finish(
       previous,
       answered,
@@ -1286,7 +1431,20 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
       joinBubbles(["hope you enjoyed that bundle", closer]),
       joinBubbles(["so did that bundle hit", closer]),
     ];
-    return finish(previous, next, "ANSWERED", mustAnswer, facts, input, closer, PERSONAL_PERMISSION_EXAMPLES, "welcome_bundle", true, false, variants);
+    return finish(
+      previous,
+      next,
+      "ANSWERED",
+      mustAnswer,
+      facts,
+      input,
+      closer,
+      PERSONAL_PERMISSION_EXAMPLES,
+      "welcome_bundle",
+      true,
+      false,
+      variants,
+    );
   }
 
   if (previous.step === "VIBE_CHECK") {
@@ -1335,10 +1493,10 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
               : next.step === "ASK_LOCATION"
                 ? [locationLine()]
                 : next.step === "ASK_PERSONAL_PERMISSION"
-              ? PERSONAL_PERMISSION_EXAMPLES
-              : next.step === "ASK_SUB_DOM"
-                ? [subDomQuestion(input)]
-                : [];
+                  ? PERSONAL_PERMISSION_EXAMPLES
+                  : next.step === "ASK_SUB_DOM"
+                    ? [subDomQuestion(input)]
+                    : [];
       return finish(
         previous,
         goTo(next, next.step, { resumeHoldTurns: 0 }),
@@ -1348,7 +1506,11 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         input,
         jerking ? dive : closerFor(next.step, next),
         quoted,
-        jerking ? "vibe_yes" : next.step === "ASK_AGE" ? "vibe_no" : beatIdFor(next.step, mustAnswer),
+        jerking
+          ? "vibe_yes"
+          : next.step === "ASK_AGE"
+            ? "vibe_no"
+            : beatIdFor(next.step, mustAnswer),
         true,
         false,
         variants,
@@ -1373,29 +1535,70 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
 
   if (previous.step === "ASK_AGE") {
     if (facts.extra.fan_age) {
-      const onward = nextBase.intake.location || nextBase.skipped?.location
-        ? goTo(nextBase, nextBase.intake.job || nextBase.skipped?.job ? afterIntake(nextBase).step : "ASK_JOB")
-        : goTo(nextBase, "ASK_LOCATION");
+      const onward =
+        nextBase.intake.location || nextBase.skipped?.location
+          ? goTo(
+              nextBase,
+              nextBase.intake.job || nextBase.skipped?.job ? afterIntake(nextBase).step : "ASK_JOB",
+            )
+          : goTo(nextBase, "ASK_LOCATION");
       const closer = closerFor(onward.step, onward);
       const variants = mustAnswer
         ? leadForMustAnswer(mustAnswer, input, onward.step, onward)
         : withCloser(["ok"], closer);
-      return finish(previous, onward, extraOnAnswer ? "ANSWERED_PLUS_EXTRA" : "ANSWERED", mustAnswer, facts, input, closer, [], mustAnswer ? beatIdFor(onward.step, mustAnswer) : "location", true, false, variants);
+      return finish(
+        previous,
+        onward,
+        extraOnAnswer ? "ANSWERED_PLUS_EXTRA" : "ANSWERED",
+        mustAnswer,
+        facts,
+        input,
+        closer,
+        [],
+        mustAnswer ? beatIdFor(onward.step, mustAnswer) : "location",
+        true,
+        false,
+        variants,
+      );
     }
     const recovered = recoverPastAsked(previous, nextBase, mustAnswer, input, last);
-    return finish(previous, recovered.next, "IGNORED", mustAnswer, facts, input, recovered.closer, [], recovered.beatId, recovered.skipPitch, false, recovered.variants);
+    return finish(
+      previous,
+      recovered.next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      recovered.closer,
+      [],
+      recovered.beatId,
+      recovered.skipPitch,
+      false,
+      recovered.variants,
+    );
   }
 
   if (previous.step === "ASK_LOCATION") {
     if (facts.location || facts.extra.fan_city) {
       const close = looksCloseToCreator(last, input.creatorCity ?? null);
       const react = close
-        ? ["oh thats interesting", "i dont talk to a lot of people that are pretty close to me"].join("\n")
-        : ["oh deal breaker, just kidding haha", "its cool were gonna still talk on here anyways"].join("\n");
+        ? [
+            "oh thats interesting",
+            "i dont talk to a lot of people that are pretty close to me",
+          ].join("\n")
+        : [
+            "oh deal breaker, just kidding haha",
+            "its cool were gonna still talk on here anyways",
+          ].join("\n");
       const onward =
-        !nextBase.intake.job && !nextBase.skipped?.job ? goTo(nextBase, "ASK_JOB") : afterIntake(nextBase);
+        !nextBase.intake.job && !nextBase.skipped?.job
+          ? goTo(nextBase, "ASK_JOB")
+          : afterIntake(nextBase);
       const closer = closerFor(onward.step, onward);
-      const herCity = mustAnswer === "creator-location" ? locationReplyVariants(input.creatorCity ?? null)[0] : null;
+      const herCity =
+        mustAnswer === "creator-location"
+          ? locationReplyVariants(input.creatorCity ?? null)[0]
+          : null;
       const variants = mustAnswer
         ? leadForMustAnswer(mustAnswer, input, onward.step, onward)
         : [joinBubbles([react, closer])];
@@ -1415,7 +1618,20 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
       );
     }
     const recovered = recoverPastAsked(previous, nextBase, mustAnswer, input, last);
-    return finish(previous, recovered.next, "IGNORED", mustAnswer, facts, input, recovered.closer, [], recovered.beatId, recovered.skipPitch, false, recovered.variants);
+    return finish(
+      previous,
+      recovered.next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      recovered.closer,
+      [],
+      recovered.beatId,
+      recovered.skipPitch,
+      false,
+      recovered.variants,
+    );
   }
 
   if (previous.step === "ASK_JOB") {
@@ -1426,7 +1642,9 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         : "thats fine, props to you for working anyways, its cool that you have a job afterall";
       const onward = afterIntake(nextBase);
       const closer = closerFor(onward.step, onward);
-      const permissionVariants = PERSONAL_PERMISSION_EXAMPLES.map((example) => joinBubbles([react, example]));
+      const permissionVariants = PERSONAL_PERMISSION_EXAMPLES.map((example) =>
+        joinBubbles([react, example]),
+      );
       return finish(
         previous,
         onward,
@@ -1443,7 +1661,20 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
       );
     }
     const recovered = recoverPastAsked(previous, nextBase, mustAnswer, input, last);
-    return finish(previous, recovered.next, "IGNORED", mustAnswer, facts, input, recovered.closer, [], recovered.beatId, recovered.skipPitch, false, recovered.variants);
+    return finish(
+      previous,
+      recovered.next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      recovered.closer,
+      [],
+      recovered.beatId,
+      recovered.skipPitch,
+      false,
+      recovered.variants,
+    );
   }
 
   if (previous.step === "ASK_PERSONAL_PERMISSION") {
@@ -1473,7 +1704,20 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
       );
     }
     const recovered = recoverPastAsked(previous, nextBase, mustAnswer, input, last);
-    return finish(previous, recovered.next, "IGNORED", mustAnswer, facts, input, recovered.closer, [], recovered.beatId, recovered.skipPitch, false, recovered.variants);
+    return finish(
+      previous,
+      recovered.next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      recovered.closer,
+      [],
+      recovered.beatId,
+      recovered.skipPitch,
+      false,
+      recovered.variants,
+    );
   }
 
   if (previous.step === "ASK_SUB_DOM") {
@@ -1482,23 +1726,66 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         "im kind of the same, but if you really were to decide",
         "what do you feel like being now, letting me take charge or you doing it?",
       ].join("\n");
-      return finish(previous, nextBase, "ANSWERED", mustAnswer, facts, input, line, [line], "switch_now", true, false, [line]);
+      return finish(
+        previous,
+        nextBase,
+        "ANSWERED",
+        mustAnswer,
+        facts,
+        input,
+        line,
+        [line],
+        "switch_now",
+        true,
+        false,
+        [line],
+      );
     }
     if (facts.dominance === "SUBMISSIVE") {
       const line = [
         "figured that a long time ago, it was just a matter of time till you were going to admit it",
         "ready to finally surrender to me now?",
       ].join("\n");
-      const next = goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", { phase: "SELLING_SEQUENCE" });
-      return finish(previous, next, "ANSWERED", mustAnswer, facts, input, null, [line], "sub_yes", false, false, [line]);
+      const next = goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", {
+        phase: "SELLING_SEQUENCE",
+      });
+      return finish(
+        previous,
+        next,
+        "ANSWERED",
+        mustAnswer,
+        facts,
+        input,
+        null,
+        [line],
+        "sub_yes",
+        false,
+        false,
+        [line],
+      );
     }
     if (facts.dominance === "DOMINANT") {
       const line = [
         "well in that case i just want to see if you can properly do it hehe",
         "so are you going to prove yourself now?",
       ].join("\n");
-      const next = goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", { phase: "SELLING_SEQUENCE" });
-      return finish(previous, next, "ANSWERED", mustAnswer, facts, input, null, [line], "dom_yes", false, false, [line]);
+      const next = goTo(nextBase, nextBase.welcomePurchased ? "WARMUP" : "SEND_PRODUCT", {
+        phase: "SELLING_SEQUENCE",
+      });
+      return finish(
+        previous,
+        next,
+        "ANSWERED",
+        mustAnswer,
+        facts,
+        input,
+        null,
+        [line],
+        "dom_yes",
+        false,
+        false,
+        [line],
+      );
     }
     if (!asked(OBJECTIVE_QUESTION_PATTERNS.SUB_DOM, input.recentMessages)) {
       const question = subDomQuestion({
@@ -1506,10 +1793,36 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         recentMessages: input.recentMessages,
         dominance: nextBase.dominance,
       });
-      return finish(previous, nextBase, deviation, mustAnswer, facts, input, question, [question], "subdom", true, false, [question]);
+      return finish(
+        previous,
+        nextBase,
+        deviation,
+        mustAnswer,
+        facts,
+        input,
+        question,
+        [question],
+        "subdom",
+        true,
+        false,
+        [question],
+      );
     }
     const recovered = recoverPastAsked(previous, nextBase, mustAnswer, input, last);
-    return finish(previous, recovered.next, "IGNORED", mustAnswer, facts, input, recovered.closer, [], recovered.beatId, recovered.skipPitch, false, recovered.variants);
+    return finish(
+      previous,
+      recovered.next,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      recovered.closer,
+      [],
+      recovered.beatId,
+      recovered.skipPitch,
+      false,
+      recovered.variants,
+    );
   }
 
   if (previous.step === "WARMUP") {
@@ -1519,18 +1832,44 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
         ? ["are you ready for me", ["soo", "are you ready for me"].join("\n")]
         : step === 1
           ? [
-              ["dont get too excited.. i havent done anything yet", "im just getting warmed up", "wait i shot something earlier"].join("\n"),
+              [
+                "dont get too excited.. i havent done anything yet",
+                "im just getting warmed up",
+                "wait i shot something earlier",
+              ].join("\n"),
             ]
           : step === 2
             ? ["this is gonna be fun"]
             : step === 3
               ? ["u have no idea"]
-              : [["one more before i send the real thing", "wait let me send u something"].join("\n")];
+              : [
+                  ["one more before i send the real thing", "wait let me send u something"].join(
+                    "\n",
+                  ),
+                ];
     const next =
       step >= 4
-        ? goTo({ ...nextBase, warmupStep: 5 }, nextBase.unpaidProductId && !nextBase.allowedSkipToNextProduct ? "FOLLOW_UP_PRODUCT" : "SEND_PRODUCT")
+        ? goTo(
+            { ...nextBase, warmupStep: 5 },
+            nextBase.unpaidProductId && !nextBase.allowedSkipToNextProduct
+              ? "FOLLOW_UP_PRODUCT"
+              : "SEND_PRODUCT",
+          )
         : goTo({ ...nextBase, warmupStep: step + 1 }, "WARMUP", { phase: "SELLING_SEQUENCE" });
-    return finish(previous, next, "ANSWERED", mustAnswer, facts, input, variants[0] ?? null, variants, `warmup_${step}`, step >= 4 ? false : true, false, variants);
+    return finish(
+      previous,
+      next,
+      "ANSWERED",
+      mustAnswer,
+      facts,
+      input,
+      variants[0] ?? null,
+      variants,
+      `warmup_${step}`,
+      step >= 4 ? false : true,
+      false,
+      variants,
+    );
   }
 
   if (previous.unpaidProductId && !previous.allowedSkipToNextProduct) {
@@ -1542,7 +1881,20 @@ export function advanceConversationFlow(input: FanIntakeInput): FlowTransition {
     const missing = missingIntakeStep(nextBase);
     const onward = missing ? goTo(nextBase, missing) : nextBase;
     const closer = closerFor(onward.step, onward);
-    return finish(previous, onward, "IGNORED", mustAnswer, facts, input, closer, [], beatIdFor(onward.step, mustAnswer), true, false, leadForMustAnswer(mustAnswer, input, onward.step, onward));
+    return finish(
+      previous,
+      onward,
+      "IGNORED",
+      mustAnswer,
+      facts,
+      input,
+      closer,
+      [],
+      beatIdFor(onward.step, mustAnswer),
+      true,
+      false,
+      leadForMustAnswer(mustAnswer, input, onward.step, onward),
+    );
   }
 
   return finish(previous, nextBase, deviation, null, facts, input, null, [], "flow", false);
@@ -1587,11 +1939,18 @@ function finish(
   const stripList = [
     ...sent,
     ...(holding && pending ? [pending] : []),
-    ...(resolvedNext.currentQuestion === "PERSONAL_PERMISSION" || resolvedNext.step === "ASK_PERSONAL_PERMISSION"
+    ...(resolvedNext.currentQuestion === "PERSONAL_PERMISSION" ||
+    resolvedNext.step === "ASK_PERSONAL_PERMISSION"
       ? (["SUB_DOM"] as FlowQuestion[])
       : []),
   ];
-  const resolved = variants ?? (mustAnswer ? leadForMustAnswer(mustAnswer, input, resolvedNext.step, resolvedNext, !holding) : closer && !holding ? [closer] : []);
+  const resolved =
+    variants ??
+    (mustAnswer
+      ? leadForMustAnswer(mustAnswer, input, resolvedNext.step, resolvedNext, !holding)
+      : closer && !holding
+        ? [closer]
+        : []);
   const cleanedVariants = resolved
     .map((text) => stripRepeatedObjectivesAndFiller(text, stripList))
     .filter(Boolean);
@@ -1615,20 +1974,27 @@ function finish(
   };
 }
 
-export function stripRepeatedObjectivesAndFiller(text: string, alreadySent: FlowQuestion[]): string {
+export function stripRepeatedObjectivesAndFiller(
+  text: string,
+  alreadySent: FlowQuestion[],
+): string {
   const bubbles = text
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
   const kept = bubbles.filter((bubble) => {
     if (looksLikeStandaloneFiller(bubble)) return false;
-    const objectives = FLOW_QUESTIONS.filter((question) => OBJECTIVE_QUESTION_PATTERNS[question].test(bubble));
+    const objectives = FLOW_QUESTIONS.filter((question) =>
+      OBJECTIVE_QUESTION_PATTERNS[question].test(bubble),
+    );
     if (objectives.some((objective) => alreadySent.includes(objective))) return false;
     return true;
   });
   const fallback = bubbles.filter((bubble) => {
     if (looksLikeStandaloneFiller(bubble)) return false;
-    const objectives = FLOW_QUESTIONS.filter((question) => OBJECTIVE_QUESTION_PATTERNS[question].test(bubble));
+    const objectives = FLOW_QUESTIONS.filter((question) =>
+      OBJECTIVE_QUESTION_PATTERNS[question].test(bubble),
+    );
     return !objectives.length;
   });
   return (kept.length ? kept : fallback).join("\n");
@@ -1637,7 +2003,11 @@ export function stripRepeatedObjectivesAndFiller(text: string, alreadySent: Flow
 export function inferFanIntake(input: FanIntakeInput, _skipPacing = false): FanIntakeBeat | null {
   const transition = advanceConversationFlow(input);
   if (!transition.variants.length) return null;
-  if (transition.next.phase === "SELLING_SEQUENCE" && transition.beatId === "flow" && !transition.mustAnswer) {
+  if (
+    transition.next.phase === "SELLING_SEQUENCE" &&
+    transition.beatId === "flow" &&
+    !transition.mustAnswer
+  ) {
     return null;
   }
   return {
@@ -1657,6 +2027,10 @@ export function fillFanFlow(template: string, vars: FanIntakeVars): string {
 export function logFlowDebug(payload: Record<string, unknown>): void {
   const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   const env = proc?.env ?? {};
-  if (env.NODE_ENV === "production" || (env.NODE_ENV !== "development" && env.CANOPY_FLOW_LOG !== "1")) return;
+  if (
+    env.NODE_ENV === "production" ||
+    (env.NODE_ENV !== "development" && env.CANOPY_FLOW_LOG !== "1")
+  )
+    return;
   console.info("[canopy-flow]", JSON.stringify(payload));
 }

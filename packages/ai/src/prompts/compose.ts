@@ -107,9 +107,11 @@ function modeBlock(input: GenerationInput): string {
 function salesBlock(input: GenerationInput): string[] {
   const mode = input.responseMode ?? "NATURAL";
   const readiness = input.salesReadiness ?? "CONNECTING";
-  const allowPitch = readiness === "BUYING_SIGNAL" || readiness === "ACTIVE_SALE" || mode === "SALES";
+  const allowPitch =
+    readiness === "BUYING_SIGNAL" || readiness === "ACTIVE_SALE" || mode === "SALES";
   const allowPrice = allowPitch;
-  const teaseOnly = mode === "EXPLICIT" && (readiness === "SEXUAL_MOMENTUM" || readiness === "FLIRTING");
+  const teaseOnly =
+    mode === "EXPLICIT" && (readiness === "SEXUAL_MOMENTUM" || readiness === "FLIRTING");
   const parts: string[] = [];
   if (allowPitch && input.sellTarget) {
     parts.push(
@@ -124,7 +126,9 @@ function salesBlock(input: GenerationInput): string[] {
     parts.push(
       `<pricing_policy>Send eligible PPVs at list first. First PPV ≤ $10 never discounted. Later PPVs stay at list while he talks; discount only after silence. Never invent a discount or go below the floor.</pricing_policy>`,
     );
-    parts.push(`<pricing_state>${JSON.stringify(input.pricing ?? { concessionAllowed: false, lastOffer: null, ladder: [] })}</pricing_state>`);
+    parts.push(
+      `<pricing_state>${JSON.stringify(input.pricing ?? { concessionAllowed: false, lastOffer: null, ladder: [] })}</pricing_state>`,
+    );
   }
   if (allowPitch && input.activeSequence) {
     parts.push(`<active_sequence>${JSON.stringify(input.activeSequence)}</active_sequence>`);
@@ -133,10 +137,14 @@ function salesBlock(input: GenerationInput): string[] {
     parts.push(`<valid_products>${JSON.stringify(input.products)}</valid_products>`);
   }
   if (input.followUpPhase === "FOLLOW_UP" && allowPitch) {
-    parts.push("<follow_up>Unpaid PPV still at list. Nudge the paid drop without saying unlock the video.</follow_up>");
+    parts.push(
+      "<follow_up>Unpaid PPV still at list. Nudge the paid drop without saying unlock the video.</follow_up>",
+    );
   }
   if (readiness === "AFTERCARE") {
-    parts.push("<aftercare>He purchased or finished a sequence. Be warm. Do not immediately force another sale.</aftercare>");
+    parts.push(
+      "<aftercare>He purchased or finished a sequence. Be warm. Do not immediately force another sale.</aftercare>",
+    );
   }
   return parts;
 }
@@ -199,7 +207,9 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
       : "",
     `<subscriber_memory>${JSON.stringify(input.memories)}</subscriber_memory>`,
     `<rolling_summary>${input.summary ?? "none"}</rolling_summary>`,
-    alreadySent.length ? `<already_sent>Do not repeat these creator lines:\n${alreadySent.join("\n")}</already_sent>` : "",
+    alreadySent.length
+      ? `<already_sent>Do not repeat these creator lines:\n${alreadySent.join("\n")}</already_sent>`
+      : "",
     input.threadLessons?.length
       ? `<thread_lessons>HARD bans from THIS thread:\n${input.threadLessons.join("\n")}</thread_lessons>`
       : "",
@@ -220,11 +230,17 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
     { role: "system", content: `${system}\n${legalBlock()}` },
     { role: "user", content: user },
     ...input.recentMessages
-      .filter((m) => m.authorType === "SUBSCRIBER" || m.authorType === "CHATTER" || m.authorType === "CREATOR")
+      .filter(
+        (m) =>
+          m.authorType === "SUBSCRIBER" || m.authorType === "CHATTER" || m.authorType === "CREATOR",
+      )
       .map((m): OpenAI.Chat.ChatCompletionMessageParam => ({
         role: m.authorType === "SUBSCRIBER" ? "user" : "assistant",
         content: m.body,
       })),
-    { role: "user", content: `Generation instruction (not a fan message): produce the required JSON reply to ONLY the pending fan turn ${JSON.stringify(input.latestFanTurn ?? input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "")}. Do not respond to your own assistant messages or infer that the fan said them.` },
+    {
+      role: "user",
+      content: `Generation instruction (not a fan message): produce the required JSON reply to ONLY the pending fan turn ${JSON.stringify(input.latestFanTurn ?? input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "")}. Do not respond to your own assistant messages or infer that the fan said them.`,
+    },
   ];
 }

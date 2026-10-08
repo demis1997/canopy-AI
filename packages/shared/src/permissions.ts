@@ -66,12 +66,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversations.generate",
     "conversations.escalate",
   ],
-  CREATOR: [
-    "creators.edit_own_persona",
-    "products.manage",
-    "conversations.view",
-    "analytics.view",
-  ],
+  CREATOR: ["creators.edit_own_persona", "products.manage", "conversations.view", "analytics.view"],
 };
 
 export function hasPermission(role: Role, permission: Permission): boolean {

@@ -2,7 +2,7 @@
   "name": "canopy",
   "private": true,
   "version": "0.1.0",
-  "description": "Canopy — multi-tenant AI chatting and sales copilot for adult-content creators and agencies.",
+  "description": "Canopy \u2014 multi-tenant AI chatting and sales copilot for adult-content creators and agencies.",
   "packageManager": "pnpm@9.4.0",
   "scripts": {
     "dev": "pnpm --filter @canopy/web dev",
@@ -18,6 +18,20 @@
     "platform:mock-demo": "pnpm --filter @canopy/web platform:mock-demo",
     "platform:validate-selectors": "pnpm --filter @canopy/web platform:validate-selectors",
     "eval": "pnpm --filter @canopy/ai eval",
-    "lint": "pnpm -r --if-present lint"
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm db:generate && pnpm -r --if-present typecheck",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
+    "test:e2e": "pnpm --filter @canopy/web test:e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "typescript-eslint": "^8.71.1"
+  },
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0"
   }
 }

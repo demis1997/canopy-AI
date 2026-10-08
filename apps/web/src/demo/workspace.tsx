@@ -37,7 +37,6 @@ import type {
   DemoMemory,
   DemoMessage,
   DemoProduct,
-  DemoSubscriber,
   DemoSuggestion,
   DemoVaultItem,
 } from "./types";
@@ -47,13 +46,19 @@ const FILTERS = ["All", "Unread", "High value", "Follow-up", "Escalated"] as con
 const INTEL_TABS = ["AI Copilot", "Subscriber", "Products", "Vault", "Activity", "Debug"] as const;
 
 function cloneConvos() {
-  return demoConversations.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, attachments: [...m.attachments] })), tags: [...c.tags] }));
+  return demoConversations.map((c) => ({
+    ...c,
+    messages: c.messages.map((m) => ({ ...m, attachments: [...m.attachments] })),
+    tags: [...c.tags],
+  }));
 }
 
 export function DemoWorkspace() {
   const [creatorId, setCreatorId] = useState("creator_maya");
   const [conversations, setConversations] = useState(cloneConvos);
-  const [subscribers, setSubscribers] = useState(() => demoSubscribers.map((s) => ({ ...s, memories: [...s.memories] })));
+  const [subscribers, setSubscribers] = useState(() =>
+    demoSubscribers.map((s) => ({ ...s, memories: [...s.memories] })),
+  );
   const [products, setProducts] = useState(demoProducts);
   const [vault] = useState(demoVault);
   const [activeId, setActiveId] = useState("conv_alex");
@@ -66,7 +71,7 @@ export function DemoWorkspace() {
   const [paid, setPaid] = useState(false);
   const [price, setPrice] = useState<number | "">("");
   const [attached, setAttached] = useState<DemoAttachment[]>([]);
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [, setPreviewId] = useState<string | null>(null);
   const [productId, setProductId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DemoSuggestion[]>([]);
   const [sugIndex, setSugIndex] = useState(0);
@@ -85,7 +90,10 @@ export function DemoWorkspace() {
   const [demoStep, setDemoStep] = useState(0);
   const [tip, setTip] = useState("");
   const [note, setNote] = useState("");
-  const [saved, setSaved] = useState(["mmm you caught me between sets", "that's $25 if you actually want it"]);
+  const [saved, setSaved] = useState([
+    "mmm you caught me between sets",
+    "that's $25 if you actually want it",
+  ]);
 
   const creator = demoCreators.find((c) => c.id === creatorId)!;
   const convo = conversations.find((c) => c.id === activeId)!;
@@ -96,14 +104,22 @@ export function DemoWorkspace() {
       .filter((c) => c.creatorId === creatorId)
       .filter((c) => {
         const s = subscribers.find((x) => x.id === c.subscriberId)!;
-        if (query && !`${s.displayName} ${s.username} ${c.lastMessage}`.toLowerCase().includes(query.toLowerCase())) return false;
+        if (
+          query &&
+          !`${s.displayName} ${s.username} ${c.lastMessage}`
+            .toLowerCase()
+            .includes(query.toLowerCase())
+        )
+          return false;
         if (filter === "Unread") return c.unreadCount > 0;
         if (filter === "High value") return c.highValue;
         if (filter === "Follow-up") return c.followUp;
         if (filter === "Escalated") return c.escalated;
         return true;
       })
-      .sort((a, b) => (sort === "spend" ? b.spend - a.spend : b.lastMessageAt.localeCompare(a.lastMessageAt)));
+      .sort((a, b) =>
+        sort === "spend" ? b.spend - a.spend : b.lastMessageAt.localeCompare(a.lastMessageAt),
+      );
   }, [conversations, creatorId, filter, query, sort, subscribers]);
 
   const creatorProducts = products.filter((p) => p.creatorId === creatorId);
@@ -113,9 +129,14 @@ export function DemoWorkspace() {
     purchasedProductIds: sub.purchasedProductIds,
   });
 
-  const updateConvo = (id: string, patch: Partial<DemoConversation> | ((c: DemoConversation) => DemoConversation)) => {
+  const updateConvo = (
+    id: string,
+    patch: Partial<DemoConversation> | ((c: DemoConversation) => DemoConversation),
+  ) => {
     setConversations((rows) =>
-      rows.map((c) => (c.id !== id ? c : typeof patch === "function" ? patch(c) : { ...c, ...patch })),
+      rows.map((c) =>
+        c.id !== id ? c : typeof patch === "function" ? patch(c) : { ...c, ...patch },
+      ),
     );
   };
 
@@ -143,7 +164,8 @@ export function DemoWorkspace() {
       }
       setGenerating(true);
       setTab("AI Copilot");
-      const last = [...convo.messages].reverse().find((m) => m.authorType === "SUBSCRIBER")?.body ?? "";
+      const last =
+        [...convo.messages].reverse().find((m) => m.authorType === "SUBSCRIBER")?.body ?? "";
       const res = await fetch("/api/demo/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -229,14 +251,23 @@ export function DemoWorkspace() {
   }
 
   function attachProduct(p: DemoProduct, asPaid: boolean, offerPrice?: number) {
-    const item = vault.find((v) => v.productId === p.id && v.placeholderKind !== "FREE_PREVIEW") ?? vault.find((v) => v.id === p.mediaIds[0]);
+    const item =
+      vault.find((v) => v.productId === p.id && v.placeholderKind !== "FREE_PREVIEW") ??
+      vault.find((v) => v.id === p.mediaIds[0]);
     const preview = vault.find((v) => p.previewIds.includes(v.id));
     setProductId(p.id);
     setPaid(asPaid);
-    setPrice(asPaid ? offerPrice ?? p.standardPrice : 0);
+    setPrice(asPaid ? (offerPrice ?? p.standardPrice) : 0);
     const atts: DemoAttachment[] = [];
     if (preview) {
-      atts.push({ id: preview.id, kind: "FREE_PREVIEW", label: "Free preview", paid: false, purchased: true, preview: true });
+      atts.push({
+        id: preview.id,
+        kind: "FREE_PREVIEW",
+        label: "Free preview",
+        paid: false,
+        purchased: true,
+        preview: true,
+      });
       setPreviewId(preview.id);
     }
     if (item) {
@@ -246,7 +277,7 @@ export function DemoWorkspace() {
         label: item.title,
         paid: asPaid,
         purchased: false,
-        price: asPaid ? offerPrice ?? p.standardPrice : undefined,
+        price: asPaid ? (offerPrice ?? p.standardPrice) : undefined,
       });
     }
     setAttached(atts);
@@ -316,11 +347,13 @@ export function DemoWorkspace() {
           ...c,
           spend: c.spend + sentPrice,
           funnelStage: "PURCHASE",
-          messages: c.messages.map((m) =>
-            m.id === message.id
-              ? { ...m, attachments: m.attachments.map((a) => ({ ...a, purchased: true })) }
-              : m,
-          ).concat(sys),
+          messages: c.messages
+            .map((m) =>
+              m.id === message.id
+                ? { ...m, attachments: m.attachments.map((a) => ({ ...a, purchased: true })) }
+                : m,
+            )
+            .concat(sys),
         }));
         setSubscribers((rows) =>
           rows.map((s) =>
@@ -337,7 +370,11 @@ export function DemoWorkspace() {
         setProducts((rows) =>
           rows.map((p) =>
             p.id === sentProductId
-              ? { ...p, timesSold: p.timesSold + 1, conversionRate: Math.min(0.99, p.conversionRate + 0.02) }
+              ? {
+                  ...p,
+                  timesSold: p.timesSold + 1,
+                  conversionRate: Math.min(0.99, p.conversionRate + 0.02),
+                }
               : p,
           ),
         );
@@ -369,7 +406,9 @@ export function DemoWorkspace() {
     <div className="demo-shell flex h-screen flex-col bg-[#f3f5f7] text-slate-800">
       <header className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">C</div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-500 text-xs font-bold text-white">
+            C
+          </div>
           <span className="text-sm font-semibold tracking-tight">Canopy</span>
           <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 ring-1 ring-teal-200">
             Demo environment
@@ -382,10 +421,16 @@ export function DemoWorkspace() {
           >
             <Play size={12} /> Run demo
           </button>
-          <Link className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100" href="/demo/products">
+          <Link
+            className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100"
+            href="/demo/products"
+          >
             Products
           </Link>
-          <Link className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100" href="/demo/automations/welcome-message">
+          <Link
+            className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100"
+            href="/demo/automations/welcome-message"
+          >
             Welcome
           </Link>
           <Link className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100" href="/login">
@@ -402,7 +447,9 @@ export function DemoWorkspace() {
       <div className="flex min-h-0 flex-1">
         <aside className="flex w-[300px] shrink-0 flex-col border-r border-slate-200 bg-white">
           <div className="border-b border-slate-100 p-3">
-            <label className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Creator</label>
+            <label className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+              Creator
+            </label>
             <select
               className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm"
               value={creatorId}
@@ -467,17 +514,30 @@ export function DemoWorkspace() {
                     <div className="flex items-center justify-between gap-1">
                       <span className="truncate text-sm font-medium">{s.displayName}</span>
                       <span className="text-[10px] text-slate-400">
-                        {new Date(c.lastMessageAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(c.lastMessageAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
                     </div>
                     <div className="truncate text-[11px] text-slate-400">@{s.username}</div>
                     <div className="truncate text-xs text-slate-500">{c.lastMessage}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      <span className="rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">${c.spend}</span>
-                      <span className="rounded bg-teal-50 px-1.5 text-[10px] text-teal-700">{c.funnelStage}</span>
-                      {c.escalated ? <span className="rounded bg-red-50 px-1.5 text-[10px] text-red-600">Escalated</span> : null}
+                      <span className="rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">
+                        ${c.spend}
+                      </span>
+                      <span className="rounded bg-teal-50 px-1.5 text-[10px] text-teal-700">
+                        {c.funnelStage}
+                      </span>
+                      {c.escalated ? (
+                        <span className="rounded bg-red-50 px-1.5 text-[10px] text-red-600">
+                          Escalated
+                        </span>
+                      ) : null}
                       {c.unreadCount ? (
-                        <span className="rounded-full bg-teal-600 px-1.5 text-[10px] text-white">{c.unreadCount}</span>
+                        <span className="rounded-full bg-teal-600 px-1.5 text-[10px] text-white">
+                          {c.unreadCount}
+                        </span>
                       ) : null}
                     </div>
                   </div>
@@ -493,14 +553,19 @@ export function DemoWorkspace() {
               <Avatar initials={sub.initials} hue={sub.hue} online={convo.online} size={40} />
               <div>
                 <div className="text-sm font-semibold">
-                  {sub.displayName} <span className="font-normal text-slate-400">@{sub.username}</span>
+                  {sub.displayName}{" "}
+                  <span className="font-normal text-slate-400">@{sub.username}</span>
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  {convo.online ? "Online" : "Offline"} · ${sub.spend} spent · subscribed {sub.subscribedAt} · {creator.displayName} · {convo.assignedChatter}
+                  {convo.online ? "Online" : "Offline"} · ${sub.spend} spent · subscribed{" "}
+                  {sub.subscribedAt} · {creator.displayName} · {convo.assignedChatter}
                 </div>
                 <div className="mt-1 flex gap-1">
                   {convo.tags.map((t) => (
-                    <span key={t} className="rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">
+                    <span
+                      key={t}
+                      className="rounded bg-slate-100 px-1.5 text-[10px] text-slate-600"
+                    >
                       {t}
                     </span>
                   ))}
@@ -508,18 +573,28 @@ export function DemoWorkspace() {
               </div>
             </div>
             <div className="relative">
-              <button className="rounded-md p-2 hover:bg-slate-100" onClick={() => setDrawer(drawer === "more" ? null : "more")}>
+              <button
+                className="rounded-md p-2 hover:bg-slate-100"
+                onClick={() => setDrawer(drawer === "more" ? null : "more")}
+              >
                 <MoreHorizontal size={18} />
               </button>
               {drawer === "more" ? (
                 <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
                   {[
                     ["Add note", () => setNote(sub.notes || "Follow up tomorrow.")],
-                    ["Add tag", () => updateConvo(activeId, { tags: [...new Set([...convo.tags, "priority"])] })],
+                    [
+                      "Add tag",
+                      () =>
+                        updateConvo(activeId, { tags: [...new Set([...convo.tags, "priority"])] }),
+                    ],
                     ["Mark follow-up", () => updateConvo(activeId, { followUp: true })],
                     ["Escalate", () => updateConvo(activeId, { escalated: true })],
                     ["View subscriber profile", () => setTab("Subscriber")],
-                    [convo.mutedAi ? "Unmute AI" : "Mute AI suggestions", () => updateConvo(activeId, { mutedAi: !convo.mutedAi })],
+                    [
+                      convo.mutedAi ? "Unmute AI" : "Mute AI suggestions",
+                      () => updateConvo(activeId, { mutedAi: !convo.mutedAi }),
+                    ],
                   ].map(([label, fn]) => (
                     <button
                       key={String(label)}
@@ -563,7 +638,14 @@ export function DemoWorkspace() {
                 setPreviewId(item.id);
                 setAttached((a) => [
                   ...a.filter((x) => x.kind !== "FREE_PREVIEW"),
-                  { id: item.id, kind: "FREE_PREVIEW", label: "Free preview", paid: false, purchased: true, preview: true },
+                  {
+                    id: item.id,
+                    kind: "FREE_PREVIEW",
+                    label: "Free preview",
+                    paid: false,
+                    purchased: true,
+                    preview: true,
+                  },
                 ]);
               }}
               onCreateProduct={(item) => {
@@ -605,7 +687,10 @@ export function DemoWorkspace() {
             {attached.length ? (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attached.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2 rounded-md border border-slate-200 p-1 pr-2 text-[11px]">
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-2 rounded-md border border-slate-200 p-1 pr-2 text-[11px]"
+                  >
                     <MediaThumb kind={a.kind} compact />
                     {a.label}
                     {a.paid ? ` · $${a.price}` : " · free"}
@@ -651,7 +736,16 @@ export function DemoWorkspace() {
               <IconBtn
                 title="Add voice note"
                 onClick={() =>
-                  setAttached((a) => [...a, { id: "voice_new", kind: "VOICE_NOTE", label: "Voice note", paid: false, purchased: true }])
+                  setAttached((a) => [
+                    ...a,
+                    {
+                      id: "voice_new",
+                      kind: "VOICE_NOTE",
+                      label: "Voice note",
+                      paid: false,
+                      purchased: true,
+                    },
+                  ])
                 }
               >
                 <Mic size={16} />
@@ -659,25 +753,40 @@ export function DemoWorkspace() {
               <IconBtn title="Add product" onClick={() => setTab("Products")}>
                 <Tag size={16} />
               </IconBtn>
-              <IconBtn title="Set price" onClick={() => setDrawer(drawer === "price" ? null : "price")}>
+              <IconBtn
+                title="Set price"
+                onClick={() => setDrawer(drawer === "price" ? null : "price")}
+              >
                 <DollarSign size={16} />
               </IconBtn>
               <IconBtn
                 title="Add free preview"
                 onClick={() => {
-                  const prev = vault.find((v) => v.creatorId === creatorId && v.placeholderKind === "FREE_PREVIEW");
+                  const prev = vault.find(
+                    (v) => v.creatorId === creatorId && v.placeholderKind === "FREE_PREVIEW",
+                  );
                   if (prev) {
                     setPreviewId(prev.id);
                     setAttached((a) => [
                       ...a.filter((x) => x.kind !== "FREE_PREVIEW"),
-                      { id: prev.id, kind: "FREE_PREVIEW", label: "Free preview", paid: false, purchased: true, preview: true },
+                      {
+                        id: prev.id,
+                        kind: "FREE_PREVIEW",
+                        label: "Free preview",
+                        paid: false,
+                        purchased: true,
+                        preview: true,
+                      },
                     ]);
                   }
                 }}
               >
                 <Eye size={16} />
               </IconBtn>
-              <IconBtn title="Saved responses" onClick={() => setDrawer(drawer === "saved" ? null : "saved")}>
+              <IconBtn
+                title="Saved responses"
+                onClick={() => setDrawer(drawer === "saved" ? null : "saved")}
+              >
                 <Bookmark size={16} />
               </IconBtn>
               <button
@@ -688,7 +797,11 @@ export function DemoWorkspace() {
                 <Sparkles size={14} /> {generating ? "Generating…" : "Generate with Canopy"}
               </button>
               <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500">
-                <input type="checkbox" checked={enterToSend} onChange={(e) => setEnterToSend(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={enterToSend}
+                  onChange={(e) => setEnterToSend(e.target.checked)}
+                />
                 Enter to send
               </label>
               <button
@@ -710,7 +823,11 @@ export function DemoWorkspace() {
             {drawer === "saved" ? (
               <div className="mt-2 space-y-1">
                 {savedResponses.map((s) => (
-                  <button key={s} className="block w-full rounded-md bg-slate-50 px-2 py-1 text-left text-xs" onClick={() => setDraft(s)}>
+                  <button
+                    key={s}
+                    className="block w-full rounded-md bg-slate-50 px-2 py-1 text-left text-xs"
+                    onClick={() => setDraft(s)}
+                  >
                     {s}
                   </button>
                 ))}
@@ -728,7 +845,11 @@ export function DemoWorkspace() {
               <div className="mt-2 flex items-center gap-2 text-xs">
                 <label className="flex items-center gap-1">
                   Paid
-                  <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={paid}
+                    onChange={(e) => setPaid(e.target.checked)}
+                  />
                 </label>
                 <input
                   type="number"
@@ -770,18 +891,28 @@ export function DemoWorkspace() {
                 <Row k="Intent" v={intent} />
                 <Row k="Funnel" v={convo.funnelStage} />
                 <Row k="Next action" v={action} />
-                  <Row k="Prompt" v="canopy-copilot-v27" />
+                <Row k="Prompt" v="canopy-copilot-v27" />
                 <Row k="Model" v="Demo model" />
                 <p className="text-xs text-slate-500">{convo.summary}</p>
-                {risk.length ? <p className="text-xs text-amber-700">Flags: {risk.join(", ")}</p> : null}
+                {risk.length ? (
+                  <p className="text-xs text-amber-700">Flags: {risk.join(", ")}</p>
+                ) : null}
                 <div className="flex gap-1">
-                  <button className="rounded bg-slate-100 px-2 py-1 text-xs" onClick={() => void generate()}>
+                  <button
+                    className="rounded bg-slate-100 px-2 py-1 text-xs"
+                    onClick={() => void generate()}
+                  >
                     Regenerate
                   </button>
                 </div>
-                {generating ? <p className="text-xs text-teal-700">Demo AI response · generating…</p> : null}
+                {generating ? (
+                  <p className="text-xs text-teal-700">Demo AI response · generating…</p>
+                ) : null}
                 {suggestions.map((s, i) => (
-                  <div key={s.id} className={`rounded-lg border p-2 ${i === sugIndex ? "border-teal-400" : "border-slate-200"}`}>
+                  <div
+                    key={s.id}
+                    className={`rounded-lg border p-2 ${i === sugIndex ? "border-teal-400" : "border-slate-200"}`}
+                  >
                     <div className="mb-1 flex justify-between text-[10px] uppercase text-slate-400">
                       <span>{s.tone}</span>
                       <span>Demo AI response</span>
@@ -825,8 +956,22 @@ export function DemoWorkspace() {
                 <Row k="Interests" v={sub.interests.join(", ") || "—"} />
                 <Row k="Boundaries" v={sub.boundaries.join(", ") || "—"} />
                 <Row k="Objections" v={sub.objections.join(", ") || "—"} />
-                <Row k="Purchased" v={sub.purchasedProductIds.map((id) => products.find((p) => p.id === id)?.name).join(", ") || "—"} />
-                <Row k="Offered" v={sub.offeredProductIds.map((id) => products.find((p) => p.id === id)?.name).join(", ") || "—"} />
+                <Row
+                  k="Purchased"
+                  v={
+                    sub.purchasedProductIds
+                      .map((id) => products.find((p) => p.id === id)?.name)
+                      .join(", ") || "—"
+                  }
+                />
+                <Row
+                  k="Offered"
+                  v={
+                    sub.offeredProductIds
+                      .map((id) => products.find((p) => p.id === id)?.name)
+                      .join(", ") || "—"
+                  }
+                />
                 <Row k="Follow-up" v={sub.followUpAt ?? "—"} />
                 <p className="text-xs text-slate-500">{note || sub.notes}</p>
                 <div className="pt-2 text-xs font-medium">Memories</div>
@@ -837,13 +982,19 @@ export function DemoWorkspace() {
                     onChange={(next) =>
                       setSubscribers((rows) =>
                         rows.map((s) =>
-                          s.id === sub.id ? { ...s, memories: s.memories.map((x) => (x.id === m.id ? next : x)) } : s,
+                          s.id === sub.id
+                            ? { ...s, memories: s.memories.map((x) => (x.id === m.id ? next : x)) }
+                            : s,
                         ),
                       )
                     }
                     onDelete={() =>
                       setSubscribers((rows) =>
-                        rows.map((s) => (s.id === sub.id ? { ...s, memories: s.memories.filter((x) => x.id !== m.id) } : s)),
+                        rows.map((s) =>
+                          s.id === sub.id
+                            ? { ...s, memories: s.memories.filter((x) => x.id !== m.id) }
+                            : s,
+                        ),
                       )
                     }
                   />
@@ -854,29 +1005,62 @@ export function DemoWorkspace() {
             {tab === "Products" ? (
               <div>
                 <div className="mb-2 flex flex-wrap gap-1">
-                  {["ALL", "PHOTO", "VIDEO", "AUDIO", "BUNDLE", "CUSTOM", "Purchased", "Not purchased", "Recommended"].map((f) => (
+                  {[
+                    "ALL",
+                    "PHOTO",
+                    "VIDEO",
+                    "AUDIO",
+                    "BUNDLE",
+                    "CUSTOM",
+                    "Purchased",
+                    "Not purchased",
+                    "Recommended",
+                  ].map((f) => (
                     <button
                       key={f}
                       className={`rounded-full px-2 py-0.5 text-[10px] ${productFilter === f ? "bg-teal-600 text-white" : "bg-slate-100"}`}
                       onClick={() => setProductFilter(f)}
                     >
-                      {f === "PHOTO" ? "Photos" : f === "VIDEO" ? "Videos" : f === "AUDIO" ? "Voice" : f === "BUNDLE" ? "Bundles" : f}
+                      {f === "PHOTO"
+                        ? "Photos"
+                        : f === "VIDEO"
+                          ? "Videos"
+                          : f === "AUDIO"
+                            ? "Voice"
+                            : f === "BUNDLE"
+                              ? "Bundles"
+                              : f}
                     </button>
                   ))}
                 </div>
                 <div className="space-y-2">
                   {creatorProducts
                     .filter((p) => {
-                      if (productFilter === "Purchased") return sub.purchasedProductIds.includes(p.id);
-                      if (productFilter === "Not purchased") return !sub.purchasedProductIds.includes(p.id);
-                      if (productFilter === "Recommended") return eligible.eligible.some((e) => e.id === p.id);
-                      if (["PHOTO", "VIDEO", "AUDIO", "BUNDLE", "CUSTOM"].includes(productFilter)) return p.mediaType === productFilter;
+                      if (productFilter === "Purchased")
+                        return sub.purchasedProductIds.includes(p.id);
+                      if (productFilter === "Not purchased")
+                        return !sub.purchasedProductIds.includes(p.id);
+                      if (productFilter === "Recommended")
+                        return eligible.eligible.some((e) => e.id === p.id);
+                      if (["PHOTO", "VIDEO", "AUDIO", "BUNDLE", "CUSTOM"].includes(productFilter))
+                        return p.mediaType === productFilter;
                       return true;
                     })
                     .map((p) => (
                       <div key={p.id} className="rounded-lg border border-slate-200 p-2">
                         <div className="flex gap-2">
-                          <MediaThumb kind={p.mediaType === "AUDIO" ? "VOICE_NOTE" : p.mediaType === "BUNDLE" ? "PREMIUM_BUNDLE" : p.mediaType === "VIDEO" ? "SHORT_VIDEO" : "PHOTO_SET"} compact />
+                          <MediaThumb
+                            kind={
+                              p.mediaType === "AUDIO"
+                                ? "VOICE_NOTE"
+                                : p.mediaType === "BUNDLE"
+                                  ? "PREMIUM_BUNDLE"
+                                  : p.mediaType === "VIDEO"
+                                    ? "SHORT_VIDEO"
+                                    : "PHOTO_SET"
+                            }
+                            compact
+                          />
                           <div className="min-w-0">
                             <div className="font-medium">{p.name}</div>
                             <div className="text-[11px] text-slate-500">
@@ -884,8 +1068,9 @@ export function DemoWorkspace() {
                               {p.bundlePrice ? ` · bundle $${p.bundlePrice}` : ""}
                             </div>
                             <div className="text-[10px] text-slate-400">
-                              {p.tags.join(" · ")} · {p.available ? "available" : "off"} · sold {p.timesSold} ·{" "}
-                              {Math.round(p.conversionRate * 100)}% · {p.source} · synced {p.lastSyncedAt.slice(0, 10)}
+                              {p.tags.join(" · ")} · {p.available ? "available" : "off"} · sold{" "}
+                              {p.timesSold} · {Math.round(p.conversionRate * 100)}% · {p.source} ·
+                              synced {p.lastSyncedAt.slice(0, 10)}
                             </div>
                             <div className="mt-1 flex gap-1">
                               <Mini onClick={() => attachProduct(p, true)}>Add paid</Mini>
@@ -921,7 +1106,14 @@ export function DemoWorkspace() {
                   setPreviewId(item.id);
                   setAttached((a) => [
                     ...a.filter((x) => x.kind !== "FREE_PREVIEW"),
-                    { id: item.id, kind: "FREE_PREVIEW", label: "Free preview", paid: false, purchased: true, preview: true },
+                    {
+                      id: item.id,
+                      kind: "FREE_PREVIEW",
+                      label: "Free preview",
+                      paid: false,
+                      purchased: true,
+                      preview: true,
+                    },
                   ]);
                 }}
                 onCreateProduct={(item) => {
@@ -976,11 +1168,20 @@ export function DemoWorkspace() {
                 <li>Intent classification → {lineage?.intent || intent}</li>
                 <li>Funnel stage → {lineage?.funnelStage || convo.funnelStage}</li>
                 <li>Database product query → {lineage?.productQuery || "not run"}</li>
-                <li>Eligible products → {(lineage?.eligibleProductIds ?? eligible.eligible.map((p) => p.id)).join(", ") || "none"}</li>
-                <li>Retrieved training → {(lineage?.retrievedExamples ?? []).join(" | ") || "—"}</li>
+                <li>
+                  Eligible products →{" "}
+                  {(lineage?.eligibleProductIds ?? eligible.eligible.map((p) => p.id)).join(", ") ||
+                    "none"}
+                </li>
+                <li>
+                  Retrieved training → {(lineage?.retrievedExamples ?? []).join(" | ") || "—"}
+                </li>
                 <li>Venice/demo model → {lineage?.model || "Demo model"}</li>
                 <li>Backend validation → {(lineage?.validation ?? []).join(", ")}</li>
-                <li>Chatter approval → {lineage?.chatterApproval || "not sent"} · {lineage?.chatterIdentity || DEMO_CHATTER}</li>
+                <li>
+                  Chatter approval → {lineage?.chatterApproval || "not sent"} ·{" "}
+                  {lineage?.chatterIdentity || DEMO_CHATTER}
+                </li>
                 <li>Original suggestion → {lineage?.originalSuggestion || "—"}</li>
                 <li>Final edited text → {lineage?.editedText || lineage?.finalMessage || "—"}</li>
                 <li>Final message → {lineage?.finalMessage || "—"}</li>
@@ -1009,7 +1210,9 @@ function MessageBubble({ message }: { message: DemoMessage }) {
       <div className={`max-w-[72%] ${mine ? "items-end" : "items-start"} flex flex-col gap-1`}>
         <div
           className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-            mine ? "rounded-br-md bg-teal-600 text-white" : "rounded-bl-md bg-white text-slate-800 shadow-sm"
+            mine
+              ? "rounded-br-md bg-teal-600 text-white"
+              : "rounded-bl-md bg-white text-slate-800 shadow-sm"
           }`}
         >
           {message.body}
@@ -1031,7 +1234,10 @@ function MessageBubble({ message }: { message: DemoMessage }) {
           </div>
         ))}
         <div className="text-[10px] text-slate-400">
-          {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {new Date(message.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
           {mine ? (message.read ? " · Read" : " · Sent") : ""}
           {message.aiAssisted ? " · AI-assisted" : ""}
           {message.chatterName ? ` · ${message.chatterName}` : ""}
@@ -1052,15 +1258,30 @@ function Row({ k, v }: { k: string; v: string }) {
 
 function Mini({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
-    <button className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium hover:bg-slate-200" onClick={onClick}>
+    <button
+      className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium hover:bg-slate-200"
+      onClick={onClick}
+    >
       {children}
     </button>
   );
 }
 
-function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
+function IconBtn({
+  children,
+  onClick,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
   return (
-    <button title={title} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" onClick={onClick}>
+    <button
+      title={title}
+      className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
+      onClick={onClick}
+    >
       {children}
     </button>
   );
@@ -1132,7 +1353,11 @@ function VaultPanel({
   const [owned, setOwned] = useState("ALL");
   const tags = [...new Set(items.flatMap((i) => i.tags))];
   const filtered = items.filter((i) => {
-    if (query && !`${i.title} ${i.tags.join(" ")} ${i.id}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (
+      query &&
+      !`${i.title} ${i.tags.join(" ")} ${i.id}`.toLowerCase().includes(query.toLowerCase())
+    )
+      return false;
     if (type !== "ALL" && i.mediaType !== type) return false;
     if (tag !== "ALL" && !i.tags.includes(tag)) return false;
     if (priceBand === "free" && i.defaultPrice > 0) return false;
@@ -1147,10 +1372,16 @@ function VaultPanel({
       <div className="mb-2 flex items-center justify-between">
         <div className="text-xs font-semibold">Creator vault · DEMO</div>
         <div className="flex gap-1">
-          <button onClick={() => setMode("grid")} className={mode === "grid" ? "text-teal-700" : "text-slate-400"}>
+          <button
+            onClick={() => setMode("grid")}
+            className={mode === "grid" ? "text-teal-700" : "text-slate-400"}
+          >
             <LayoutGrid size={14} />
           </button>
-          <button onClick={() => setMode("list")} className={mode === "list" ? "text-teal-700" : "text-slate-400"}>
+          <button
+            onClick={() => setMode("list")}
+            className={mode === "list" ? "text-teal-700" : "text-slate-400"}
+          >
             <List size={14} />
           </button>
           <button className="text-xs text-slate-400" onClick={onClose}>
@@ -1159,25 +1390,46 @@ function VaultPanel({
         </div>
       </div>
       <div className="mb-2 flex flex-wrap gap-2">
-        <input className="h-8 flex-1 rounded border border-slate-200 px-2 text-xs" placeholder="Search vault" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <select className="h-8 rounded border border-slate-200 text-xs" value={type} onChange={(e) => setType(e.target.value)}>
+        <input
+          className="h-8 flex-1 rounded border border-slate-200 px-2 text-xs"
+          placeholder="Search vault"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select
+          className="h-8 rounded border border-slate-200 text-xs"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        >
           {["ALL", "PHOTO", "VIDEO", "AUDIO", "BUNDLE", "CUSTOM"].map((t) => (
             <option key={t}>{t}</option>
           ))}
         </select>
-        <select className="h-8 rounded border border-slate-200 text-xs" value={tag} onChange={(e) => setTag(e.target.value)}>
+        <select
+          className="h-8 rounded border border-slate-200 text-xs"
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+        >
           <option value="ALL">Tags</option>
           {tags.map((t) => (
             <option key={t}>{t}</option>
           ))}
         </select>
-        <select className="h-8 rounded border border-slate-200 text-xs" value={priceBand} onChange={(e) => setPriceBand(e.target.value)}>
+        <select
+          className="h-8 rounded border border-slate-200 text-xs"
+          value={priceBand}
+          onChange={(e) => setPriceBand(e.target.value)}
+        >
           <option value="ALL">Any price</option>
           <option value="free">Free</option>
           <option value="under20">Under $20</option>
           <option value="20plus">$20+</option>
         </select>
-        <select className="h-8 rounded border border-slate-200 text-xs" value={owned} onChange={(e) => setOwned(e.target.value)}>
+        <select
+          className="h-8 rounded border border-slate-200 text-xs"
+          value={owned}
+          onChange={(e) => setOwned(e.target.value)}
+        >
           <option value="ALL">All purchase states</option>
           <option value="purchased">Purchased</option>
           <option value="not">Not purchased</option>
@@ -1189,7 +1441,11 @@ function VaultPanel({
             <button
               className="w-full"
               onClick={() =>
-                setSelected(selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id])
+                setSelected(
+                  selected.includes(item.id)
+                    ? selected.filter((id) => id !== item.id)
+                    : [...selected, item.id],
+                )
               }
             >
               <MediaThumb kind={item.placeholderKind} compact={mode === "list"} />
@@ -1209,7 +1465,8 @@ function VaultPanel({
         ))}
       </div>
       <p className="mt-2 text-[10px] text-slate-400">
-        {selected.length} selected · Create product from media is MEDIA_UPLOAD / MANUAL. Live PLATFORM_VAULT_SYNC is not connected.
+        {selected.length} selected · Create product from media is MEDIA_UPLOAD / MANUAL. Live
+        PLATFORM_VAULT_SYNC is not connected.
       </p>
       {selected[0] ? (
         <button

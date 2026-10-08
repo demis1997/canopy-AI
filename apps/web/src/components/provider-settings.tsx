@@ -167,7 +167,9 @@ export function ProviderSettings() {
               void run("health", async () => {
                 const j = await call("health");
                 setHealth(JSON.stringify(j));
-                setStatus(j.ok ? `Health ok · ${j.latencyMs}ms` : `Health failed · ${j.error ?? "unknown"}`);
+                setStatus(
+                  j.ok ? `Health ok · ${j.latencyMs}ms` : `Health failed · ${j.error ?? "unknown"}`,
+                );
               })
             }
           >

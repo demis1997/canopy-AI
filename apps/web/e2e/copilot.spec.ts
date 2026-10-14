@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("login, auto-reply, analytics", async ({ page }) => {
+test("login, auto-reply, analytics", async ({ page, browser }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("chatter1@demo.canopy");
   await page.getByLabel("Password").fill("CanopyDemo!2026");
@@ -24,7 +24,25 @@ test("login, auto-reply, analytics", async ({ page }) => {
   });
 
   await page.goto("/analytics");
-  await expect(page.getByText("SUGGESTION_ACCEPTED")).toBeVisible();
+  await expect(page.getByText("Access denied", { exact: true })).toBeVisible();
+
+  const managerPage = await browser.newPage({ baseURL: new URL(page.url()).origin });
+  try {
+    await managerPage.goto("/login");
+    await managerPage.getByLabel("Email").fill("manager@demo.canopy");
+    await managerPage.getByLabel("Password").fill("CanopyDemo!2026");
+    await managerPage.getByRole("button", { name: "Continue" }).click();
+    await managerPage.waitForURL(/dashboard/);
+    await managerPage.goto("/analytics");
+    await expect(
+      managerPage.getByRole("heading", { name: "Analytics", exact: true }),
+    ).toBeVisible();
+    await expect(
+      managerPage.getByRole("listitem").filter({ hasText: "Sam Rivera (DEMO chatter)" }),
+    ).toContainText(/\b[1-9]\d* accepted \/ edited/);
+  } finally {
+    await managerPage.close();
+  }
 });
 
 test("uncertain age conversation is blocked", async ({ page }) => {

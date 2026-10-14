@@ -9,12 +9,19 @@ test("login, auto-reply, analytics", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Workspace Lumen Demo Agency", exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Open chat with Maya" }).click();
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  await page.goto("/conversations");
+  await page.getByRole("link", { name: "Alex P. (DEMO)", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add fan message", exact: true })).toBeVisible();
 
-  await page.getByPlaceholder("Type as the fan").fill("you looked so hot. got anything filthier?");
-  await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByText(/Sent as/)).toBeVisible({ timeout: 30_000 });
+  await page
+    .getByPlaceholder("Type as the fan to add a message, then generate suggestions", {
+      exact: true,
+    })
+    .fill("you looked so hot. got anything filthier?");
+  await page.getByRole("button", { name: "Add fan message", exact: true }).click();
+  await expect(page.getByText("Model replied in this chat.", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
 
   await page.goto("/analytics");
   await expect(page.getByText("SUGGESTION_ACCEPTED")).toBeVisible();

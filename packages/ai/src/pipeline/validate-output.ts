@@ -351,8 +351,19 @@ export function applyReplyGuards(
   const recentMessages =
     extras?.recentMessages ?? recent.map((body) => ({ authorType: "CREATOR", body }));
   const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
-  const swap = (current: GenerationOutput, pool: string[]) =>
-    replaceAllOptions(current, pool, seed, recent);
+  let needsContextRegeneration = false;
+  const swap = (current: GenerationOutput, pool: string[]) => {
+    if (pool.some((text) => NATURAL_CHAT_VARIANTS.includes(text))) {
+      needsContextRegeneration = true;
+      return current;
+    }
+    return replaceAllOptions(current, pool, seed, recent);
+  };
+  const fallback = (index: number): string => {
+    if (noSexual) needsContextRegeneration = true;
+    const pool = noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS;
+    return pool[index % pool.length]!;
+  };
 
   const route = extras?.operationalIntent
     ? { intent: extras.operationalIntent }
@@ -502,6 +513,7 @@ export function applyReplyGuards(
     replaced = true;
     reason = "unconfirmed-mixup-clarify";
   } else if (
+    !noSexual &&
     hits["waiting-reveal"] &&
     (looksLikeTellHook(firstText(next)) || !repairPool?.length)
   ) {
@@ -637,11 +649,7 @@ export function applyReplyGuards(
 
   if (rejectedDrafts.length) {
     next = mapOptionTexts(next, (text, i) =>
-      rejectedDrafts.some((draft) => tooSimilar(text, draft))
-        ? (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
-            i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
-          ]!
-        : text,
+      rejectedDrafts.some((draft) => tooSimilar(text, draft)) ? fallback(i) : text,
     );
   }
 
@@ -743,11 +751,7 @@ export function applyReplyGuards(
         noPitch || (next.recommendedProductId != null && idsToDrop.has(next.recommendedProductId));
       next = mapOptionTexts(next, (text, i) => {
         const stripped = stripCatalogMentions(text, namesToStrip);
-        return stripped.trim()
-          ? stripped
-          : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
-              i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
-            ]!;
+        return stripped.trim() ? stripped : fallback(i);
       });
       if (dropProduct) {
         next = {
@@ -777,11 +781,7 @@ export function applyReplyGuards(
   ) {
     next = mapOptionTexts(next, (text, i) => {
       const stripped = stripCatalogMentions(text, catalogNames);
-      return stripped.trim()
-        ? stripped
-        : (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS)[
-            i % (noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS).length
-          ]!;
+      return stripped.trim() ? stripped : fallback(i);
     });
     next = {
       ...next,
@@ -814,6 +814,12 @@ export function applyReplyGuards(
             ? extras.fanIntake
             : RAPPORT_ONLY_VARIANTS,
     );
+  }
+
+  // The server retries empty options with the full conversation. Do not hide a
+  // rejected draft behind a generic greeting or acknowledgment.
+  if (needsContextRegeneration) {
+    return operationalReviewOutput(next, "CONTEXT_REGEN_REQUIRED");
   }
 
   if (noSexual) {

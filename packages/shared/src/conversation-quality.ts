@@ -342,6 +342,31 @@ export function validateQualityGrounding(opts: {
 }): { ok: true } | { ok: false; code: string } {
   const reply = opts.reply.trim();
   const decision = opts.decision;
+  // A greeting is not an answer to a mid-thread question.
+  if (
+    !looksLikeGreeting(opts.turn) &&
+    !looksLikeWellbeingAsk(opts.turn) &&
+    !/\bwhat(?: are| r)? (?:you|u) (?:doing|up to)\b/i.test(opts.turn) &&
+    /^(?:hey+\s+)?(?:i['’]?m|im|i am)\s+(?:good(?=\s+(?:just|actually|today)|[.!?,\n]|$)|doing (?:pretty )?good\b|just (?:relaxing|chilling)\b|taking it easy\b)/i.test(
+      reply,
+    )
+  ) {
+    return { ok: false, code: "UNRELATED_GREETING" };
+  }
+  const asksForClarificationOrNextStep =
+    /\b(?:what do (?:you|u) mean|what should we do(?: now)?|what (?:do we do|next))\b/i.test(
+      opts.turn,
+    );
+  const bareCatchphrase =
+    /^(?:(?:oh+|haha|lol|mmm+|hey+)\W*)?(?:(?:you['’]?re|you are|ur)\s+(?:trouble|cute|hot)|nice,?\s+i like a man who knows what he wants)[.!\s\p{Emoji_Presentation}]*$/iu.test(
+      reply,
+    );
+  if (
+    asksForClarificationOrNextStep &&
+    (bareCatchphrase || /^(?:yeah i hear (?:you|u)|makes sense|lol true)[.!\s]*$/i.test(reply))
+  ) {
+    return { ok: false, code: "IGNORED_QUESTION" };
+  }
   if (!decision.allowExplicit && containsSexualLanguage(reply))
     return { ok: false, code: "SEXUAL_NOT_ALLOWED" };
   if (

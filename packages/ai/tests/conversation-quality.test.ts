@@ -306,3 +306,57 @@ describe("prompt speaker identity", () => {
     expect(String(prompt[0]?.content)).toContain("Never attribute your own words");
   });
 });
+
+describe("context-preserving guard recovery", () => {
+  const draft = {
+    intent: "CASUAL_CHAT" as const,
+    funnelStage: "RAPPORT" as const,
+    explicitnessLevel: "FLIRTY" as const,
+    recommendedAction: "REPLY" as const,
+    replyOptions: [
+      {
+        text: "haha i just meant you sound playful",
+        messages: ["haha i just meant you sound playful"],
+        tone: "PLAYFUL" as const,
+        internalReason: "Clarify",
+      },
+    ],
+    recommendedProductId: null,
+    approvedPrice: null,
+    requiresHumanReview: false,
+    riskFlags: [],
+    memoryUpdates: [],
+    suggestedFunnelTransition: null,
+  };
+  it("requests regeneration instead of inserting a greeting when a draft repeats", () => {
+    const result = applyReplyGuards(draft, "What do you mean?", {
+      responseMode: "NATURAL",
+      recentOutbound: [draft.replyOptions[0]!.text],
+    });
+    expect(result.replyOptions).toEqual([]);
+    expect(result.riskFlags).toContain("CONTEXT_REGEN_REQUIRED");
+  });
+  it("preserves a clarification instead of replacing it with a waiting-for-reveal tease", () => {
+    const result = applyReplyGuards(draft, "What do you mean?", { responseMode: "NATURAL" });
+    expect(result.replyOptions[0]?.text).toBe(draft.replyOptions[0]!.text);
+  });
+});
+
+it("keeps the previous creator message and pending clarification in corrective prompts", () => {
+  const recentMessages = [
+    { authorType: "SUBSCRIBER", body: "What should we do now?" },
+    { authorType: "CHATTER", body: "ohh, you're trouble. 🙄" },
+    { authorType: "SUBSCRIBER", body: "What do you mean?" },
+  ];
+  const prompt = composeGenerationPrompt(
+    genInput("What do you mean?", {
+      recentMessages,
+      correctiveRetry: true,
+      correctiveCodes: ["CONTEXT_REGEN_REQUIRED"],
+    }),
+  );
+  expect(prompt).toContainEqual({ role: "assistant", content: recentMessages[1]!.body });
+  expect(String(prompt[1]?.content)).toContain("CONTEXT_REGEN_REQUIRED");
+  expect(String(prompt[1]?.content)).toContain("explain your most recent creator message");
+  expect(String(prompt.at(-1)?.content)).toContain('"What do you mean?"');
+});

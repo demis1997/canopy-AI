@@ -188,3 +188,45 @@ describe("quality grounding", () => {
     ).toEqual({ ok: false, code: "IGNORED_QUESTION" });
   });
 });
+
+describe("conversation continuity", () => {
+  it.each(["What do you mean?", "What should we do now?"])(
+    "rejects a greeting reset for %s",
+    (turn) => {
+      expect(
+        validateQualityGrounding({
+          reply: "heyy im good just relaxing a little",
+          turn,
+          decision: decideConversationTurn({ subscriberText: turn }),
+        }),
+      ).toEqual({ ok: false, code: "UNRELATED_GREETING" });
+    },
+  );
+  it.each(["What do you mean?", "What should we do now?"])(
+    "rejects an empty catchphrase for %s",
+    (turn) => {
+      expect(
+        validateQualityGrounding({
+          reply: "ohh, you're trouble. 🙄",
+          turn,
+          decision: decideConversationTurn({ subscriberText: turn }),
+        }),
+      ).toEqual({ ok: false, code: "IGNORED_QUESTION" });
+    },
+  );
+  it.each([
+    ["What do you mean?", "haha i just meant you sound playful"],
+    ["What should we do now?", "we could chat for a bit, what are you in the mood for?"],
+    ["hey how are you?", "heyy im good just relaxing a little"],
+    ["what are you doing?", "im just relaxing a little"],
+    ["are you good at cooking?", "im good at cooking pasta"],
+  ])("accepts a relevant reply to %s", (turn, reply) => {
+    expect(
+      validateQualityGrounding({
+        reply,
+        turn,
+        decision: decideConversationTurn({ subscriberText: turn }),
+      }),
+    ).toEqual({ ok: true });
+  });
+});

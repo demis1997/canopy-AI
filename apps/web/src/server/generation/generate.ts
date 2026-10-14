@@ -1069,7 +1069,10 @@ export async function generateForConversation(input: {
     );
     let groundingCodes = groundingCodesFor(validated.output);
     if (groundingCodes.length || !validated.output.replyOptions.length) {
-      result = await generateOnce(true, groundingCodes);
+      result = await generateOnce(true, [
+        ...groundingCodes,
+        ...validated.output.riskFlags.filter((flag) => flag === "CONTEXT_REGEN_REQUIRED"),
+      ]);
       const postRetry = evaluateSafety({
         adultStatus: conversation.adultStatus as AdultStatus,
         subscriberText,

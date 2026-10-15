@@ -82,6 +82,7 @@ async function connect() {
 }
 
 async function workerLoop() {
+  const targetAccountId = arg("account");
   let stopping = false;
   process.once("SIGINT", () => {
     stopping = true;
@@ -92,7 +93,10 @@ async function workerLoop() {
   while (!stopping) {
     const flags = readFeatureFlags();
     const accounts = await prisma.platformAccount.findMany({
-      where: { autonomyMode: { not: "PAUSED" } },
+      where: {
+        autonomyMode: { not: "PAUSED" },
+        ...(targetAccountId ? { id: targetAccountId } : {}),
+      },
     });
     for (const account of accounts) {
       if (stopping) break;

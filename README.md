@@ -54,6 +54,24 @@ pnpm worker             # BullMQ jobs; reads apps/web/.env
 pnpm platform:worker    # Inbox polling, receipt sync and scheduled delivery
 ```
 
+For an initial local test against the hosted database, create a private, Git-ignored
+`.env.worker.local` at the repository root using the same `DATABASE_URL` and
+`APP_ENCRYPTION_KEY` as the hosted app. Set `REDIS_URL=` for supported inline jobs,
+`ONLYFANS_MOCK_PLATFORM=false`, `ONLYFANS_BROWSER_INTEGRATION=false`,
+`ONLYFANS_AUTONOMOUS_TEXT=true`, and `ONLYFANS_AUTONOMOUS_PPV=false`.
+Configure a real AI provider in the app or supply its environment credentials too.
+From the repository root, run:
+
+```bash
+pnpm --filter @canopy/web exec tsx --env-file=../../.env.worker.local src/platform/cli.ts worker --account <platformAccountId>
+```
+
+`--account` restricts polling and delivery to that Canopy platform account; it is
+not the provider's `acct_...` ID. Omit it to process all non-paused accounts. The
+worker must stay running and the computer must stay awake. Do not run migrations
+or seed the production database for this test. Changing the encryption key requires
+reconnecting saved platform and AI-provider credentials before starting the worker.
+
 Without `REDIS_URL`, supported jobs run inline. Inline processing does not provide delayed execution or queue debounce. Catalog imports require Redis and the background worker. Keep Redis configured for production; producer errors are surfaced instead of silently switching transports.
 
 ## Model configuration

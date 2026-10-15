@@ -30,6 +30,18 @@ export default async function PlatformPage() {
         title="Platform & extension"
         description="Connect OnlyFansAPI from Products & vault. Copilot mode requires approval for every reply. Canopy stores the provider API key encrypted and never collects creator passwords."
       />
+      <Card className="space-y-2 text-sm text-white/70">
+        <div className="font-medium text-white">Automatic reply setup</div>
+        <p>
+          Connecting an account and selecting Autopilot do not start the message worker. The worker
+          must be running to receive fan messages and send replies. For a local test, keep the
+          worker computer awake; closing it stops automatic replies.
+        </p>
+        <p>
+          After changing the encryption key, reconnect your platform and saved AI-provider
+          credentials. The website and worker must use the same database and encryption key.
+        </p>
+      </Card>
       <ExtensionOnboarding />
       <Card className="text-sm text-white/70">
         Flags: browser={String(flags.browserIntegration)} · autonomous text=
@@ -58,6 +70,13 @@ export default async function PlatformPage() {
               <Badge tone="bad">{account.manualInterventionReason}</Badge>
             ) : null}
           </div>
+          <p role="status" className="text-sm text-white/70">
+            {!account.lastHeartbeatAt
+              ? "Worker has not checked in. Automatic replies are not ready yet."
+              : Date.now() - account.lastHeartbeatAt.getTime() > 120_000
+                ? "Worker check-in is overdue. Check that the worker computer is awake and the worker is running."
+                : "Worker checked in recently. Replies still follow your account policy and AI-provider checks."}
+          </p>
           <AutonomySelect accountId={account.id} value={account.autonomyMode} />
           {account.policy ? <PolicyForm accountId={account.id} policy={account.policy} /> : null}
           <div>

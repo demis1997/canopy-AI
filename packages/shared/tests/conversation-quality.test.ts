@@ -230,3 +230,35 @@ describe("conversation continuity", () => {
     ).toEqual({ ok: true });
   });
 });
+
+describe("activity replies are not wellbeing answers", () => {
+  it.each([
+    "oh thats nice! im good too. what youve been up to",
+    "oh that's nice, I'm good too. what have you been up to?",
+    "nice! i am doing well too",
+  ])("rejects an invented reciprocal wellbeing answer: %s", (reply) => {
+    const turn = "just making connections";
+    expect(
+      validateQualityGrounding({
+        reply,
+        turn,
+        decision: decideConversationTurn({ subscriberText: turn }),
+      }),
+    ).toEqual({ ok: false, code: "UNRELATED_GREETING" });
+  });
+  it.each([
+    ["just making connections", "meeting anyone interesting?"],
+    ["just making connections", "i like meeting new people too"],
+    ["just making connections, how are you?", "nice! im good too, taking it easy"],
+    ["im good, hbu?", "im good too"],
+    ["im good", "nice! im good too"],
+  ])("accepts a grounded response to %s", (turn, reply) => {
+    expect(
+      validateQualityGrounding({
+        reply,
+        turn,
+        decision: decideConversationTurn({ subscriberText: turn }),
+      }),
+    ).toEqual({ ok: true });
+  });
+});

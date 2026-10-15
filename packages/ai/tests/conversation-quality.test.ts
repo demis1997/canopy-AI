@@ -360,3 +360,28 @@ it("keeps the previous creator message and pending clarification in corrective p
   expect(String(prompt[1]?.content)).toContain("explain your most recent creator message");
   expect(String(prompt.at(-1)?.content)).toContain('"What do you mean?"');
 });
+
+it("keeps an answer to the creator's why question grounded in that question", () => {
+  const turn = "just making connections";
+  const previous = "not much, just chilling and waiting for you to tell me why you asked";
+  const input = genInput(turn, {
+    recentMessages: [
+      { authorType: "CHATTER", body: previous },
+      { authorType: "SUBSCRIBER", body: turn },
+    ],
+  });
+  const prompt = composeGenerationPrompt(input);
+  expect(prompt).toContainEqual({ role: "assistant", content: previous });
+  expect(prompt).toContainEqual({ role: "user", content: turn });
+  expect(String(prompt[1]?.content)).toContain("Continue from that answer");
+  expect(
+    validateQualityGrounding({
+      turn,
+      reply: "oh thats nice! im good too. what youve been up to",
+      decision: decideConversationTurn({
+        subscriberText: turn,
+        recentMessages: input.recentMessages,
+      }),
+    }),
+  ).toEqual({ ok: false, code: "UNRELATED_GREETING" });
+});

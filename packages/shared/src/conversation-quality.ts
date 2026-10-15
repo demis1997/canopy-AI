@@ -342,10 +342,29 @@ export function validateQualityGrounding(opts: {
 }): { ok: true } | { ok: false; code: string } {
   const reply = opts.reply.trim();
   const decision = opts.decision;
+  const asksBack = /\b(?:hbu|wbu|(?:how|what) about (?:you|u)|and (?:you|u))\b/i.test(opts.turn);
+  const reportsWellbeing =
+    /(?:^|[.!?,]\s*)(?:(?:i['’]?m|im|i am)\s+(?:doing\s+)?)?(?:good|fine|well|great|okay|ok|alright)(?:[.!?,]|$|\s+thanks\b)/i.test(
+      opts.turn,
+    );
+  // A fan describing an activity or purpose did not say they feel good or
+  // ask how the creator is. Check the whole reply, including after an ack.
+  if (
+    !looksLikeWellbeingAsk(opts.turn) &&
+    !asksBack &&
+    !reportsWellbeing &&
+    /\b(?:i['’]?m|im|i am)\s+(?:doing\s+)?(?:good|fine|well|great|okay|ok|alright)\s+(?:too|as well)\b/i.test(
+      reply,
+    )
+  ) {
+    return { ok: false, code: "UNRELATED_GREETING" };
+  }
   // A greeting is not an answer to a mid-thread question.
   if (
     !looksLikeGreeting(opts.turn) &&
     !looksLikeWellbeingAsk(opts.turn) &&
+    !asksBack &&
+    !reportsWellbeing &&
     !/\bwhat(?: are| r)? (?:you|u) (?:doing|up to)\b/i.test(opts.turn) &&
     /^(?:hey+\s+)?(?:i['’]?m|im|i am)\s+(?:good(?=\s+(?:just|actually|today)|[.!?,\n]|$)|doing (?:pretty )?good\b|just (?:relaxing|chilling)\b|taking it easy\b)/i.test(
       reply,

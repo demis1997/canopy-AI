@@ -5,7 +5,13 @@ import {
   messageDirection,
   plainText,
 } from "./onlyfans-api-client";
-import type { OnlyFansAdapter, VisibleMessage, SendRequest, SendVerification } from "./types";
+import type {
+  OnlyFansAdapter,
+  VisibleMessage,
+  SendRequest,
+  SendVerification,
+  InboxConversation,
+} from "./types";
 import { AdapterClosedError } from "./types";
 
 export class ApiOnlyFansAdapter implements OnlyFansAdapter {
@@ -25,21 +31,28 @@ export class ApiOnlyFansAdapter implements OnlyFansAdapter {
     return "CONNECTED" as const;
   }
   async listInboxConversations() {
-    const rows = [];
-    for await (const page of this.client.pages("chats?limit=100"))
+    const rows: InboxConversation[] = [];
+    for await (const thread of this.iterateInboxConversations()) rows.push(thread);
+    return rows;
+  }
+  async *iterateInboxConversations(since?: Date): AsyncGenerator<InboxConversation> {
+    // Recent order lets us stop at conversations older than this connection.
+    // Process each chat as it arrives instead of first loading the whole account.
+    for await (const page of this.client.pages("chats?limit=100&order=recent"))
       for (const raw of page) {
         const chat = chatSchema.parse(raw);
+        if (since && chat.lastMessage && Date.parse(chat.lastMessage.createdAt) < since.getTime())
+          return;
         const fan = chat.withUser ?? chat.fan;
         if (!fan) throw new Error("CHAT_IDENTITY_MISSING");
         this.fans.set(chat.id ?? fan.id, { id: fan.id, name: fan.name ?? fan.username ?? fan.id });
-        rows.push({
+        yield {
           externalConversationId: chat.id ?? fan.id,
           externalFanId: fan.id,
           externalFanDisplayName: fan.name ?? fan.username ?? fan.id,
           unread: true,
-        });
+        };
       }
-    return rows;
   }
   async openConversation(id: string) {
     if (!/^\d+$/.test(id)) throw new Error("Invalid chat ID");

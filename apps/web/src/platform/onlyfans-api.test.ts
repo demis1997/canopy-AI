@@ -209,3 +209,37 @@ describe("OnlyFansAPI PPV delivery", () => {
     ]);
   });
 });
+
+describe("incremental live inbox polling", () => {
+  it("processes a recent chat before fetching the next inbox page and stops at pre-connection history", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      response(
+        [
+          { fan: { id: 2 }, lastMessage: { createdAt: "2026-10-15T12:01:00Z" } },
+          { fan: { id: 3 }, lastMessage: { createdAt: "2026-10-14T12:00:00Z" } },
+        ],
+        "https://api.onlyfansapi.com/api/acct_test/chats?offset=2",
+      ),
+    );
+    const adapter = new ApiOnlyFansAdapter(
+      new OnlyFansApiClient("acct_test", "test-key", fetcher),
+      "1",
+    );
+    const threads = adapter.iterateInboxConversations(new Date("2026-10-15T12:00:00Z"));
+    expect((await threads.next()).value).toMatchObject({ externalFanId: "2" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await threads.next()).done).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("still imports missing-timestamp chats rather than silently skipping possible new messages", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response([{ fan: { id: 2 } }], null));
+    const adapter = new ApiOnlyFansAdapter(
+      new OnlyFansApiClient("acct_test", "test-key", fetcher),
+      "1",
+    );
+    const ids = [];
+    for await (const thread of adapter.iterateInboxConversations(new Date()))
+      ids.push(thread.externalFanId);
+    expect(ids).toEqual(["2"]);
+  });
+});

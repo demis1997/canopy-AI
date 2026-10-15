@@ -70,6 +70,7 @@ export interface OnlyFansAdapter {
   detectAccount(): Promise<{ externalAccountId: string | null; displayName: string | null }>;
   detectConnectionState(): Promise<ConnectionState>;
   listInboxConversations(): Promise<InboxConversation[]>;
+  iterateInboxConversations?(since?: Date): AsyncIterable<InboxConversation>;
   openConversation(externalConversationId: string): Promise<void>;
   readVisibleMessages(): Promise<VisibleMessage[]>;
   detectNewMessages(sinceExternalId?: string | null): Promise<VisibleMessage[]>;

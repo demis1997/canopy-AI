@@ -44,9 +44,11 @@ async function syncInboxUnlocked(
   const identity = await input.adapter.detectAccount();
   if (!identity.externalAccountId || identity.externalAccountId !== accountRecord.externalAccountId)
     throw new Error("ACCOUNT_MISMATCH");
-  const threads = await input.adapter.listInboxConversations();
+  const threads = input.adapter.iterateInboxConversations
+    ? input.adapter.iterateInboxConversations(accountRecord.authorizedAt ?? undefined)
+    : await input.adapter.listInboxConversations();
   let processed = 0;
-  for (const thread of threads) {
+  for await (const thread of threads) {
     await assertOwnership();
     await input.adapter.openConversation(thread.externalConversationId);
     const storedThread = await prisma.platformConversation.findUnique({

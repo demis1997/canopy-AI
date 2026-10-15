@@ -6,6 +6,7 @@ import { MockOnlyFansAdapter, createMockInboxState } from "./mock-adapter";
 import { PlaywrightOnlyFansAdapter } from "./onlyfans-adapter";
 import { describeBrowserHost, openHostedOrLocalContext } from "./browser";
 import { ApiOnlyFansAdapter } from "./onlyfans-api-adapter";
+import { OnlyFansApiError } from "./onlyfans-api-client";
 import { apiClient, syncPlatformReceipts } from "../server/platform-catalog";
 import { deliverAction, processIncoming, syncInbox } from "./runner";
 import { platformLog } from "./logger";
@@ -125,6 +126,7 @@ async function workerLoop() {
         });
         if (
           account.driver === "ONLYFANS_API" &&
+          !process.argv.includes("--skip-receipts") &&
           (!account.lastReceiptSyncAt || Date.now() - account.lastReceiptSyncAt.getTime() > 300_000)
         ) {
           await syncPlatformReceipts({
@@ -166,6 +168,12 @@ async function workerLoop() {
           where: { id: account.id },
           data: { connectionStatus: "DEGRADED", manualInterventionReason: reason.slice(0, 160) },
         });
+        if (arg("once")) process.exitCode = 1;
+        if (targetAccountId && error instanceof OnlyFansApiError && error.status === 402) {
+          // The provider requires credits; do not keep retrying a scoped test.
+          process.exitCode = 1;
+          return;
+        }
       } finally {
         await context?.close();
       }

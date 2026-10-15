@@ -71,11 +71,13 @@ export default async function PlatformPage() {
             ) : null}
           </div>
           <p role="status" className="text-sm text-white/70">
-            {!account.lastHeartbeatAt
-              ? "Worker has not checked in. Automatic replies are not ready yet."
-              : Date.now() - account.lastHeartbeatAt.getTime() > 120_000
-                ? "Worker check-in is overdue. Check that the worker computer is awake and the worker is running."
-                : "Worker checked in recently. Replies still follow your account policy and AI-provider checks."}
+            {account.manualInterventionReason?.includes("(402)")
+              ? "OnlyFansAPI credits are exhausted. Restore provider credits before restarting the worker."
+              : !account.lastHeartbeatAt
+                ? "Worker has not checked in. Automatic replies are not ready yet."
+                : Date.now() - account.lastHeartbeatAt.getTime() > 120_000
+                  ? "Worker check-in is overdue. Check that the worker computer is awake and the worker is running."
+                  : "Worker checked in recently. Replies still follow your account policy and AI-provider checks."}
           </p>
           <AutonomySelect accountId={account.id} value={account.autonomyMode} />
           {account.policy ? <PolicyForm accountId={account.id} policy={account.policy} /> : null}

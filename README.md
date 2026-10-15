@@ -63,8 +63,12 @@ Configure a real AI provider in the app or supply its environment credentials to
 From the repository root, run:
 
 ```bash
-pnpm --filter @canopy/web exec tsx --env-file=/absolute/path/to/canopy/.env.worker.local /absolute/path/to/canopy/apps/web/src/platform/cli.ts worker --account <platformAccountId>
+pnpm --filter @canopy/web exec tsx --env-file=/absolute/path/to/canopy/.env.worker.local /absolute/path/to/canopy/apps/web/src/platform/cli.ts worker --account <platformAccountId> --skip-receipts
 ```
+
+`--skip-receipts` defers historical purchase reconciliation during this text-only test.
+Omit it for normal receipt synchronization. A scoped worker stops on HTTP 402
+until provider credits are restored.
 
 `--account` restricts polling and delivery to that Canopy platform account; it is
 not the provider's `acct_...` ID. Omit it to process all non-paused accounts. The

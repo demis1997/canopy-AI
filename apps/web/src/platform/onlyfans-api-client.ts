@@ -40,6 +40,10 @@ export const postSchema = z
 export const chatSchema = z
   .object({
     id: id.optional(),
+    lastMessage: z
+      .object({ createdAt: z.string().datetime({ offset: true }) })
+      .passthrough()
+      .nullish(),
     withUser: z
       .object({ id, name: z.string().optional(), username: z.string().optional() })
       .optional(),

@@ -154,3 +154,29 @@ describe("inbox history before generation", () => {
     expect(mocks.enqueue).not.toHaveBeenCalled();
   });
 });
+
+it("processes a streamed conversation before fetching more inbox pages", async () => {
+  const a = adapter();
+  a.listInboxConversations = vi.fn().mockRejectedValue(new Error("Full listing must not run"));
+  a.iterateInboxConversations = async function* () {
+    yield {
+      externalConversationId: "2",
+      externalFanId: "2",
+      externalFanDisplayName: "Fan",
+      unread: true,
+    };
+    expect(mocks.incoming).toHaveBeenCalledOnce();
+    expect(mocks.enqueue).toHaveBeenCalledOnce();
+  };
+  a.detectNewMessages = vi.fn().mockResolvedValue([
+    {
+      externalMessageId: "fan-message",
+      direction: "INBOUND",
+      body: "hello",
+      messageType: "TEXT",
+      sentAt: "2026-10-15T12:01:00Z",
+    },
+  ]);
+  await syncInbox({ organizationId: "org", platformAccountId: "account", adapter: a });
+  expect(a.listInboxConversations).not.toHaveBeenCalled();
+});

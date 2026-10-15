@@ -69,10 +69,29 @@ describe("OnlyFansAPI pagination and retries", () => {
     expect(pages).toHaveLength(2);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it("normalizes the provider API pagination host without sending credentials there", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response([message()], "https://api.onlyfansapi.com/api/acct_test/chats?offset=10"),
+      )
+      .mockResolvedValueOnce(response([], null));
+    const client = new OnlyFansApiClient("acct_test", "test-key", fetcher);
+    for await (const page of client.pages("chats")) void page;
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe(
+      "https://app.onlyfansapi.com/api/acct_test/chats?offset=10",
+    );
+  });
   it("never sends credentials to a foreign origin or another account via pagination", async () => {
     for (const next of [
       "https://evil.example/api/acct_test/chats",
       "https://app.onlyfansapi.com/api/acct_other/chats",
+      "https://api.onlyfansapi.com/api/acct_other/chats",
+      "https://api.onlyfansapi.com.evil.example/api/acct_test/chats",
+      "http://api.onlyfansapi.com/api/acct_test/chats",
+      "https://api.onlyfansapi.com:444/api/acct_test/chats",
+      "https://user:password@api.onlyfansapi.com/api/acct_test/chats",
     ]) {
       const fetcher = vi.fn().mockResolvedValueOnce(response([], next));
       const client = new OnlyFansApiClient("acct_test", "test-key", fetcher);

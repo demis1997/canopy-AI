@@ -63,7 +63,7 @@ Configure a real AI provider in the app or supply its environment credentials to
 From the repository root, run:
 
 ```bash
-pnpm --filter @canopy/web exec tsx --env-file=../../.env.worker.local src/platform/cli.ts worker --account <platformAccountId>
+pnpm --filter @canopy/web exec tsx --env-file=/absolute/path/to/canopy/.env.worker.local /absolute/path/to/canopy/apps/web/src/platform/cli.ts worker --account <platformAccountId>
 ```
 
 `--account` restricts polling and delivery to that Canopy platform account; it is

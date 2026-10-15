@@ -110,6 +110,9 @@ export class OnlyFansApiClient {
 
   private url(path: string): URL {
     const url = new URL(path, this.base);
+    // The provider returns pagination links on its API subdomain. Keep all
+    // authenticated requests on our original origin, with the same account guard.
+    if (url.origin === "https://api.onlyfansapi.com") url.hostname = this.base.hostname;
     if (
       url.origin !== this.base.origin ||
       !url.pathname.startsWith(`/api/${this.accountId}/`) ||

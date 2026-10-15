@@ -53,12 +53,68 @@ export async function POST(request: Request) {
         generationModel: z.string().optional(),
         classificationModel: z.string().optional(),
         provider: z.enum(["venice", "openrouter", "openai"]).optional(),
-        action: z.enum(["save", "test-key", "list-models", "health", "test-generation"]),
+        action: z.enum([
+          "save",
+          "restore-server-key",
+          "test-key",
+          "list-models",
+          "health",
+          "test-generation",
+        ]),
       })
       .parse(await request.json());
 
     const baseURL = body.baseUrl || env.baseURL || "https://api.venice.ai/api/v1";
     const providerName = inferProvider(baseURL, body.provider ?? env.name);
+    if (body.action === "restore-server-key") {
+      // Use only the configured server endpoint. Never send a server secret to
+      // a URL supplied in the request, or expose it in the response.
+      const config = await getProviderConfiguration(ctx.organizationId);
+      if (!env.apiKey || env.name !== providerName || (config && config.provider !== env.name)) {
+        return NextResponse.json(
+          { error: "No matching server key. Enter a new provider key." },
+          { status: 409 },
+        );
+      }
+      const { provider } = createLLMProvider({
+        apiKey: env.apiKey,
+        provider: env.name,
+        baseURL: env.baseURL,
+      });
+      const health = await provider.healthCheck();
+      if (!health.ok) {
+        return NextResponse.json(
+          { error: "The server key failed its provider health check." },
+          { status: 502 },
+        );
+      }
+      const credential = await prisma.$transaction(async (tx) => {
+        const saved = await tx.apiCredential.create({
+          data: {
+            organizationId: ctx.organizationId,
+            provider: env.name,
+            encryptedKey: encryptSecret(env.apiKey),
+            keyLastFour: lastFour(env.apiKey),
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            action: "CONFIGURE_PROVIDER",
+            entityType: "ApiCredential",
+            entityId: saved.id,
+            metadata: { provider: env.name, source: "server-key-recovery" },
+          },
+        });
+        return saved;
+      });
+      return NextResponse.json({
+        saved: true,
+        provider: env.name,
+        keyLastFour: credential.keyLastFour,
+      });
+    }
     const { apiKey } = await resolveProviderCredential(
       ctx.organizationId,
       providerName,

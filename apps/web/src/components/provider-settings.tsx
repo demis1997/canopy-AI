@@ -141,7 +141,23 @@ export function ProviderSettings() {
             />
           </div>
         </div>
+        <p className="text-xs text-white/50">
+          Changed the encryption key? Re-enter your API key, or restore the matching key configured
+          on the server. Restoring checks the key before saving it with the current encryption key.
+        </p>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            disabled={Boolean(busy)}
+            onClick={() =>
+              void run("restore", async () => {
+                await call("restore-server-key");
+                window.location.reload();
+              })
+            }
+          >
+            {busy === "restore" ? "Restoring…" : "Restore server key"}
+          </Button>
           <Button
             variant="secondary"
             disabled={Boolean(busy)}

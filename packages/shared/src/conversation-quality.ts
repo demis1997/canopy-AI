@@ -1,3 +1,4 @@
+import { classifyConversationIntent } from "./conversation-progression.js";
 import {
   looksLikeContentAsk,
   looksLikeDirectCreatorQuestion,
@@ -275,6 +276,14 @@ export function decideConversationTurn(opts: {
     responseMode = "OPERATIONAL";
   }
 
+  const conversationIntent = classifyConversationIntent(opts.subscriberText, opts.recentMessages);
+  if (operational.intent === "NONE") {
+    if (conversationIntent === "ROMANTIC_INTEREST" || conversationIntent === "INTIMATE_INTEREST")
+      if (responseMode !== "EXPLICIT") responseMode = "FLIRTY";
+    if (conversationIntent === "OBJECTION_HESITATION" || conversationIntent === "DISENGAGEMENT")
+      responseMode = "NATURAL";
+  }
+
   const intakeOpportunity = decideIntakeOpportunity({
     subscriberText: opts.subscriberText,
     operational,
@@ -282,7 +291,10 @@ export function decideConversationTurn(opts: {
     pacing,
     recentMessages: opts.recentMessages ?? [],
   });
-  const allowPitch = salesReadiness === "BUYING_SIGNAL" || salesReadiness === "ACTIVE_SALE";
+  const allowPitch =
+    responseMode === "SALES" &&
+    conversationIntent !== "OBJECTION_HESITATION" &&
+    conversationIntent !== "DISENGAGEMENT";
   const allowPrice = allowPitch;
   const allowExplicit =
     responseMode === "EXPLICIT" ||

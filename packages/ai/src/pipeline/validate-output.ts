@@ -191,6 +191,7 @@ function logGuardDebug(payload: Record<string, unknown>): void {
 }
 
 export type ReplyGuardExtras = {
+  contextualRecovery?: boolean;
   rejections?: OperatorRejection[];
   catalog?: { id: string; name?: string }[];
   conversationId?: string;
@@ -353,14 +354,14 @@ export function applyReplyGuards(
   const teasePool = teaseReplyVariants(Boolean(extras?.transPersona));
   let needsContextRegeneration = false;
   const swap = (current: GenerationOutput, pool: string[]) => {
-    if (pool.some((text) => NATURAL_CHAT_VARIANTS.includes(text))) {
+    if (extras?.contextualRecovery || pool.some((text) => NATURAL_CHAT_VARIANTS.includes(text))) {
       needsContextRegeneration = true;
       return current;
     }
     return replaceAllOptions(current, pool, seed, recent);
   };
   const fallback = (index: number): string => {
-    if (noSexual) needsContextRegeneration = true;
+    if (noSexual || extras?.contextualRecovery) needsContextRegeneration = true;
     const pool = noSexual ? NATURAL_CHAT_VARIANTS : RAPPORT_ONLY_VARIANTS;
     return pool[index % pool.length]!;
   };
@@ -446,7 +447,7 @@ export function applyReplyGuards(
       reason = "relationship-kept";
     }
     applied = "relationship";
-  } else if (hits.tease && !noSexual) {
+  } else if (hits.tease && !noSexual && !extras?.contextualRecovery) {
     next = swap(next, teasePool);
     applied = "tease";
     replaced = true;
@@ -514,6 +515,7 @@ export function applyReplyGuards(
     reason = "unconfirmed-mixup-clarify";
   } else if (
     !noSexual &&
+    !extras?.contextualRecovery &&
     hits["waiting-reveal"] &&
     (looksLikeTellHook(firstText(next)) || !repairPool?.length)
   ) {
@@ -884,6 +886,7 @@ export function validateProductsAndPrices(
     creatorId?: string;
     purchasedProductIds?: string[];
     subscriberText?: string;
+    contextualRecovery?: boolean;
     rejections?: OperatorRejection[];
     conversationId?: string;
     dominance?: string;
@@ -910,6 +913,7 @@ export function validateProductsAndPrices(
 ): { ok: boolean; output: GenerationOutput; errors: string[] } {
   const errors: string[] = [];
   let next = applyReplyGuards({ ...output }, opts?.subscriberText ?? "", {
+    contextualRecovery: opts?.contextualRecovery,
     rejections: opts?.rejections,
     catalog,
     conversationId: opts?.conversationId,

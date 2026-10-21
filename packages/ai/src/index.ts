@@ -12,3 +12,5 @@ export * from "./funnel/engine.js";
 export * from "./training/corpus.js";
 export * from "./training/retrieve.js";
 export * from "./pricing/concession.js";
+
+export * from "./pipeline/rank-responses.js";

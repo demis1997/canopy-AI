@@ -12,6 +12,7 @@ export type RetrievalQuery = {
     intent?: string | null;
     funnelStage?: string | null;
   }[];
+  nonGraphicRomance?: boolean;
   allowSexting?: boolean;
   allowPricing?: boolean;
   responseMode?: ResponseMode;
@@ -74,6 +75,16 @@ function tokens(text: string): string[] {
 function excludedForQuery(query: RetrievalQuery, chunk: TrainingChunkSeed): boolean {
   const mode = query.responseMode;
   const tags = new Set(chunk.tags);
+  if (
+    query.nonGraphicRomance &&
+    (tags.has("sexting") ||
+      tags.has("first-message") ||
+      tags.has("sequence") ||
+      /light pressure|never skip teasing|hint at the clip and let him ask|filming.*right now|aftercare after the (first|third)|if content sell it else ignore/i.test(
+        chunk.content,
+      ))
+  )
+    return true;
   if (chunk.tags.includes("trans") && !query.transPersona) return true;
   if (query.allowSexting === false && (tags.has("sexting") || chunk.intent === "SEXTING"))
     return true;

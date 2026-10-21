@@ -11,3 +11,5 @@ export * from "./fan-flow.js";
 export * from "./thread-lessons.js";
 export * from "./operational-intent.js";
 export * from "./conversation-quality.js";
+
+export * from "./conversation-progression.js";

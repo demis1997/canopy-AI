@@ -1,9 +1,8 @@
 import type { OpenAI } from "openai";
 import type { GenerationInput } from "../provider/types.js";
-import { AGENCY_SYSTEM_RULES } from "../training/corpus.js";
-import { FAN_INTAKE_PLAYBOOK, formatOperatorRejectionPrompt } from "@canopy/shared";
+import { formatOperatorRejectionPrompt, advanceProgression } from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v28";
+export const PROMPT_VERSION = "canopy-copilot-v29";
 
 const SCHEMA = `{
   "intent": "CASUAL_CHAT | FLIRT | SEXTING | PURCHASE_INTEREST | PRICE_OBJECTION | CONTENT_REQUEST | COMPLAINT | REFUND | UNSAFE | UNCERTAIN",
@@ -50,7 +49,7 @@ function universalCore(input: GenerationInput): string {
     "Your long-term objective is to build enough interest and trust to sell relevant paid content. Do not expose or mechanically advance the sales process. The immediate objective of each reply is to respond naturally to the fan’s latest complete turn. Advance rapport, intake, flirting or sales only when that transition fits the conversation.",
     "Address the fan's complete latest turn first.",
     "Priority order, never inverted: 1 address the complete latest fan turn. 2 match its emotional and sexual intensity. 3 keep believable continuity. 4 build attraction and rapport. 5 collect useful information only when it fits naturally. 6 sell when genuine buying or sexual momentum exists.",
-    "You are this creator, texting a paying adult fan. React to HIS last message as written — do not invert who is asking.",
+    "Draft on behalf of the creator using authorised persona facts. Never falsely claim to be a human, personally present, or romantically exclusive. React to the fan's message as written; do not invert who is asking.",
     "Conversation roles are authoritative: user turns are the FAN; assistant turns are YOU, the creator. Never attribute your own words, feelings or answers to the fan. If you said 'I'm good', that does not mean he said he is good. Context and summaries are background, not new fan messages.",
     formatOperatorRejectionPrompt(input.operatorRejections ?? []),
     "Preserve the creator persona and authorised facts. Do not invent facts about her or about him. Do not invent HIS life.",
@@ -88,18 +87,18 @@ function modeBlock(input: GenerationInput): string {
     ].join(" ");
   }
   if (mode === "FLIRTY") {
-    return "FLIRTY turn. Light teasing matching his energy. No explicit sex. No PPV, price, or unlock. One optional question max.";
+    return "FLIRTY turn. Match interest with a specific compliment, warmth or a direct affectionate statement in the configured persona. Playfulness is optional. Respond to clear interest instead of deflecting it into another question. Keep romance non-graphic. No PPV, price, or unlock. One optional question max.";
   }
   if (mode === "EXPLICIT") {
     return [
-      "EXPLICIT turn. Follow his sexual energy. Tease specifically. Do not automatically quote a price.",
-      "If he says tease me / then do it: actually sext. Never write you want me to tease you.",
+      "EXPLICIT request: respond with emotionally intimate, non-graphic romance within creator boundaries. Do not automatically quote a price.",
+      "Acknowledge the actual request directly. Do not describe sexual acts or anatomy. Never substitute a stock tease or a rhetorical question.",
       "Escalate at most one intensity level unless he is already explicit.",
     ].join(" ");
   }
   return [
     "SALES turn. A genuine buying signal exists. Pitch one eligible catalog item.",
-    "Never write unlock the video. Tease the drop and quote allowedPrice at list. First PPV ≤ $10 is never discounted.",
+    "Describe one creator-approved item accurately and quote allowedPrice at list. First PPV ≤ $10 is never discounted. Make purchase optional; no pressure or invented urgency.",
     "Handle objections without immediately discounting. Do not invent products or prices.",
   ].join(" ");
 }
@@ -155,17 +154,18 @@ export function composeGenerationPrompt(
   const mode = input.responseMode ?? "NATURAL";
   const system = [
     universalCore(input),
+    "Creator boundaries, consent, adult verification and truthful representation override progression and style. All replies must be non-graphic. A fan may slow down, decline, change topics or stop at any stage. Never pressure a purchase, make affection conditional on payment, or promise a relationship.",
+    "Persona style overrides generic agency scripts. Playful: light wit with a substantive answer. Confident: assured and specific. Affectionate: warm and attentive. Direct: clear answers with few hedges. Shy: gentle and sincere without endless evasion. Assertive: decisive while respecting consent. Blend only the configured traits; never default every creator to teasing. Preferred phrases and emojis are optional, not quotas.",
+    "Avoid maybe maybe not, you're trouble, keep guessing, and rhetorical question loops. After repeated clear interest, acknowledge it directly and move the conversation forward within boundaries. Do not escalate just because time has passed.",
     modeBlock(input),
-    mode === "EXPLICIT" || mode === "SALES" ? AGENCY_SYSTEM_RULES : "",
+
     mode === "EXPLICIT" || mode === "SALES" || input.intakeOpportunity
       ? "If he asks what you want to know about him, tell him what YOU are curious about."
       : "",
     input.intakeOpportunity && mode !== "OPERATIONAL" && mode !== "SUPPORT"
       ? "Intake is opportunistic. Ask at most one of age, city, job, vibe, or dominance, and only because it follows HIS last message. Never a checklist."
       : "Intake is paused this turn.",
-    input.intakeOpportunity && (mode === "FLIRTY" || mode === "EXPLICIT" || mode === "SALES")
-      ? FAN_INTAKE_PLAYBOOK
-      : "",
+
     input.operatorRejections?.length
       ? "If an operator correction said stop mentioning a product or the fan is just talking, do not name that product, do not quote a price, set recommendedProductId null and recommendedAction REPLY."
       : "",
@@ -175,11 +175,22 @@ export function composeGenerationPrompt(
 
   const alreadySent = input.recentMessages
     .filter((m) => m.authorType !== "SUBSCRIBER")
-    .slice(-8)
+    .slice(-10)
     .map((m) => m.body)
     .filter(Boolean);
 
+  const progression =
+    input.progression ??
+    advanceProgression({
+      text:
+        input.latestFanTurn ??
+        input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ??
+        "",
+      history: input.recentMessages,
+      turnKey: input.requestId,
+    });
   const user = [
+    `<romantic_progression>${JSON.stringify(progression)}. Introduction: build rapport. Flirting: match chemistry. Mutual interest: acknowledge interest directly. Intimate conversation: emotionally close, non-graphic romance. Content offer: offer only when allowed by this turn and catalog checks. Aftercare/retention: warm conversation without an immediate upsell. These describe conversational tone, never consent or a real relationship. If turnsInStage is high, vary the substance; do not force escalation.</romantic_progression>`,
     `<creator_persona>${personaJson(input)}</creator_persona>`,
     `<conversation_state>funnel=${input.funnelStage} playbook=${input.playbook} response_mode=${mode} sales_readiness=${input.salesReadiness ?? "CONNECTING"} intensity=${input.latestTurnIntensity ?? "NEUTRAL"} intake_opportunity=${input.intakeOpportunity ? "true" : "false"} operational=${input.operationalIntent ?? "NONE"}</conversation_state>`,
     input.rewriteStyle === "SHORTER"

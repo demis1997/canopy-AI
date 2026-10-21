@@ -85,6 +85,7 @@ export type MemorySnapshot = {
 };
 
 export type GenerationInput = {
+  progression?: import("@canopy/shared").ProgressionState;
   requestId: string;
   persona: PersonaSnapshot;
   recentMessages: { authorType: string; body: string }[];

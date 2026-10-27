@@ -14,6 +14,12 @@ import {
 } from "@canopy/ai";
 import {
   resolvePersonaControls,
+  SUBSCRIBER_PERSONA_KEY,
+  readSubscriberPersona,
+  advanceSubscriberPersona,
+  isDynamicPreferenceQuestion,
+  routeSubscriberPersona,
+  subscriberPersonaObjective,
   readConversationSession,
   reduceConversationSession,
   sessionAllowsSales,
@@ -106,7 +112,7 @@ export async function generateForConversation(input: {
 
   const persona = conversation.creator.personas[0];
   if (!persona) throw new Error("Creator has no active persona");
-  const controls = resolvePersonaControls(persona.conversationControls);
+  let controls = resolvePersonaControls(persona.conversationControls);
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenant.organizationId },
@@ -526,8 +532,52 @@ export async function generateForConversation(input: {
       conversation.activeSequence?.steps.find((s) => s.productId)?.productId ??
       null;
     const extra = stringRecord(fanNote?.extra);
+    const previousRouting = readSubscriberPersona(extra[SUBSCRIBER_PERSONA_KEY]);
+    const preferenceHistory = previousRouting?.questionAsked
+      ? []
+      : await prisma.message.findMany({
+          where: {
+            organizationId: tenant.organizationId,
+            authorType: { in: ["CREATOR", "CHATTER"] },
+            conversation: {
+              creatorId: conversation.creatorId,
+              subscriberId: conversation.subscriberId,
+            },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: 10,
+        });
+    const subscriberPersona = advanceSubscriberPersona({
+      previous: previousRouting
+        ? {
+            ...previousRouting,
+            questionAsked:
+              previousRouting.questionAsked ||
+              preferenceHistory.some((m) => isDynamicPreferenceQuestion(m.body)),
+          }
+        : undefined,
+      text: subscriberText,
+      turnKey: inputMessageIds.join(":"),
+      history: recent,
+      now: new Date().toISOString(),
+    });
+    subscriberPersona.questionAsked ||= preferenceHistory.some((m) =>
+      isDynamicPreferenceQuestion(m.body),
+    );
+    controls = routeSubscriberPersona(subscriberPersona, controls).controls;
     const sessionKey = `conversation_session_${conversation.id}`;
     let session = readConversationSession(extra[sessionKey]);
+    if (!session) {
+      const retained = readConversationSession(extra.subscriber_session_v1);
+      if (retained)
+        session = reduceConversationSession(retained, { type: "RETURNING_SUBSCRIBER" }, controls);
+    }
+    if (
+      previousRouting?.lastSeenAt &&
+      Date.now() - Date.parse(previousRouting.lastSeenAt) > 3 * 86400000 &&
+      previousRouting.lastTurnKey !== inputMessageIds.join(":")
+    )
+      session = reduceConversationSession(session, { type: "RETURNING_SUBSCRIBER" }, controls);
     if (!session && (fanMessageCount > 3 || purchases.length > 0))
       session = reduceConversationSession(undefined, { type: "RETURNING_SUBSCRIBER" }, controls);
     const knownDeclines = new Set(session?.declinedProductIds ?? []);
@@ -559,6 +609,7 @@ export async function generateForConversation(input: {
       { type: "FAN_TURN", key: inputMessageIds.join(":"), text: subscriberText, history: recent },
       controls,
     );
+    subscriberPersona.lastObjective = subscriberPersonaObjective(subscriberPersona, session);
     const progressionKey = `conversation_progression_${conversation.id}`;
     const progression = advanceProgression({
       previous: readProgression(extra[progressionKey]),
@@ -653,6 +704,9 @@ export async function generateForConversation(input: {
       unpaidProductId: unpaidOffer?.productId,
       allowedSkipToNextProduct: lockPolicy === "ALLOW_NEXT",
     });
+    // Subscriber routing replaces legacy mandatory sub/dom intake, not adult verification.
+    if (["ASK_SUB_DOM", "ASK_PERSONAL_PERMISSION"].includes(flow.next.step))
+      decision = { ...decision, intakeOpportunity: false, allowIntakeQuestion: false };
     const facts = flow.facts;
     const mergedExtra =
       responseMode === "SUPPORT"
@@ -660,6 +714,8 @@ export async function generateForConversation(input: {
         : { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
     mergedExtra[progressionKey] = JSON.stringify(progression);
     mergedExtra[sessionKey] = JSON.stringify(session);
+    mergedExtra.subscriber_session_v1 = JSON.stringify(session);
+    mergedExtra[SUBSCRIBER_PERSONA_KEY] = JSON.stringify(subscriberPersona);
     if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
     if (flow.next.fanIsJerking != null)
       mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
@@ -680,7 +736,8 @@ export async function generateForConversation(input: {
       facts.notesAppend ||
       extra.flow_step !== mergedExtra.flow_step ||
       extra[progressionKey] !== mergedExtra[progressionKey] ||
-      extra[sessionKey] !== mergedExtra[sessionKey]
+      extra[sessionKey] !== mergedExtra[sessionKey] ||
+      extra[SUBSCRIBER_PERSONA_KEY] !== mergedExtra[SUBSCRIBER_PERSONA_KEY]
     ) {
       const nextNotes = [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n").trim();
       await prisma.fanNote.upsert({
@@ -824,6 +881,7 @@ export async function generateForConversation(input: {
     const generationInput: GenerationInput = {
       progression,
       conversationSession: session,
+      subscriberPersona,
       alreadySent: qualityHistory
         .filter((m) => ["CREATOR", "CHATTER"].includes(m.authorType))
         .slice(-10)
@@ -1166,6 +1224,7 @@ export async function generateForConversation(input: {
         personaControls: controls,
         messageLength: persona.typicalMessageLength,
         session,
+        subscriberPersona,
         operational,
         decision: { ...decision, responseMode },
         catalog: catalogForValidate,
@@ -1297,6 +1356,7 @@ export async function generateForConversation(input: {
       intakeOpportunity: decision.intakeOpportunity,
       buyingSignals: decision.buyingSignals,
       conversationSession: session,
+      subscriberPersona,
       conversationProgression: progression,
       candidateEvaluations,
       providerAttempts,
@@ -1421,6 +1481,7 @@ export async function generateForConversation(input: {
         tokens: result.promptTokens + result.completionTokens,
         repaired: result.repaired,
         conversationSession: session,
+        subscriberPersona,
         conversationProgression: progression,
         conversationQuality: diagnostics.conversationQuality,
         candidateEvaluations,

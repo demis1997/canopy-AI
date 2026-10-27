@@ -3,6 +3,10 @@ import { composeGenerationPrompt } from "../src/prompts/compose.js";
 import { conversationPolicyCodes } from "../src/safety/conversation-policy.js";
 import { evaluateReplyCandidates } from "../src/pipeline/evaluate-replies.js";
 import {
+  advanceSubscriberPersona,
+  routeSubscriberPersona,
+  resolvePersonaControls,
+  reduceConversationSession,
   decideConversationTurn,
   detectOperationalIntent,
   type GenerationOutput,
@@ -110,3 +114,32 @@ it("leaves exploitation and coercive-payment policy in place regardless of allow
   );
   expect(conversationPolicyCodes("fuck me")).toContain("GRAPHIC_CONTENT");
 });
+
+it.each(["I like leading", "I like following"])(
+  "injects the subscriber route without changing policy or profanity: %s",
+  (text) => {
+    const subscriberPersona = advanceSubscriberPersona({
+      text,
+      turnKey: "pref",
+      history: [],
+      now: "2026-10-27T12:00:00Z",
+    });
+    const request = input([{ authorType: "SUBSCRIBER", body: text }]);
+    request.subscriberPersona = subscriberPersona;
+    request.persona.conversationControls = routeSubscriberPersona(
+      subscriberPersona,
+      resolvePersonaControls({ casualProfanity: "ALLOW" }),
+    ).controls;
+    request.conversationSession = reduceConversationSession(undefined, {
+      type: "FAN_TURN",
+      text,
+      key: "pref",
+    });
+    const prompt = composeGenerationPrompt(request);
+    expect(String(prompt[0]?.content)).toContain("Subscriber routing:");
+    expect(String(prompt[0]?.content)).toContain("Preference is not consent");
+    expect(String(prompt[0]?.content)).toContain('"casualProfanity":"ALLOW"');
+    expect(String(prompt[1]?.content)).toContain(subscriberPersona.activePersona);
+    expect(String(prompt[0]?.content)).toContain("All replies must be non-graphic");
+  },
+);

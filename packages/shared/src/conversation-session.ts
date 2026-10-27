@@ -19,12 +19,30 @@ const sessionSchema = z.object({
   version: z.literal(1),
   stage: sessionStageSchema,
   lastTurnKey: z.string(),
+  lastIntent: z
+    .enum([
+      "CASUAL_CONVERSATION",
+      "FLIRTING",
+      "ROMANTIC_INTEREST",
+      "INTIMATE_INTEREST",
+      "CONTENT_PURCHASE_INTEREST",
+      "OBJECTION_HESITATION",
+      "DISENGAGEMENT",
+    ])
+    .default("CASUAL_CONVERSATION"),
   turns: z.number().int().nonnegative(),
   salesOptOut: z.boolean(),
   declinedProductIds: z.array(z.string()),
   purchasedProductIds: z.array(z.string()),
   seenOfferIds: z.array(z.string()),
   awaitingOfferId: z.string().optional(),
+  lastOffer: z
+    .object({
+      id: z.string(),
+      productId: z.string(),
+      status: z.enum(["OFFERED", "DECLINED", "PURCHASED"]),
+    })
+    .optional(),
   followUps: z.number().int().nonnegative(),
   returningSubscriber: z.boolean(),
   topicChanged: z.boolean(),
@@ -55,6 +73,7 @@ export function initialConversationSession(): ConversationSession {
     version: 1,
     stage: "OPENING",
     lastTurnKey: "",
+    lastIntent: "CASUAL_CONVERSATION",
     turns: 0,
     salesOptOut: false,
     declinedProductIds: [],
@@ -75,12 +94,29 @@ export function reduceConversationSession(
   if (event.type === "RETURNING_SUBSCRIBER")
     return { ...state, returningSubscriber: true, stage: "RAPPORT" };
   if (event.type === "OFFER_SENT") {
-    if (state.seenOfferIds.includes(event.id)) return state;
+    if (state.seenOfferIds.includes(event.id)) {
+      // Backfill older saved sessions without advancing their stage or counting another offer.
+      if (!state.lastOffer && state.seenOfferIds.at(-1) === event.id)
+        return {
+          ...state,
+          lastOffer: {
+            id: event.id,
+            productId: event.productId,
+            status: state.purchasedProductIds.includes(event.productId)
+              ? "PURCHASED"
+              : state.declinedProductIds.includes(event.productId)
+                ? "DECLINED"
+                : "OFFERED",
+          },
+        };
+      return state;
+    }
     // Delivery events are backend facts, not LLM recommendations or consent.
     return {
       ...state,
       seenOfferIds: unique([...state.seenOfferIds, event.id]),
       awaitingOfferId: event.id,
+      lastOffer: { id: event.id, productId: event.productId, status: "OFFERED" },
       stage: "PPV_OFFER",
       followUps: 0,
     };
@@ -89,6 +125,10 @@ export function reduceConversationSession(
     return {
       ...state,
       declinedProductIds: unique([...state.declinedProductIds, event.productId]),
+      lastOffer:
+        state.lastOffer?.productId === event.productId
+          ? { ...state.lastOffer, status: "DECLINED" }
+          : state.lastOffer,
       awaitingOfferId: undefined,
       stage: "RAPPORT",
     };
@@ -97,6 +137,10 @@ export function reduceConversationSession(
     return {
       ...state,
       purchasedProductIds: unique([...state.purchasedProductIds, event.productId]),
+      lastOffer:
+        state.lastOffer?.productId === event.productId
+          ? { ...state.lastOffer, status: "PURCHASED" }
+          : state.lastOffer,
       awaitingOfferId: undefined,
       stage: "PURCHASE_CONFIRMATION",
       followUps: 0,
@@ -119,12 +163,21 @@ export function reduceConversationSession(
   state.followUps = 0;
   const text = event.text.toLowerCase().replace(/[’']/g, "");
   const intent = classifyConversationIntent(event.text, event.history);
+  state.lastIntent = intent;
   if (
     /\b(no (more )?(sales|offers|ppv)|stop (offering|selling|pitching)|dont (sell|pitch|offer)|just (want to )?(talk|chat)|ordinary conversation)\b/.test(
       text,
     )
   )
     state.salesOptOut = true;
+  if (
+    state.lastOffer?.status === "OFFERED" &&
+    /\b(no thanks|not buying|pass|maybe later|too expensive|dont want (?:it|that))\b/.test(text)
+  ) {
+    state.declinedProductIds = unique([...state.declinedProductIds, state.lastOffer.productId]);
+    state.lastOffer = { ...state.lastOffer, status: "DECLINED" };
+    state.awaitingOfferId = undefined;
+  }
   // Only a new, explicit shopping request reopens sales, not a short yes or an unrelated reply.
   else if (
     intent === "CONTENT_PURCHASE_INTEREST" &&

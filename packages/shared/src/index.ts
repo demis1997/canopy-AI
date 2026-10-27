@@ -18,3 +18,5 @@ export * from "./persona-controls.js";
 export * from "./conversation-session.js";
 
 export * from "./casual-language.js";
+
+export * from "./subscriber-persona.js";

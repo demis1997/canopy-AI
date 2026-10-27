@@ -4,7 +4,7 @@ import { conversationPolicyCodes } from "../src/safety/conversation-policy.js";
 import { rankConversationResponses } from "../src/pipeline/rank-responses.js";
 import { validateProductsAndPrices } from "../src/pipeline/validate-output.js";
 import { selectConversationContext } from "../src/prompts/context.js";
-import type { GenerationOutput } from "@canopy/shared";
+import { advanceSubscriberPersona, type GenerationOutput } from "@canopy/shared";
 const output = (text: string, price: number | null = 15): GenerationOutput => ({
   intent: "PURCHASE_INTEREST",
   funnelStage: "OFFER",
@@ -145,4 +145,23 @@ it("does not confuse traffic with trafficking while retaining exploitation block
   ]) {
     expect(evaluateSafety({ adultStatus: "VERIFIED_ADULT", subscriberText }).allowed).toBe(false);
   }
+});
+
+it("rejects renewed preference discovery after an explicit answer without changing approval", () => {
+  const subscriberPersona = advanceSubscriberPersona({
+    text: "I prefer following",
+    turnKey: "answer",
+    history: [],
+    now: "2026-10-27T12:00:00Z",
+  });
+  const ranked = rankConversationResponses(output("Do you prefer leading or following?"), {
+    turn: "I prefer following",
+    history: [],
+    subscriberPersona,
+  });
+  expect(ranked.evaluations[0]?.checks.constraints).toContain(
+    "REPEATED_DYNAMIC_PREFERENCE_QUESTION",
+  );
+  expect(ranked.output.replyOptions).toEqual([]);
+  expect(ranked.output.requiresHumanReview).toBe(true);
 });

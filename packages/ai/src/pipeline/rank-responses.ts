@@ -1,6 +1,8 @@
 import { conversationPolicyCodes } from "../safety/conversation-policy.js";
 import {
   evaluateConversationResponse,
+  subscriberPersonaResponseCodes,
+  type SubscriberPersonaState,
   type ConversationIntent,
   type GenerationOutput,
   resolvePersonaControls,
@@ -18,6 +20,7 @@ export function rankConversationResponses(
     prohibitedWords?: string[];
     personaControls?: Partial<PersonaControls>;
     session?: ConversationSession;
+    subscriberPersona?: SubscriberPersonaState;
     messageLength?: string;
     groundingCodes?: (reply: string) => string[];
   },
@@ -49,6 +52,12 @@ export function rankConversationResponses(
     if (context.messageLength && text.split(/\s+/).filter(Boolean).length > wordLimit) {
       evaluation.codes.push("PERSONA_MESSAGE_LENGTH");
       evaluation.checks.constraints.push("PERSONA_MESSAGE_LENGTH");
+      evaluation.score = 0;
+    }
+    const routingCodes = subscriberPersonaResponseCodes(text, context.subscriberPersona);
+    if (routingCodes.length) {
+      evaluation.codes.push(...routingCodes);
+      evaluation.checks.constraints.push(...routingCodes);
       evaluation.score = 0;
     }
     const policyCodes = conversationPolicyCodes(text);

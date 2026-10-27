@@ -259,3 +259,48 @@ it("persists sales opt-outs and keeps the next ordinary turn in rapport", async 
   expect(input.allowPitch).toBe(false);
   expect(input.sellTarget).toBeNull();
 });
+
+it("persists a subscriber route, restores it on a new session, and accepts corrections", async () => {
+  mocks.messages.mockImplementation((q: { take: number }) =>
+    q.take === 10
+      ? []
+      : [
+          {
+            id: "leading",
+            authorType: "SUBSCRIBER",
+            body: "I prefer taking the lead",
+            createdAt: new Date(),
+          },
+        ],
+  );
+  mocks.generate.mockResolvedValue(result(["Sounds good. We can go at your pace."]));
+  await run();
+  const first = mocks.generate.mock.calls.at(-1)?.[0];
+  expect(first.subscriberPersona.preference).toBe("PREFERS_LEADING");
+  expect(first.persona.conversationControls.characterization).toBe("SOFT");
+  const extra = mocks.saveNote.mock.calls.at(-1)?.[0].update.extra;
+  expect(JSON.parse(extra.subscriber_persona_v1).activePersona).toBe("SOFT_PLAYFUL");
+  // Remove conversation-local state: shared subscriber memory must survive a new session.
+  delete extra.conversation_session_conversation;
+  mocks.fanNote.mockResolvedValue({ extra, notes: "", location: "", dominance: "DOMINANT" });
+  mocks.messages.mockImplementation((q: { take: number }) =>
+    q.take === 10
+      ? []
+      : [
+          {
+            id: "correction",
+            authorType: "SUBSCRIBER",
+            body: "Actually I want you to lead",
+            createdAt: new Date(),
+          },
+        ],
+  );
+  mocks.generate.mockResolvedValue(
+    result(["Of course. Let's keep the conversation easy and relaxed."]),
+  );
+  await run();
+  const next = mocks.generate.mock.calls.at(-1)?.[0];
+  expect(next.subscriberPersona.preference).toBe("PREFERS_FOLLOWING");
+  expect(next.persona.conversationControls.characterization).toBe("ASSERTIVE");
+  expect(next.conversationSession.returningSubscriber).toBe(true);
+});

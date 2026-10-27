@@ -11,6 +11,9 @@ import {
 } from "@canopy/ai";
 import {
   advanceProgression,
+  advanceSubscriberPersona,
+  routeSubscriberPersona,
+  subscriberPersonaObjective,
   decideConversationTurn,
   detectOperationalIntent,
   reduceConversationSession,
@@ -18,6 +21,10 @@ import {
   splitReplyBubbles,
   casualProfanityPattern,
 } from "@canopy/shared";
+import {
+  subscriberRoutingFixtures,
+  type RoutingFixture,
+} from "../../../packages/ai/src/eval/subscriber-routing-fixtures.js";
 import { profanityFixtures } from "../../../packages/ai/src/eval/profanity-fixtures.js";
 import { resolveOrganizationProvider } from "../src/server/ai-provider.js";
 
@@ -83,20 +90,34 @@ async function main() {
     cases: [],
   };
   let passed = true;
-  const cases = arg("--case")
-    ? profanityFixtures.filter((row) => row.id === arg("--case"))
+  const fixtures: readonly RoutingFixture[] = process.argv.includes("--routing")
+    ? subscriberRoutingFixtures
     : profanityFixtures;
+  const cases = arg("--case") ? fixtures.filter((row) => row.id === arg("--case")) : fixtures;
   if (!cases.length) throw new Error("Unknown fixture ID");
   for (const fixture of cases) {
     const started = Date.now();
-    const controls = resolvePersonaControls({
+    const baseControls = resolvePersonaControls({
       ...storedControls,
       ...(fixture.controls === "STORED" ? {} : { casualProfanity: fixture.controls }),
     });
-    const history = [
-      ...("history" in fixture ? fixture.history : []),
-      { authorType: "SUBSCRIBER", body: fixture.turn },
-    ];
+    const previousRouting = fixture.preferenceBefore
+      ? advanceSubscriberPersona({
+          text: fixture.preferenceBefore,
+          turnKey: "earlier",
+          history: [],
+          now: fixture.returning ? "2026-10-20T12:00:00Z" : new Date().toISOString(),
+        })
+      : undefined;
+    const history = [...(fixture.history ?? []), { authorType: "SUBSCRIBER", body: fixture.turn }];
+    const subscriberPersona = advanceSubscriberPersona({
+      previous: previousRouting,
+      text: fixture.turn,
+      turnKey: fixture.id,
+      history,
+      now: new Date().toISOString(),
+    });
+    const controls = routeSubscriberPersona(subscriberPersona, baseControls).controls;
     const operational = detectOperationalIntent(fixture.turn);
     const decision = decideConversationTurn({
       subscriberText: fixture.turn,
@@ -104,12 +125,30 @@ async function main() {
       recentMessages: history,
     });
     const progression = advanceProgression({ text: fixture.turn, history, turnKey: fixture.id });
+    let seedSession;
+    for (const event of fixture.events ?? [])
+      seedSession = reduceConversationSession(seedSession, event, controls);
+    if (fixture.returning)
+      seedSession = reduceConversationSession(
+        seedSession,
+        { type: "RETURNING_SUBSCRIBER" },
+        controls,
+      );
     const session = reduceConversationSession(
-      undefined,
+      seedSession,
       { type: "FAN_TURN", key: fixture.id, text: fixture.turn, history },
       controls,
     );
-    const events: unknown[] = [];
+    subscriberPersona.lastObjective = subscriberPersonaObjective(subscriberPersona, session);
+    const events: unknown[] = [
+      {
+        stage: "subscriber-routing",
+        state: subscriberPersona,
+        session,
+        controls,
+        syntheticBackendEvents: fixture.events ?? [],
+      },
+    ];
     const pre = evaluateSafety({ adultStatus: "VERIFIED_ADULT", subscriberText: fixture.turn });
     events.push({ stage: "pre-safety", result: pre });
     let finalOutput;
@@ -143,6 +182,7 @@ async function main() {
         },
         progression,
         conversationSession: session,
+        subscriberPersona,
         model: runtime.model,
         promptVersionId: PROMPT_VERSION,
         recentMessages: history,
@@ -193,6 +233,7 @@ async function main() {
         personaControls: controls,
         messageLength: "SHORT",
         session,
+        subscriberPersona,
         operational,
         decision: {
           ...decision,
@@ -234,11 +275,17 @@ async function main() {
     const expectedPhrase = "expectedPhrase" in fixture ? fixture.expectedPhrase : undefined;
     const casePassed =
       Boolean(delivery) &&
+      (!fixture.expectedPreference ||
+        subscriberPersona.preference === fixture.expectedPreference) &&
+      (!fixture.expectedOfferStatus || session.lastOffer?.status === fixture.expectedOfferStatus) &&
+      (!fixture.returning || session.returningSubscriber) &&
       (!expectedPhrase || delivery!.toLowerCase().includes(expectedPhrase)) &&
       (fixture.controls !== "AVOID" || !casualProfanityPattern.test(delivery!));
     passed &&= casePassed;
     const row = {
       fixture: fixture.id,
+      subscriberPersona,
+      conversationSession: session,
       turn: fixture.turn,
       controlsSource:
         fixture.controls === "STORED" ? "stored-creator-controls" : "synthetic-override-only",

@@ -108,6 +108,7 @@ export type SyntheticTrace = {
 
 export type GenerationInput = {
   syntheticTrace?: SyntheticTrace;
+  subscriberPersona?: import("@canopy/shared").SubscriberPersonaState;
   conversationSession?: import("@canopy/shared").ConversationSession;
   alreadySent?: string[];
   progression?: import("@canopy/shared").ProgressionState;

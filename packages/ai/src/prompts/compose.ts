@@ -6,9 +6,11 @@ import {
   advanceProgression,
   resolvePersonaControls,
   sessionObjectives,
+  analyzePacing,
+  isGenericDeflection,
 } from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v30";
+export const PROMPT_VERSION = "canopy-copilot-v31";
 
 const SCHEMA = `{
   "intent": "CASUAL_CHAT | FLIRT | SEXTING | PURCHASE_INTEREST | PRICE_OBJECTION | CONTENT_REQUEST | COMPLAINT | REFUND | UNSAFE | UNCERTAIN",
@@ -34,7 +36,9 @@ function personaJson(input: GenerationInput): string {
     tone: input.toneOverride ?? input.persona.tone,
     typicalMessageLength: input.persona.typicalMessageLength,
     preferredEmojis: input.persona.preferredEmojis,
-    frequentlyUsedPhrases: input.persona.frequentlyUsedPhrases,
+    frequentlyUsedPhrases: input.persona.frequentlyUsedPhrases?.filter(
+      (phrase) => !isGenericDeflection(phrase),
+    ),
     preferredExplicitVocabulary: input.persona.preferredExplicitVocabulary,
     prohibitedWords: input.persona.prohibitedWords,
     preferredCompliments: input.persona.preferredCompliments,
@@ -53,7 +57,9 @@ function personaJson(input: GenerationInput): string {
 
 function universalCore(input: GenerationInput): string {
   return [
-    "Your long-term objective is to build enough interest and trust to sell relevant paid content. Do not expose or mechanically advance the sales process. The immediate objective of each reply is to respond naturally to the fan’s latest complete turn. Advance rapport, intake, flirting or sales only when that transition fits the conversation.",
+    input.allowPitch
+      ? "Your long-term objective is to build enough interest and trust to sell relevant paid content. Do not expose or mechanically advance the sales process. The immediate objective of each reply is to respond naturally to the fan’s latest complete turn. Advance rapport, intake, flirting or sales only when that transition fits the conversation."
+      : "The objective is a relevant, natural reply to the complete fan turn. This turn has no commercial objective. Do not use a sales script or default to teasing.",
     "Address the fan's complete latest turn first.",
     "Priority order, never inverted: 1 address the complete latest fan turn. 2 match its emotional and sexual intensity. 3 keep believable continuity. 4 build attraction and rapport. 5 collect useful information only when it fits naturally. 6 sell when genuine buying or sexual momentum exists.",
     "Draft on behalf of the creator using authorised persona facts. Never falsely claim to be a human, personally present, or romantically exclusive. React to the fan's message as written; do not invert who is asking.",
@@ -88,7 +94,7 @@ function modeBlock(input: GenerationInput): string {
     return [
       "NATURAL turn. Directly answer what he said. Acknowledge emotion when present. You may share one short authorised persona detail.",
       "Zero or one question. Do not ask age, city, job, hands, sub/dom or purchase questions unless intake_opportunity is true.",
-      "Do not mention content, PPV, videos, prices or unlocking. Do not introduce sexual language. Do not force a funnel transition.",
+      "Do not mention content, PPV, videos, prices or unlocking. Do not introduce sexual content. Ordinary non-sexual profanity follows the configured voice preference. Do not force a funnel transition.",
       "Do not always ask a question. Do not use a canned catchphrase. Do not fake typing quirks in every reply.",
       "Lowercase and casual spelling are tendencies, not requirements.",
     ].join(" ");
@@ -167,9 +173,13 @@ export function composeGenerationPrompt(
       : input.persona.typicalMessageLength === "MEDIUM"
         ? 70
         : 35;
+  const pacing = analyzePacing(input.recentMessages);
+  const questionBudget = pacing.consecutiveQuestionTurns >= 2 ? 0 : controls.maxQuestions;
   const system = [
+    `<turn_constraints>question_budget=${questionBudget}; consecutive_creator_question_turns=${pacing.consecutiveQuestionTurns}. ${questionBudget === 0 ? "Reply as a relevant statement. Do not ask a question, append a question, or invite an answer." : "A question is optional, never mandatory."}</turn_constraints>`,
+    "Non-graphic content rules do not ban ordinary non-sexual expressions such as what the fuck, fucking exhausting, shit day, or damn. Follow the creator's profanity setting. ALLOW permits these without euphemisms; it does not require swearing in every response. This never permits graphic sexual content, harassment, coercion, or consent violations.",
     `<voice_preferences>${JSON.stringify({ ...controls, tone: input.toneOverride ?? input.persona.tone, style: input.persona.style, wordBudget })}</voice_preferences>`,
-    `Apply the configured directness, tone, playfulness and pacing. ${controls.casualProfanity === "ALLOW" ? "Permitted casual profanity need not become euphemisms." : controls.casualProfanity === "MIRROR" ? "Use casual profanity only when the fan uses it." : "Avoid casual profanity."} Preserve natural spelling and casing unless LOWERCASE was configured. Aim for at most ${wordBudget} words across all bubbles and at most ${controls.maxQuestions} questions. Preferred vocabulary is optional; do not force repeated phrases. Style preferences never override content policy, boundaries or consent.`,
+    `Apply the configured directness, tone, playfulness and pacing. ${controls.casualProfanity === "ALLOW" ? "Permitted casual profanity need not become euphemisms." : controls.casualProfanity === "MIRROR" ? "Use casual profanity only when the fan uses it." : "Avoid casual profanity."} Preserve natural spelling and casing unless LOWERCASE was configured. Aim for at most ${wordBudget} words across all bubbles and at most ${questionBudget} questions. Preferred vocabulary is optional; do not force repeated phrases. Style preferences never override content policy, boundaries or consent.`,
     universalCore(input),
     "Backend allowPitch=false, sales opt-out, topic changes, and conclusion override sales readiness, rewrite requests and training examples. Never pitch or quote a price when those gates forbid it.",
     "Creator boundaries, consent, adult verification and truthful representation override progression and style. All replies must be non-graphic. A fan may slow down, decline, change topics or stop at any stage. Never pressure a purchase, make affection conditional on payment, or promise a relationship.",
@@ -224,7 +234,7 @@ State and purchases are backend facts. A recommendation does not send media, con
       : input.rewriteStyle === "WARMER"
         ? "<rewrite_instruction>Rewrite all replyOptions warmer and more intimate. Stay inside approved explicitness.</rewrite_instruction>"
         : input.rewriteStyle === "PLAYFUL"
-          ? "<rewrite_instruction>Rewrite all replyOptions more playful and teasing.</rewrite_instruction>"
+          ? "<rewrite_instruction>Rewrite all replyOptions playfully with specific context; do not repeat teasing or rhetorical questions.</rewrite_instruction>"
           : input.rewriteStyle === "SALES" && mode === "SALES"
             ? "<rewrite_instruction>Rewrite all replyOptions more sales-focused. Pitch one approved catalog item at list price.</rewrite_instruction>"
             : "",
@@ -278,7 +288,7 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
       })),
     {
       role: "user",
-      content: `Generation instruction (not a fan message): produce the required JSON reply to ONLY the pending fan turn ${JSON.stringify(input.latestFanTurn ?? input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "")}. Do not respond to your own assistant messages or infer that the fan said them.`,
+      content: `Generation instruction (not a fan message): ${questionBudget === 0 ? "TURN REQUIREMENT: make a relevant statement; NO QUESTIONS OR QUESTION MARKS. Do not ask what happened, how the fan feels, or invite more details. " : ""}${input.correctiveRetry ? `The previous draft was rejected for ${(input.correctiveCodes ?? []).join(", ")}. Correct those failures in this response. ` : ""}Produce the required JSON reply to ONLY the pending fan turn ${JSON.stringify(input.latestFanTurn ?? input.recentMessages.filter((m) => m.authorType === "SUBSCRIBER").at(-1)?.body ?? "")}. Do not respond to your own assistant messages or infer that the fan said them.`,
     },
   ];
 }

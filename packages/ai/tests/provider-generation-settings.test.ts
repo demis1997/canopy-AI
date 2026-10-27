@@ -116,3 +116,32 @@ it("retains configured limits and prior context during JSON repair", async () =>
     content: "invalid",
   });
 });
+it("traces the exact synthetic system request and unvalidated raw response before parsing", async () => {
+  const events: import("../src/provider/types.js").SyntheticTraceEvent[] = [];
+  await new VeniceLLMProvider({ apiKey: "synthetic" }).generateReplies({
+    ...input,
+    syntheticTrace: { kind: "SYNTHETIC_ONLY", emit: (event) => events.push(event) },
+  });
+  expect(events.map((event) => event.stage)).toEqual([
+    "provider-request",
+    "provider-raw-response",
+    "provider-parse",
+  ]);
+  const request = events[0];
+  expect(request?.stage === "provider-request" && request.messages[0]?.role).toBe("system");
+  const raw = events[1];
+  expect(raw?.stage === "provider-raw-response" && raw.rawText).toBe(JSON.stringify(output));
+  expect(JSON.stringify(events)).not.toContain("Authorization");
+});
+it("a diagnostic sink failure cannot change generation behavior", async () => {
+  const result = await new VeniceLLMProvider({ apiKey: "synthetic" }).generateReplies({
+    ...input,
+    syntheticTrace: {
+      kind: "SYNTHETIC_ONLY",
+      emit: () => {
+        throw new Error("Synthetic logging failure");
+      },
+    },
+  });
+  expect(result.output.replyOptions[0]?.text).toBe("Hi, good to hear from you.");
+});

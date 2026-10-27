@@ -1,3 +1,4 @@
+import { maskCasualProfanity } from "./casual-language.js";
 import {
   looksLikeAreYouReal,
   looksLikeContentAsk,
@@ -348,11 +349,8 @@ export function determineResponseMode(opts: {
 
 export function containsSexualLanguage(text: string): boolean {
   // Unambiguous everyday profanity is not a sexual request or an output policy violation.
-  const contextual = text.replace(
-    /\b(?:fuck (?:this|that|work|traffic|it)|(?:a |the |so |really )?fucking (?!(?:you|me|my|your|her|his|their)\b)|(?:this|that|it) sucks)\b/gi,
-    " ",
-  );
-  return /\b(pussy|cock|girlcock|fuck|suck|cum|horny|stroke|dick|mouth on|on my knees|leaking|jerk|sext|shot something filthy|beg a little|dont u dare finish)\b/i.test(
+  const contextual = maskCasualProfanity(text);
+  return /\b(pussy|cock|girlcock|fuck(?:ing)?|suck|cum|horny|stroke|dick|mouth on|on my knees|leaking|jerk|sext|shot something filthy|beg a little|dont u dare finish)\b/i.test(
     contextual,
   );
 }

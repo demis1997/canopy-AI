@@ -25,20 +25,30 @@ export function rankConversationResponses(
   const evaluations = output.replyOptions.map((option, index) => ({
     index,
     ...evaluateConversationResponse({ reply: option.text, ...context }),
+    checks: {
+      quality: [] as string[],
+      policy: [] as string[],
+      persona: [] as string[],
+      grounding: [] as string[],
+      constraints: [] as string[],
+    },
   }));
   for (const evaluation of evaluations) {
     const text = output.replyOptions[evaluation.index]!.text.toLowerCase();
+    evaluation.checks.quality = [...evaluation.codes];
     if (
       context.session?.stage === "CONCLUSION" &&
       /\?/.test(output.replyOptions[evaluation.index]!.text)
     ) {
       evaluation.codes.push("QUESTION_AFTER_CONCLUSION");
+      evaluation.checks.constraints.push("QUESTION_AFTER_CONCLUSION");
       evaluation.score = 0;
     }
     const wordLimit =
       context.messageLength === "SHORT" ? 35 : context.messageLength === "MEDIUM" ? 70 : 110;
     if (context.messageLength && text.split(/\s+/).filter(Boolean).length > wordLimit) {
       evaluation.codes.push("PERSONA_MESSAGE_LENGTH");
+      evaluation.checks.constraints.push("PERSONA_MESSAGE_LENGTH");
       evaluation.score = 0;
     }
     const policyCodes = conversationPolicyCodes(text);
@@ -47,12 +57,15 @@ export function rankConversationResponses(
       context.turn,
       resolvePersonaControls(context.personaControls),
     );
+    evaluation.checks.policy = policyCodes;
+    evaluation.checks.persona = styleCodes;
     if (policyCodes.length || styleCodes.length) {
       evaluation.codes.push(...policyCodes, ...styleCodes);
       evaluation.score = 0;
     }
     const groundingCodes =
       context.groundingCodes?.(output.replyOptions[evaluation.index]!.text) ?? [];
+    evaluation.checks.grounding = groundingCodes;
     if (groundingCodes.length) {
       evaluation.codes.push(...groundingCodes);
       evaluation.score = 0;
@@ -60,6 +73,7 @@ export function rankConversationResponses(
     }
     if (context.prohibitedWords?.some((word) => word.trim() && text.includes(word.toLowerCase()))) {
       evaluation.codes.push("PERSONA_PROHIBITED_WORD");
+      evaluation.checks.persona.push("PERSONA_PROHIBITED_WORD");
       evaluation.score = 0;
     }
   }

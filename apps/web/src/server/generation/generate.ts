@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto";
 import { prisma, requireTenant, type AdultStatus, type Prisma } from "@canopy/database";
 import {
   evaluateSafety,
-  rankConversationResponses,
+  evaluateReplyCandidates,
   containsPromptInjection,
-  validateProductsAndPrices,
   resolveFunnel,
   PROMPT_VERSION,
   ProviderError,
@@ -14,7 +13,6 @@ import {
   type GenerationInput,
 } from "@canopy/ai";
 import {
-  applyPersonaCasing,
   resolvePersonaControls,
   readConversationSession,
   reduceConversationSession,
@@ -55,10 +53,7 @@ import {
   detectOperationalIntent,
   determineResponseMode,
   operationalGenerationPlan,
-  validateReplyGrounding,
   decideConversationTurn,
-  validateQualityGrounding,
-  analyzePacing,
   type CatalogProduct,
 } from "@canopy/shared";
 import { persistOperationalSkip } from "../operational-handoff";
@@ -1161,28 +1156,9 @@ export async function generateForConversation(input: {
       resaleAllowed: p.resaleAllowed,
     }));
 
-    const groundingCodesFor = (output: typeof result.output) =>
-      output.replyOptions.flatMap((opt) => {
-        const check = validateReplyGrounding({
-          reply: opt.text,
-          turn: subscriberText,
-          operational,
-          mode: responseMode,
-          recommendedProductId: output.recommendedProductId,
-        });
-        const quality = validateQualityGrounding({
-          reply: opt.text,
-          turn: subscriberText,
-          decision,
-          recommendedProductId: output.recommendedProductId,
-          pacing: analyzePacing(recent),
-        });
-        return [...(check.ok ? [] : [check.code]), ...(quality.ok ? [] : [quality.code])];
-      });
-
-    const candidateEvaluations: ReturnType<typeof rankConversationResponses>["evaluations"][] = [];
-    const rank = (output: typeof result.output) => {
-      const ranked = rankConversationResponses(output, {
+    const candidateEvaluations: ReturnType<typeof evaluateReplyCandidates>["evaluations"][] = [];
+    const evaluate = (output: typeof result.output) => {
+      const evaluated = evaluateReplyCandidates(output, {
         turn: subscriberText,
         history: qualityHistory,
         intent: progression.intent,
@@ -1190,30 +1166,18 @@ export async function generateForConversation(input: {
         personaControls: controls,
         messageLength: persona.typicalMessageLength,
         session,
-        groundingCodes: (reply) =>
-          groundingCodesFor({
-            ...output,
-            replyOptions: [{ ...output.replyOptions[0]!, text: reply }],
-          }),
+        operational,
+        decision: { ...decision, responseMode },
+        catalog: catalogForValidate,
+        guardOptions: validateOpts,
+        discountLimitPercent: 10,
+        concessionAllowed: pricing.concessionAllowed,
       });
-      candidateEvaluations.push(ranked.evaluations);
-      // Case is the only intentional formatting transform; ordinary vocabulary is retained.
-      ranked.output.replyOptions = ranked.output.replyOptions.map((option) => ({
-        ...option,
-        text: applyPersonaCasing(option.text, controls),
-        messages: option.messages.map((message) => applyPersonaCasing(message, controls)),
-      }));
-      return ranked.output;
+      candidateEvaluations.push(evaluated.evaluations);
+      return evaluated.validation;
     };
-    let validated = validateProductsAndPrices(
-      rank(result.output),
-      catalogForValidate,
-      10,
-      pricing.concessionAllowed,
-      validateOpts,
-    );
-    validated.output = rank(validated.output);
-    let groundingCodes = groundingCodesFor(validated.output);
+    let validated = evaluate(result.output);
+    let groundingCodes = validated.errors;
     if (groundingCodes.length || !validated.output.replyOptions.length) {
       result = await generateOnce(true, [...groundingCodes, ...validated.output.riskFlags]);
       const postRetry = evaluateSafety({
@@ -1237,15 +1201,8 @@ export async function generateForConversation(input: {
           },
         };
       } else {
-        validated = validateProductsAndPrices(
-          rank(result.output),
-          catalogForValidate,
-          10,
-          pricing.concessionAllowed,
-          validateOpts,
-        );
-        validated.output = rank(validated.output);
-        groundingCodes = groundingCodesFor(validated.output);
+        validated = evaluate(result.output);
+        groundingCodes = validated.errors;
         if (groundingCodes.length) {
           validated = {
             ok: false,

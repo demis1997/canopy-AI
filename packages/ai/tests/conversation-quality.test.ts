@@ -154,7 +154,7 @@ describe("mode specific prompts and retrieval", () => {
   it("keeps NATURAL prompts free of PPV price and dominance scripts", () => {
     const system = String(composeGenerationPrompt(genInput("hey how are you?"))[0]?.content ?? "");
     const user = String(composeGenerationPrompt(genInput("hey how are you?"))[1]?.content ?? "");
-    expect(system).toMatch(/long-term objective is to build enough interest/);
+    expect(system).toMatch(/This turn has no commercial objective/);
     expect(system).toMatch(/NATURAL turn/);
     expect(system).not.toMatch(/Every send has a job on the sales sequence/);
     expect(system).not.toMatch(/taking control/);

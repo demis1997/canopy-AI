@@ -27,6 +27,10 @@ const normalized = (text: string) =>
     .trim();
 const deflection =
   /\b(maybe maybe not|youre trouble|you are trouble|wouldnt you like to know|wouldn t you like to know|keep guessing|earn it|if youre lucky)\b/i;
+export function isGenericDeflection(text: string): boolean {
+  return deflection.test(normalized(text));
+}
+
 const rhetorical =
   /\b(can you handle|are you ready|wouldnt you like|want to find out|guess what|what would you do|oh really)\b/i;
 

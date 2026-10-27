@@ -1,3 +1,4 @@
+import { maskCasualProfanity } from "./casual-language.js";
 export const MAX_REPLY_BUBBLES = 3;
 
 /** Meet / meetup / m33tup and close spellings — never appear in outbound copy. */
@@ -871,11 +872,13 @@ export function looksLikeContentAsk(text: string): boolean {
 }
 
 export function looksLikeSextAsk(text: string): boolean {
-  const contextual = text.replace(
-    /\b(?:fuck (?:this|that|work|traffic|it)|(?:this|that|it) sucks|hard (?:day|work|shift|time|question)|wet (?:weather|road|clothes))\b/gi,
+  const contextual = maskCasualProfanity(text).replace(
+    /\b(?:hard (?:day|work|shift|time|question)|wet (?:weather|road|clothes))\b/gi,
     " ",
   );
-  return /\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick|girlcock)\b/i.test(contextual);
+  return /\b(cock|pussy|fuck(?:ing)?|suck|cum|hard|wet|horny|stroke|dick|girlcock)\b/i.test(
+    contextual,
+  );
 }
 
 export function looksLikeSexualPivot(text: string): boolean {

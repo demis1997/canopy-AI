@@ -85,7 +85,29 @@ export type MemorySnapshot = {
   verified: boolean;
 };
 
+export type SyntheticTraceEvent =
+  | {
+      stage: "provider-request";
+      model: string;
+      messages: { role: string; content?: unknown }[];
+      temperature: number;
+      sampling: import("./generation-settings.js").GenerationSettings;
+    }
+  | {
+      stage: "provider-raw-response";
+      model: string;
+      reportedModel: string;
+      finishReason: string | null;
+      rawText: string;
+    }
+  | { stage: "provider-parse"; success: boolean; error?: string };
+export type SyntheticTrace = {
+  kind: "SYNTHETIC_ONLY";
+  emit: (event: SyntheticTraceEvent) => void;
+};
+
 export type GenerationInput = {
+  syntheticTrace?: SyntheticTrace;
   conversationSession?: import("@canopy/shared").ConversationSession;
   alreadySent?: string[];
   progression?: import("@canopy/shared").ProgressionState;

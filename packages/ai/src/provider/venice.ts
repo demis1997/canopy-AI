@@ -17,9 +17,22 @@ import type {
   MemoryExtractionResult,
   ProviderHealth,
   SummaryInput,
+  SyntheticTrace,
+  SyntheticTraceEvent,
 } from "./types.js";
 import { composeGenerationPrompt } from "../prompts/compose.js";
 import { parseGenerationOutput } from "../pipeline/validate-output.js";
+
+function emitSyntheticTrace(trace: SyntheticTrace | undefined, event: SyntheticTraceEvent) {
+  // Explicit per-call opt-in only: never dump real conversation payloads via an env flag.
+  if (trace?.kind === "SYNTHETIC_ONLY") {
+    try {
+      trace.emit(event);
+    } catch {
+      /* Diagnostics cannot alter generation or send decisions. */
+    }
+  }
+}
 
 const QWEN_RECOMMENDED = /qwen/i;
 const UNCENSORED_RE = /uncensor|abliterat|unfiltered|nsfw/i;
@@ -248,11 +261,17 @@ export class VeniceLLMProvider implements LLMProvider {
       model,
       messages: prompt,
       generation: true,
+      trace: input.syntheticTrace,
       json: true,
       temperature,
     });
     let repaired = false;
     let parsed = parseGenerationOutput(first.text);
+    emitSyntheticTrace(input.syntheticTrace, {
+      stage: "provider-parse",
+      success: parsed.success,
+      ...(!parsed.success ? { error: parsed.error } : {}),
+    });
     let rawText = first.text;
     let promptTokens = first.promptTokens;
     let completionTokens = first.completionTokens;
@@ -263,6 +282,7 @@ export class VeniceLLMProvider implements LLMProvider {
         model,
         temperature: 0.2,
         generation: true,
+        trace: input.syntheticTrace,
         messages: [
           ...prompt,
           { role: "assistant", content: first.text },
@@ -275,6 +295,11 @@ export class VeniceLLMProvider implements LLMProvider {
         json: true,
       });
       parsed = parseGenerationOutput(retry.text);
+      emitSyntheticTrace(input.syntheticTrace, {
+        stage: "provider-parse",
+        success: parsed.success,
+        ...(!parsed.success ? { error: parsed.error } : {}),
+      });
       rawText = retry.text;
       promptTokens += retry.promptTokens;
       completionTokens += retry.completionTokens;
@@ -359,6 +384,7 @@ export class VeniceLLMProvider implements LLMProvider {
     model: string;
     messages: OpenAI.Chat.ChatCompletionMessageParam[];
     generation?: boolean;
+    trace?: SyntheticTrace;
     json?: boolean;
     temperature?: number;
   }): Promise<{
@@ -373,6 +399,14 @@ export class VeniceLLMProvider implements LLMProvider {
       );
     };
     try {
+      if (opts.generation)
+        emitSyntheticTrace(opts.trace, {
+          stage: "provider-request",
+          model: opts.model,
+          messages: opts.messages,
+          temperature: opts.temperature ?? 0.7,
+          sampling: this.generationSettings,
+        });
       const completion = await this.breaker.exec(() =>
         withRetries(
           () =>
@@ -397,6 +431,14 @@ export class VeniceLLMProvider implements LLMProvider {
         ),
       );
       const text = completion.choices[0]?.message?.content ?? "";
+      if (opts.generation)
+        emitSyntheticTrace(opts.trace, {
+          stage: "provider-raw-response",
+          model: opts.model,
+          reportedModel: completion.model ?? opts.model,
+          finishReason: completion.choices[0]?.finish_reason ?? null,
+          rawText: text,
+        });
       return {
         text,
         promptTokens: completion.usage?.prompt_tokens ?? 0,

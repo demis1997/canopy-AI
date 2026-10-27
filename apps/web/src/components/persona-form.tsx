@@ -58,6 +58,27 @@ export function PersonaForm({ creatorId, initial }: { creatorId: string; initial
           </select>
         </div>
         <div>
+          <Label>Casual profanity</Label>
+          <select
+            className="mt-1 h-9 w-full rounded-md border border-white/10 bg-ink-900 px-2 text-sm"
+            value={form.conversationControls.casualProfanity}
+            onChange={(event) =>
+              set("conversationControls", {
+                ...form.conversationControls,
+                casualProfanity: event.target
+                  .value as PersonaInput["conversationControls"]["casualProfanity"],
+              })
+            }
+          >
+            <option value="MIRROR">Mirror the fan's language</option>
+            <option value="ALLOW">Allow casual profanity</option>
+            <option value="AVOID">Avoid profanity</option>
+          </select>
+          <p className="mt-1 text-xs text-white/50">
+            Applies to ordinary language. Age, consent and content safeguards still apply.
+          </p>
+        </div>
+        <div>
           <Label>Favourite colour</Label>
           <Input
             value={form.favouriteColor}

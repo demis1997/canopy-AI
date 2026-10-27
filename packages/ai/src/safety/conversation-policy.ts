@@ -1,3 +1,4 @@
+import { maskCasualProfanity } from "@canopy/shared";
 // Product policy for this non-graphic conversation path. Independent of voice,
 // profanity preference, persona directness, and response diversity scoring.
 export function conversationPolicyCodes(reply: string): string[] {
@@ -5,7 +6,7 @@ export function conversationPolicyCodes(reply: string): string[] {
   const codes: string[] = [];
   if (
     /\b(cock|pussy|dick|cum|clit|penetrat\w*|fuck(?:ing)? (?:you|me|your)|suck(?:ing)? (?:your|my))\b/i.test(
-      text,
+      maskCasualProfanity(text),
     )
   )
     codes.push("GRAPHIC_CONTENT");

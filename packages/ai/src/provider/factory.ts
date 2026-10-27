@@ -1,3 +1,4 @@
+import { generationSettingsFromEnv } from "./generation-settings.js";
 import { MockLLMProvider } from "./mock.js";
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 import type { LLMProvider } from "./types.js";
@@ -41,6 +42,7 @@ export function readProviderEnv(env: NodeJS.Dict<string> = process.env) {
   const name = providerName((pick("AI_PROVIDER", "LLM_PROVIDER") || "venice").toLowerCase());
   return {
     name,
+    generationSettings: generationSettingsFromEnv(env),
     apiKey: pick("AI_API_KEY", "LLM_API_KEY"),
     baseURL: pick("AI_BASE_URL", "LLM_BASE_URL") || BASE_URLS[name],
     model: pick("AI_MODEL", "LLM_MODEL"),
@@ -81,6 +83,7 @@ export function createLLMProvider(opts?: {
     provider: new OpenAICompatibleProvider({
       apiKey,
       baseURL,
+      generationSettings: cfg.generationSettings,
       timeoutMs: cfg.timeoutMs,
       retries: cfg.retries,
       defaultModel: opts?.defaultModel ?? (name === cfg.name ? cfg.model : ""),

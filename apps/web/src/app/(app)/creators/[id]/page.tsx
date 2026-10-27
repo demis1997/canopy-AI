@@ -1,3 +1,4 @@
+import { resolvePersonaControls } from "@canopy/shared";
 import { notFound } from "next/navigation";
 import { prisma } from "@canopy/database";
 import { Card, Badge } from "@/components/ui/card";
@@ -42,6 +43,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
         <PersonaForm
           creatorId={creator.id}
           initial={{
+            conversationControls: resolvePersonaControls(active.conversationControls),
             displayName: active.displayName,
             biography: active.biography,
             authorisedBackstory: active.authorisedBackstory,

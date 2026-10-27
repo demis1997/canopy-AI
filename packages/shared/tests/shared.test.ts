@@ -115,7 +115,7 @@ describe("generation schema", () => {
     expect(result.recommendedAction).toBe("REPLY");
     expect(result.replyOptions).toHaveLength(3);
     expect(result.replyOptions[0]!.tone).toBe("PLAYFUL");
-    expect(result.replyOptions[0]!.messages[0]).toBe("hey baby");
+    expect(result.replyOptions[0]!.messages[0]).toBe("Hey baby");
     expect(result.approvedPrice).toBe(12);
     expect(result.suggestedFunnelTransition).toBeNull();
   });
@@ -147,7 +147,7 @@ describe("reply bubbles", () => {
       suggestedFunnelTransition: null,
     });
     expect(result.replyOptions[0]!.messages).toHaveLength(3);
-    expect(result.replyOptions[0]!.messages[2]).toBe("i would have a great time on it");
+    expect(result.replyOptions[0]!.messages[2]).toBe("I would have a great time on it");
     expect(result.replyOptions[0]!.text).toContain("\n");
   });
 

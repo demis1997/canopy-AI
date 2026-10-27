@@ -15,3 +15,5 @@ Age/consent prechecks, post-generation safety checks (including retries), tenant
 Validation: shared progression simulations, AI prompt/retrieval/ranking tests, and mocked production pipeline tests cover progression, repeated interest, hesitation, ten-message history, persona injection, candidate selection, corrective generation, exhausted retries and age blocking. Existing approval and automation regression suites also run. Live Qwen inference and database/platform integration require their configured services and are not covered by the deterministic tests.
 
 Run `pnpm --filter @canopy/shared test`, `pnpm --filter @canopy/ai test`, and `pnpm --filter @canopy/web test`, plus the respective `typecheck` scripts.
+
+The 2026-10-26 follow-up adds persisted creator voice controls, an additive persona migration, and a general sales-session state machine. See [the complete pipeline trace, configuration and local test instructions](conversation-engine-pipeline.md), [the structural script extraction](reference/conversation-script-structures.json), and [the deterministic before/after results](conversation-engine-evaluation.json).

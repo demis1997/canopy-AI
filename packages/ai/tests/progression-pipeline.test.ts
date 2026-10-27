@@ -130,3 +130,64 @@ it("rejects prohibited persona words and individually ungrounded candidates", ()
   expect(ranked.evaluations[0]?.codes).toContain("PERSONA_PROHIBITED_WORD");
   expect(ranked.evaluations[1]?.codes).toContain("IGNORED_QUESTION");
 });
+it("includes the full ten-message outbound reference even when prompt history is shorter", () => {
+  const input = {
+    requestId: "history",
+    persona: {
+      displayName: "Maya",
+      tone: "warm",
+      typicalMessageLength: "SHORT",
+      conversationControls: {},
+    },
+    recentMessages: [{ authorType: "SUBSCRIBER", body: "hi" }],
+    alreadySent: Array.from({ length: 10 }, (_, i) => `Earlier creator statement ${i}`),
+    memories: [],
+    products: [],
+    funnelStage: "RAPPORT",
+    playbook: "RAPPORT",
+    retrievedExamples: [],
+  } as unknown as GenerationInput;
+  const prompt = composeGenerationPrompt(input);
+  expect(String(prompt[1]?.content)).toContain("Earlier creator statement 0");
+  expect(String(prompt[1]?.content)).toContain("Earlier creator statement 9");
+});
+it("does not expose sales context when backend pitching is disabled despite buying readiness", () => {
+  const input = {
+    requestId: "opt-out",
+    persona: {
+      displayName: "Maya",
+      tone: "warm",
+      typicalMessageLength: "SHORT",
+      conversationControls: {},
+    },
+    recentMessages: [{ authorType: "SUBSCRIBER", body: "just chat" }],
+    memories: [],
+    products: [],
+    funnelStage: "OFFER",
+    playbook: "RAPPORT",
+    retrievedExamples: [],
+    allowPitch: false,
+    responseMode: "NATURAL",
+    salesReadiness: "BUYING_SIGNAL",
+    sellTarget: { productId: "p1", name: "Real item", price: 15, reason: "CONTEXT" },
+  } as unknown as GenerationInput;
+  const text = String(composeGenerationPrompt(input)[1]?.content);
+  expect(text).not.toContain("<valid_products>");
+  expect(text).not.toContain("<pricing_policy>");
+  expect(text).not.toContain("<sell_target>");
+});
+it("rejects question-led reopenings after a conclusion and enforces configured length", () => {
+  const session = { stage: "CONCLUSION" } as import("@canopy/shared").ConversationSession;
+  const result = rankConversationResponses(draft(["What are you doing?", "Enjoy your evening."]), {
+    turn: "bye",
+    history: [],
+    session,
+  });
+  expect(result.output.replyOptions[0]?.text).toBe("Enjoy your evening.");
+  const long = rankConversationResponses(
+    draft([Array.from({ length: 40 }, (_, i) => `word${i}`).join(" ")]),
+    { turn: "hello", history: [], messageLength: "SHORT" },
+  );
+  expect(long.evaluations[0]?.codes).toContain("PERSONA_MESSAGE_LENGTH");
+  expect(long.output.replyOptions).toEqual([]);
+});

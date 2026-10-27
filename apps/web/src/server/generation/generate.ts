@@ -14,6 +14,11 @@ import {
   type GenerationInput,
 } from "@canopy/ai";
 import {
+  applyPersonaCasing,
+  resolvePersonaControls,
+  readConversationSession,
+  reduceConversationSession,
+  sessionAllowsSales,
   advanceProgression,
   readProgression,
   conversationQualityMetrics,
@@ -89,6 +94,7 @@ export async function generateForConversation(input: {
   triggerMessageId?: string;
   staleRetry?: boolean;
 }) {
+  const pipelineStartedAt = Date.now();
   const requestId = randomUUID();
   const tenant = requireTenant(input.organizationId);
   const conversation = await prisma.conversation.findFirst({
@@ -105,6 +111,7 @@ export async function generateForConversation(input: {
 
   const persona = conversation.creator.personas[0];
   if (!persona) throw new Error("Creator has no active persona");
+  const controls = resolvePersonaControls(persona.conversationControls);
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenant.organizationId },
@@ -311,6 +318,7 @@ export async function generateForConversation(input: {
     },
     select: {
       productId: true,
+      conversationId: true,
       amountCents: true,
       product: { select: { media: { select: { mediaId: true } } } },
     },
@@ -523,6 +531,39 @@ export async function generateForConversation(input: {
       conversation.activeSequence?.steps.find((s) => s.productId)?.productId ??
       null;
     const extra = stringRecord(fanNote?.extra);
+    const sessionKey = `conversation_session_${conversation.id}`;
+    let session = readConversationSession(extra[sessionKey]);
+    if (!session && (fanMessageCount > 3 || purchases.length > 0))
+      session = reduceConversationSession(undefined, { type: "RETURNING_SUBSCRIBER" }, controls);
+    const knownDeclines = new Set(session?.declinedProductIds ?? []);
+    for (const offer of conversation.offers) {
+      session = reduceConversationSession(
+        session,
+        { type: "OFFER_SENT", id: offer.id, productId: offer.productId },
+        controls,
+      );
+      if (offer.accepted === false && !knownDeclines.has(offer.productId)) {
+        session = reduceConversationSession(
+          session,
+          { type: "OFFER_DECLINED", productId: offer.productId },
+          controls,
+        );
+      }
+    }
+    for (const purchase of purchases.filter(
+      (purchase) => purchase.conversationId === conversation.id,
+    )) {
+      session = reduceConversationSession(
+        session,
+        { type: "PURCHASE_CONFIRMED", productId: purchase.productId },
+        controls,
+      );
+    }
+    session = reduceConversationSession(
+      session,
+      { type: "FAN_TURN", key: inputMessageIds.join(":"), text: subscriberText, history: recent },
+      controls,
+    );
     const progressionKey = `conversation_progression_${conversation.id}`;
     const progression = advanceProgression({
       previous: readProgression(extra[progressionKey]),
@@ -543,6 +584,14 @@ export async function generateForConversation(input: {
     ) {
       decision = { ...decision, intakeOpportunity: false, allowIntakeQuestion: false };
     }
+    const salesAllowed =
+      decision.allowPitch && sessionAllowsSales(session, progression.intent, controls);
+    if (!salesAllowed) {
+      decision = { ...decision, allowPitch: false, allowPrice: false };
+      if (responseMode === "SALES") responseMode = "NATURAL";
+    }
+    if (session.stage === "CONCLUSION" || session.topicChanged)
+      decision = { ...decision, intakeOpportunity: false, allowIntakeQuestion: false };
     const assistantHistory = await prisma.message.findMany({
       where: {
         conversationId: conversation.id,
@@ -615,6 +664,7 @@ export async function generateForConversation(input: {
         ? { ...extra, ...facts.extra }
         : { ...extra, ...facts.extra, ...serializeFlowState(flow.next) };
     mergedExtra[progressionKey] = JSON.stringify(progression);
+    mergedExtra[sessionKey] = JSON.stringify(session);
     if (facts.dominance) mergedExtra.fan_dominance = facts.dominance;
     if (flow.next.fanIsJerking != null)
       mergedExtra.fan_jerking = flow.next.fanIsJerking ? "true" : "false";
@@ -634,7 +684,8 @@ export async function generateForConversation(input: {
       facts.dominance ||
       facts.notesAppend ||
       extra.flow_step !== mergedExtra.flow_step ||
-      extra[progressionKey] !== mergedExtra[progressionKey]
+      extra[progressionKey] !== mergedExtra[progressionKey] ||
+      extra[sessionKey] !== mergedExtra[sessionKey]
     ) {
       const nextNotes = [fanNote?.notes, facts.notesAppend].filter(Boolean).join("\n").trim();
       await prisma.fanNote.upsert({
@@ -773,13 +824,20 @@ export async function generateForConversation(input: {
     if (!decision.allowPitch && sellMatch?.reason !== "CONTEXT") sellMatch = null;
     if (!decision.allowPitch) sellMatch = null;
     if (!decision.intakeOpportunity) fanIntake = null;
+    if (sellMatch && session.declinedProductIds.includes(sellMatch.product.id)) sellMatch = null;
 
     const generationInput: GenerationInput = {
       progression,
+      conversationSession: session,
+      alreadySent: qualityHistory
+        .filter((m) => ["CREATOR", "CHATTER"].includes(m.authorType))
+        .slice(-10)
+        .map((m) => m.body),
       requestId,
       model: model || "mock-qwen3-32b-uncensored",
       promptVersionId: PROMPT_VERSION,
       persona: {
+        conversationControls: controls,
         displayName: persona.displayName,
         biography: persona.biography,
         authorisedBackstory: persona.authorisedBackstory,
@@ -812,22 +870,24 @@ export async function generateForConversation(input: {
         confidence: m.confidence,
         verified: m.verified,
       })),
-      products: products.map((p) => ({
-        id: p.id,
-        name: p.name.replace(/\s*\(DEMO\)\s*/gi, "").trim(),
-        description: p.description,
-        standardPrice: p.standardPrice,
-        minimumPrice: p.minimumPrice,
-        secondPrice: p.secondPrice,
-        discountLimitPercent: p.discountLimitPercent,
-        sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
-        allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
-        available: p.available && p.sourceAvailable !== false,
-        tags: p.tags,
-        mediaType: p.mediaType,
-        explicitnessCategory:
-          productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
-      })),
+      products: products
+        .filter((p) => !session.declinedProductIds.includes(p.id))
+        .map((p) => ({
+          id: p.id,
+          name: p.name.replace(/\s*\(DEMO\)\s*/gi, "").trim(),
+          description: p.description,
+          standardPrice: p.standardPrice,
+          minimumPrice: p.minimumPrice,
+          secondPrice: p.secondPrice,
+          discountLimitPercent: p.discountLimitPercent,
+          sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
+          allowedPrice: pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice,
+          available: p.available && p.sourceAvailable !== false,
+          tags: p.tags,
+          mediaType: p.mediaType,
+          explicitnessCategory:
+            productRows.find((row) => row.id === p.id)?.explicitnessCategory ?? "SUGGESTIVE",
+        })),
       funnelStage: conversation.funnelStage,
       playbook: fanIntake
         ? "FAN_INTAKE_FLOW"
@@ -948,12 +1008,26 @@ export async function generateForConversation(input: {
       buyingSignals: decision.buyingSignals,
     };
 
-    const generateOnce = (correctiveRetry = false, codes: string[] = []) =>
-      generateRepliesWithRetry(provider, {
+    const providerAttempts: {
+      correctiveRetry: boolean;
+      latencyMs: number;
+      promptTokens: number;
+      completionTokens: number;
+    }[] = [];
+    const generateOnce = async (correctiveRetry = false, codes: string[] = []) => {
+      const attempt = await generateRepliesWithRetry(provider, {
         ...generationInput,
         correctiveRetry,
         correctiveCodes: codes,
       });
+      providerAttempts.push({
+        correctiveRetry,
+        latencyMs: attempt.latencyMs,
+        promptTokens: attempt.promptTokens,
+        completionTokens: attempt.completionTokens,
+      });
+      return attempt;
+    };
 
     let result = await generateOnce(false);
 
@@ -1008,6 +1082,7 @@ export async function generateForConversation(input: {
 
     const validateOpts = {
       contextualRecovery: true,
+      declinedProductIds: session.declinedProductIds,
       creatorId: conversation.creatorId,
       purchasedProductIds,
       subscriberText,
@@ -1076,6 +1151,8 @@ export async function generateForConversation(input: {
       name: p.name,
       standardPrice: p.standardPrice,
       minimumPrice: p.minimumPrice,
+      allowedPrice:
+        pricing.ladder.find((row) => row.productId === p.id)?.allowedPrice ?? p.standardPrice,
       secondPrice: p.secondPrice,
       discountLimitPercent: p.discountLimitPercent,
       sendAttempt: pricing.ladder.find((row) => row.productId === p.id)?.sendAttempt,
@@ -1110,6 +1187,9 @@ export async function generateForConversation(input: {
         history: qualityHistory,
         intent: progression.intent,
         prohibitedWords: persona.prohibitedWords,
+        personaControls: controls,
+        messageLength: persona.typicalMessageLength,
+        session,
         groundingCodes: (reply) =>
           groundingCodesFor({
             ...output,
@@ -1117,6 +1197,12 @@ export async function generateForConversation(input: {
           }),
       });
       candidateEvaluations.push(ranked.evaluations);
+      // Case is the only intentional formatting transform; ordinary vocabulary is retained.
+      ranked.output.replyOptions = ranked.output.replyOptions.map((option) => ({
+        ...option,
+        text: applyPersonaCasing(option.text, controls),
+        messages: option.messages.map((message) => applyPersonaCasing(message, controls)),
+      }));
       return ranked.output;
     };
     let validated = validateProductsAndPrices(
@@ -1253,8 +1339,12 @@ export async function generateForConversation(input: {
       latestTurnIntensity: decision.latestTurnIntensity,
       intakeOpportunity: decision.intakeOpportunity,
       buyingSignals: decision.buyingSignals,
+      conversationSession: session,
       conversationProgression: progression,
       candidateEvaluations,
+      providerAttempts,
+      generationSampling: result.sampling ?? null,
+      pipelineLatencyMs: Date.now() - pipelineStartedAt,
       conversationQuality: {
         ...conversationQualityMetrics(qualityHistory),
         stageChanged: progression.previousStage !== progression.stage,
@@ -1373,6 +1463,7 @@ export async function generateForConversation(input: {
       metadata: {
         tokens: result.promptTokens + result.completionTokens,
         repaired: result.repaired,
+        conversationSession: session,
         conversationProgression: progression,
         conversationQuality: diagnostics.conversationQuality,
         candidateEvaluations,

@@ -1,8 +1,14 @@
+import { selectConversationContext } from "./context.js";
 import type { OpenAI } from "openai";
 import type { GenerationInput } from "../provider/types.js";
-import { formatOperatorRejectionPrompt, advanceProgression } from "@canopy/shared";
+import {
+  formatOperatorRejectionPrompt,
+  advanceProgression,
+  resolvePersonaControls,
+  sessionObjectives,
+} from "@canopy/shared";
 
-export const PROMPT_VERSION = "canopy-copilot-v29";
+export const PROMPT_VERSION = "canopy-copilot-v30";
 
 const SCHEMA = `{
   "intent": "CASUAL_CHAT | FLIRT | SEXTING | PURCHASE_INTEREST | PRICE_OBJECTION | CONTENT_REQUEST | COMPLAINT | REFUND | UNSAFE | UNCERTAIN",
@@ -20,11 +26,12 @@ const SCHEMA = `{
 
 function personaJson(input: GenerationInput): string {
   return JSON.stringify({
+    conversationControls: resolvePersonaControls(input.persona.conversationControls),
     displayName: input.persona.displayName,
     biography: input.persona.biography,
     authorisedBackstory: input.persona.authorisedBackstory,
     personality: input.persona.personality,
-    tone: input.persona.tone,
+    tone: input.toneOverride ?? input.persona.tone,
     typicalMessageLength: input.persona.typicalMessageLength,
     preferredEmojis: input.persona.preferredEmojis,
     frequentlyUsedPhrases: input.persona.frequentlyUsedPhrases,
@@ -107,7 +114,8 @@ function salesBlock(input: GenerationInput): string[] {
   const mode = input.responseMode ?? "NATURAL";
   const readiness = input.salesReadiness ?? "CONNECTING";
   const allowPitch =
-    readiness === "BUYING_SIGNAL" || readiness === "ACTIVE_SALE" || mode === "SALES";
+    input.allowPitch ??
+    (readiness === "BUYING_SIGNAL" || readiness === "ACTIVE_SALE" || mode === "SALES");
   const allowPrice = allowPitch;
   const teaseOnly =
     mode === "EXPLICIT" && (readiness === "SEXUAL_MOMENTUM" || readiness === "FLIRTING");
@@ -152,8 +160,18 @@ export function composeGenerationPrompt(
   input: GenerationInput,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const mode = input.responseMode ?? "NATURAL";
+  const controls = resolvePersonaControls(input.persona.conversationControls);
+  const wordBudget =
+    input.persona.typicalMessageLength === "LONG"
+      ? 110
+      : input.persona.typicalMessageLength === "MEDIUM"
+        ? 70
+        : 35;
   const system = [
+    `<voice_preferences>${JSON.stringify({ ...controls, tone: input.toneOverride ?? input.persona.tone, style: input.persona.style, wordBudget })}</voice_preferences>`,
+    `Apply the configured directness, tone, playfulness and pacing. ${controls.casualProfanity === "ALLOW" ? "Permitted casual profanity need not become euphemisms." : controls.casualProfanity === "MIRROR" ? "Use casual profanity only when the fan uses it." : "Avoid casual profanity."} Preserve natural spelling and casing unless LOWERCASE was configured. Aim for at most ${wordBudget} words across all bubbles and at most ${controls.maxQuestions} questions. Preferred vocabulary is optional; do not force repeated phrases. Style preferences never override content policy, boundaries or consent.`,
     universalCore(input),
+    "Backend allowPitch=false, sales opt-out, topic changes, and conclusion override sales readiness, rewrite requests and training examples. Never pitch or quote a price when those gates forbid it.",
     "Creator boundaries, consent, adult verification and truthful representation override progression and style. All replies must be non-graphic. A fan may slow down, decline, change topics or stop at any stage. Never pressure a purchase, make affection conditional on payment, or promise a relationship.",
     "Persona style overrides generic agency scripts. Playful: light wit with a substantive answer. Confident: assured and specific. Affectionate: warm and attentive. Direct: clear answers with few hedges. Shy: gentle and sincere without endless evasion. Assertive: decisive while respecting consent. Blend only the configured traits; never default every creator to teasing. Preferred phrases and emojis are optional, not quotas.",
     "Avoid maybe maybe not, you're trouble, keep guessing, and rhetorical question loops. After repeated clear interest, acknowledge it directly and move the conversation forward within boundaries. Do not escalate just because time has passed.",
@@ -173,10 +191,13 @@ export function composeGenerationPrompt(
     .filter(Boolean)
     .join(" ");
 
-  const alreadySent = input.recentMessages
-    .filter((m) => m.authorType !== "SUBSCRIBER")
+  const alreadySent = (
+    input.alreadySent ??
+    input.recentMessages
+      .filter((m) => m.authorType === "CREATOR" || m.authorType === "CHATTER")
+      .map((m) => m.body)
+  )
     .slice(-10)
-    .map((m) => m.body)
     .filter(Boolean);
 
   const progression =
@@ -190,6 +211,11 @@ export function composeGenerationPrompt(
       turnKey: input.requestId,
     });
   const user = [
+    input.conversationSession
+      ? `<session_state>${JSON.stringify(input.conversationSession)}
+Current objective: ${sessionObjectives[input.conversationSession.stage]}
+State and purchases are backend facts. A recommendation does not send media, confirm a payment or grant access.</session_state>`
+      : "",
     `<romantic_progression>${JSON.stringify(progression)}. Introduction: build rapport. Flirting: match chemistry. Mutual interest: acknowledge interest directly. Intimate conversation: emotionally close, non-graphic romance. Content offer: offer only when allowed by this turn and catalog checks. Aftercare/retention: warm conversation without an immediate upsell. These describe conversational tone, never consent or a real relationship. If turnsInStage is high, vary the substance; do not force escalation.</romantic_progression>`,
     `<creator_persona>${personaJson(input)}</creator_persona>`,
     `<conversation_state>funnel=${input.funnelStage} playbook=${input.playbook} response_mode=${mode} sales_readiness=${input.salesReadiness ?? "CONNECTING"} intensity=${input.latestTurnIntensity ?? "NEUTRAL"} intake_opportunity=${input.intakeOpportunity ? "true" : "false"} operational=${input.operationalIntent ?? "NONE"}</conversation_state>`,
@@ -241,7 +267,7 @@ ${input.conversationFlow.askPending && input.intakeOpportunity ? `You may ask th
   return [
     { role: "system", content: `${system}\n${legalBlock()}` },
     { role: "user", content: user },
-    ...input.recentMessages
+    ...selectConversationContext(input.recentMessages)
       .filter(
         (m) =>
           m.authorType === "SUBSCRIBER" || m.authorType === "CHATTER" || m.authorType === "CREATOR",

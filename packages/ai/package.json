@@ -12,7 +12,8 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.json --noEmit",
     "eval": "tsx src/eval/runner.ts",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit"
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "eval:architecture": "node --import tsx src/eval/architecture-regression.ts"
   },
   "dependencies": {
     "@canopy/shared": "workspace:*",

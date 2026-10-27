@@ -1,3 +1,4 @@
+import { generationSettingsSchema, type GenerationSettings } from "./generation-settings.js";
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { generationOutputSchema } from "@canopy/shared";
@@ -52,8 +53,10 @@ export class VeniceLLMProvider implements LLMProvider {
   private readonly retries: number;
   private readonly defaultModel: string;
   private readonly fallbackModel: string;
+  private readonly generationSettings: GenerationSettings;
 
   constructor(opts?: {
+    generationSettings?: Partial<GenerationSettings>;
     apiKey?: string;
     baseURL?: string;
     timeoutMs?: number;
@@ -62,6 +65,7 @@ export class VeniceLLMProvider implements LLMProvider {
     fallbackModel?: string;
     extraHeaders?: Record<string, string>;
   }) {
+    this.generationSettings = generationSettingsSchema.parse(opts?.generationSettings ?? {});
     const apiKey = opts?.apiKey ?? process.env.AI_API_KEY ?? process.env.LLM_API_KEY ?? "";
     const baseURL =
       opts?.baseURL ??
@@ -130,6 +134,7 @@ export class VeniceLLMProvider implements LLMProvider {
         model,
         json: true,
         temperature: 0.2,
+        generation: true,
         messages: [
           {
             role: "system",
@@ -234,11 +239,15 @@ export class VeniceLLMProvider implements LLMProvider {
     attempt: number,
   ): Promise<GenerationResult> {
     const prompt = composeGenerationPrompt(input);
-    const temperature = attempt === 0 ? 0.7 : 0.35;
+    const temperature =
+      attempt === 0
+        ? this.generationSettings.temperature
+        : Math.min(0.35, this.generationSettings.temperature);
     const first = await this.chat({
       requestId: input.requestId,
       model,
       messages: prompt,
+      generation: true,
       json: true,
       temperature,
     });
@@ -253,6 +262,7 @@ export class VeniceLLMProvider implements LLMProvider {
         requestId: input.requestId,
         model,
         temperature: 0.2,
+        generation: true,
         messages: [
           ...prompt,
           { role: "assistant", content: first.text },
@@ -273,6 +283,7 @@ export class VeniceLLMProvider implements LLMProvider {
       }
     }
     return {
+      sampling: this.generationSettings,
       output: generationOutputSchema.parse(parsed.data),
       rawText,
       latencyMs: Date.now() - started,
@@ -347,6 +358,7 @@ export class VeniceLLMProvider implements LLMProvider {
     requestId: string;
     model: string;
     messages: OpenAI.Chat.ChatCompletionMessageParam[];
+    generation?: boolean;
     json?: boolean;
     temperature?: number;
   }): Promise<{
@@ -368,6 +380,17 @@ export class VeniceLLMProvider implements LLMProvider {
               model: opts.model,
               messages: opts.messages,
               temperature: opts.temperature ?? 0.7,
+              ...(opts.generation
+                ? {
+                    top_p: this.generationSettings.topP,
+                    frequency_penalty: this.generationSettings.frequencyPenalty,
+                    presence_penalty: this.generationSettings.presencePenalty,
+                    max_tokens: this.generationSettings.maxTokens,
+                    ...(this.generationSettings.repetitionPenalty !== undefined
+                      ? { repetition_penalty: this.generationSettings.repetitionPenalty }
+                      : {}),
+                  }
+                : {}),
               ...(opts.json ? { response_format: { type: "json_object" } } : {}),
             }),
           { retries: this.retries, requestId: opts.requestId, isRetryable },

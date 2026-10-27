@@ -182,7 +182,7 @@ it("filters a bad option without discarding the good candidate", async () => {
   mocks.generate.mockResolvedValue(
     result(["you're trouble", "I like how open you're being with me."]),
   );
-  expect((await run()).replyOptions[0]?.text).toBe("i like how open you're being with me.");
+  expect((await run()).replyOptions[0]?.text).toBe("I like how open you're being with me.");
   expect(mocks.generate).toHaveBeenCalledTimes(1);
 });
 it("age uncertainty exits before classification and generation", async () => {
@@ -196,4 +196,66 @@ it("provides concrete quality failures to the corrective generation", async () =
   mocks.generate.mockResolvedValueOnce(result(["maybe, maybe not"]));
   await run();
   expect(mocks.generate.mock.calls[1]?.[0].correctiveCodes).toContain("GENERIC_DEFLECTION");
+});
+it("applies creator casing preferences after validation rather than globally", async () => {
+  const conversation = await mocks.conversation();
+  conversation.creator.personas[0].conversationControls = { casing: "LOWERCASE" };
+  expect((await run()).replyOptions[0]?.text).toContain("i'm enjoying this conversation");
+});
+it("preserves allowed casual profanity through the production pipeline", async () => {
+  const conversation = await mocks.conversation();
+  conversation.creator.personas[0].conversationControls = {
+    casualProfanity: "ALLOW",
+    directness: "DIRECT",
+  };
+  mocks.messages.mockImplementation((query: { take: number }) =>
+    query.take === 10
+      ? []
+      : [
+          {
+            id: "work",
+            authorType: "SUBSCRIBER",
+            body: "Fuck this traffic",
+            createdAt: new Date(),
+          },
+        ],
+  );
+  mocks.generate.mockResolvedValue(
+    result(["That fucking traffic sounds awful. Hope the rest of your day is easier."]),
+  );
+  const generated = await run();
+  expect(generated).toMatchObject({ status: "COMPLETED" });
+  expect(generated.replyOptions[0]?.text).toContain("fucking traffic");
+  expect(mocks.generate).toHaveBeenCalledTimes(1);
+  expect(mocks.generate.mock.calls[0]?.[0].responseMode).toBe("NATURAL");
+});
+it("persists sales opt-outs and keeps the next ordinary turn in rapport", async () => {
+  mocks.messages.mockImplementation((query: { take: number }) =>
+    query.take === 10
+      ? []
+      : [
+          {
+            id: "opt-out",
+            authorType: "SUBSCRIBER",
+            body: "No more offers, just want to chat",
+            createdAt: new Date(),
+          },
+        ],
+  );
+  mocks.generate.mockResolvedValue(result(["Of course. We can just chat."]));
+  await run();
+  const extra = mocks.saveNote.mock.calls.at(-1)?.[0].update.extra;
+  expect(JSON.parse(extra.conversation_session_conversation).salesOptOut).toBe(true);
+  mocks.fanNote.mockResolvedValue({ extra, notes: "", location: "", dominance: "UNKNOWN" });
+  mocks.messages.mockImplementation((query: { take: number }) =>
+    query.take === 10
+      ? []
+      : [{ id: "ordinary", authorType: "SUBSCRIBER", body: "yes", createdAt: new Date() }],
+  );
+  mocks.generate.mockResolvedValue(result(["Sounds good. Let's keep it easy."]));
+  await run();
+  const input = mocks.generate.mock.calls.at(-1)?.[0];
+  expect(input.conversationSession.salesOptOut).toBe(true);
+  expect(input.allowPitch).toBe(false);
+  expect(input.sellTarget).toBeNull();
 });

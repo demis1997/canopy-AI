@@ -52,6 +52,7 @@ export type ProductCatalogItem = {
 };
 
 export type PersonaSnapshot = {
+  conversationControls?: Partial<import("@canopy/shared").PersonaControls>;
   displayName: string;
   biography: string;
   authorisedBackstory: string;
@@ -85,6 +86,8 @@ export type MemorySnapshot = {
 };
 
 export type GenerationInput = {
+  conversationSession?: import("@canopy/shared").ConversationSession;
+  alreadySent?: string[];
   progression?: import("@canopy/shared").ProgressionState;
   requestId: string;
   persona: PersonaSnapshot;
@@ -164,6 +167,7 @@ export type GenerationInput = {
 };
 
 export type GenerationResult = {
+  sampling?: import("./generation-settings.js").GenerationSettings;
   output: GenerationOutput;
   rawText: string;
   latencyMs: number;

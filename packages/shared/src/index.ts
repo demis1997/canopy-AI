@@ -13,3 +13,6 @@ export * from "./operational-intent.js";
 export * from "./conversation-quality.js";
 
 export * from "./conversation-progression.js";
+
+export * from "./persona-controls.js";
+export * from "./conversation-session.js";

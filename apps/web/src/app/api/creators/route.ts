@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         isActive: true,
         displayName: body.persona?.displayName ?? body.displayName,
         biography: body.persona?.biography ?? "",
+        conversationControls: body.persona?.conversationControls ?? {},
         authorisedBackstory: body.persona?.authorisedBackstory ?? "",
         personality: body.persona?.personality ?? "",
         tone: body.persona?.tone ?? "",

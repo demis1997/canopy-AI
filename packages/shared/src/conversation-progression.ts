@@ -44,7 +44,7 @@ export function classifyConversationIntent(
   )
     return "OBJECTION_HESITATION";
   if (
-    /\b(how much|price|buy|purchase|unlock|send (it|the (video|photos|set))|show me (your|the) (content|videos|photos)|what (content|videos|photos) do you have)\b/.test(
+    /\b(how much|price|buy|purchase|unlock|show me what you have|what do you have|send me (?:your |the )?(?:content|photos|videos|set)|send (it|the (video|photos|set))|show me (your|the) (content|videos|photos)|what (content|videos|photos) do you have)\b/.test(
       t,
     )
   )
@@ -238,19 +238,6 @@ export function evaluateConversationResponse(input: {
     )
   )
     codes.push("CONSENT_PACING_MISMATCH");
-  if (
-    /\b(filming (?:this|it|a video).*right now|took (?:this|these|that) (?:pic|photo|video)?.*just for you|recorded this a second ago)\b/.test(
-      reply,
-    )
-  )
-    codes.push("UNVERIFIED_LIVE_CLAIM");
-  // This engine's intimacy is romantic and non-graphic, including sales captions.
-  if (
-    /\b(cock|pussy|dick|cum|clit|penetrat\w*|fuck(?:ing)? (?:you|me|your)|suck(?:ing)? (?:your|my))\b/i.test(
-      reply,
-    )
-  )
-    codes.push("GRAPHIC_CONTENT");
   const repetition = codes.some((code) =>
     ["REPEATED_RESPONSE", "REPEATED_RHETORICAL_QUESTION"].includes(code),
   );

@@ -873,6 +873,7 @@ export function validateProductsAndPrices(
     name?: string;
     standardPrice: number;
     minimumPrice: number;
+    allowedPrice?: number;
     available: boolean;
     creatorId?: string;
     resaleAllowed?: boolean;
@@ -886,6 +887,7 @@ export function validateProductsAndPrices(
     creatorId?: string;
     purchasedProductIds?: string[];
     subscriberText?: string;
+    declinedProductIds?: string[];
     contextualRecovery?: boolean;
     rejections?: OperatorRejection[];
     conversationId?: string;
@@ -1052,6 +1054,31 @@ export function validateProductsAndPrices(
         riskFlags: [...next.riskFlags, "INVALID_PRICE_IN_TEXT"],
       };
     }
+  }
+
+  if (opts?.contextualRecovery && next.recommendedProductId) {
+    const product = catalog.find((item) => item.id === next.recommendedProductId);
+    if (opts.declinedProductIds?.includes(next.recommendedProductId))
+      errors.push("DECLINED_PRODUCT");
+    if (next.approvedPrice == null) errors.push("MISSING_APPROVED_PRICE");
+    else if (
+      product &&
+      Math.round(next.approvedPrice * 100) !==
+        Math.round((product.allowedPrice ?? product.standardPrice) * 100)
+    )
+      errors.push("BACKEND_PRICE_MISMATCH");
+    for (const option of next.replyOptions) {
+      const quotes = [...option.text.matchAll(/\$\s*(\d+(?:\.\d+)?)(?!\d)/g)].map((match) =>
+        Math.round(Number(match[1]) * 100),
+      );
+      if (
+        quotes.some(
+          (price) => next.approvedPrice == null || price !== Math.round(next.approvedPrice * 100),
+        )
+      )
+        errors.push("PRICE_TEXT_MISMATCH");
+    }
+    if (errors.length) next = operationalReviewOutput(next, errors.at(-1)!);
   }
 
   return { ok: errors.length === 0, output: next, errors };

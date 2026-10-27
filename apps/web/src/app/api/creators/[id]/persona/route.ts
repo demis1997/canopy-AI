@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@canopy/database";
-import { personaInputSchema } from "@canopy/shared";
+import { personaInputSchema, resolvePersonaControls } from "@canopy/shared";
 import { requireOrgUser, jsonError } from "@/lib/session";
 import { hasPermission } from "@canopy/shared";
 
@@ -18,7 +18,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const own =
       creator.userId === ctx.userId && hasPermission(ctx.role, "creators.edit_own_persona");
     if (!canManage && !own) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const body = personaInputSchema.parse(await request.json());
+    const raw = await request.json();
+    personaInputSchema.partial().parse(raw);
+    const active = creator.personas[0];
+    const body = personaInputSchema.parse({
+      ...active,
+      ...raw,
+      conversationControls: {
+        ...resolvePersonaControls(active?.conversationControls),
+        ...raw.conversationControls,
+      },
+    });
     const version = (creator.personas[0]?.version ?? 0) + 1;
     await prisma.creatorPersona.updateMany({
       where: { creatorId: creator.id, isActive: true },

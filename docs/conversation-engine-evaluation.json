@@ -1,0 +1,76 @@
+{
+  "baselineRef": "e842ca09",
+  "kind": "deterministic-engineering-comparison-not-live-model-quality",
+  "comparisons": [
+    {
+      "id": "preserve-creator-casing",
+      "before": "damn, that sounds awful.",
+      "after": "Damn, that sounds awful.",
+      "expected": "Damn, that sounds awful."
+    },
+    {
+      "id": "ordinary-profanity-not-sexual",
+      "before": true,
+      "after": false,
+      "expected": false
+    },
+    {
+      "id": "ordinary-profanity-not-a-request",
+      "before": true,
+      "after": false,
+      "expected": false
+    },
+    {
+      "id": "traffic-is-not-trafficking",
+      "before": false,
+      "after": true,
+      "expected": true
+    }
+  ],
+  "styleResults": [
+    {
+      "id": "playful",
+      "preserved": true
+    },
+    {
+      "id": "confident",
+      "preserved": true
+    },
+    {
+      "id": "soft",
+      "preserved": true
+    },
+    {
+      "id": "profanity",
+      "preserved": true
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "declines-ppv",
+      "passed": true
+    },
+    {
+      "id": "changes-topic",
+      "passed": true
+    },
+    {
+      "id": "ordinary-conversation",
+      "passed": true
+    },
+    {
+      "id": "sets-boundary",
+      "passed": true
+    },
+    {
+      "id": "backend-purchase",
+      "passed": true
+    },
+    {
+      "id": "stops-responding",
+      "passed": true
+    }
+  ],
+  "elapsedMs": 5.27,
+  "passed": true
+}

@@ -1,0 +1,101 @@
+{
+  "purpose": "Structural reference only. No dialogue, product inventory, runtime pricing, sales pressure, or delivery authorization.",
+  "references": [
+    {
+      "file": "SEXTING1_Neutral_Submissive_Shower_Script.pdf",
+      "declaredSteps": 43,
+      "personaCharacteristics": [
+        "softer self-disclosure",
+        "hesitation markers and ellipses",
+        "stretched vowels",
+        "reassurance-seeking questions",
+        "casual profanity"
+      ],
+      "freePreviewSteps": [3, 6],
+      "ppvStages": [
+        { "step": 10, "priceUsd": 15 },
+        { "step": 16, "priceUsd": 35 },
+        { "step": 23, "priceUsd": 65 },
+        { "step": 29, "priceUsd": 115 },
+        { "step": 35, "priceUsd": 150 },
+        { "step": 40, "priceUsd": 200 }
+      ],
+      "purchaseAndIgnoreBranchSteps": [11, 17, 24, 30, 36, 41],
+      "branches": [
+        "role preference",
+        "correct or incorrect colour guess",
+        "purchase or ignore after each offer",
+        "early ending",
+        "final gift/aftercare"
+      ],
+      "endingSteps": [41, 43],
+      "observations": [
+        "Colour-guess branches converge on the same free preview.",
+        "Questions provide preference or reaction checkpoints, but repeated questions do not establish consent or a purchase.",
+        "Ignore branches include pressure that must not be imported.",
+        "The opening routes a compliant fan to this script despite the softer persona label; it conflicts with the other document's routing."
+      ]
+    },
+    {
+      "file": "SEXTING2_Dominant_Mommy_Script.pdf",
+      "declaredSteps": 36,
+      "personaCharacteristics": [
+        "assertive delivery",
+        "imperative sentences",
+        "short directives",
+        "approval or praise",
+        "abbreviated spelling and casual profanity"
+      ],
+      "freePreviewSteps": [3, 5],
+      "ppvStages": [
+        { "step": 6, "priceUsd": 12 },
+        { "step": 11, "priceUsd": 22 },
+        { "step": 17, "priceUsd": 44 },
+        { "step": 22, "priceUsd": 88 },
+        { "step": 27, "priceUsd": 133 },
+        { "step": 32, "priceUsd": 197 }
+      ],
+      "purchaseAndIgnoreBranchSteps": [8, 13, 19, 24, 29, 34],
+      "branches": [
+        "role preference",
+        "positive answer or ignored opening question",
+        "purchase or ignore after each offer",
+        "early ending",
+        "finisher follow-ups",
+        "gift delivery"
+      ],
+      "endingSteps": [33, 34, 35, 36],
+      "observations": [
+        "Step 35 has two follow-up subbranches, not two additional numbered steps.",
+        "Several steps are labelled mandatory; these are document instructions, not application requirements.",
+        "Some ignore branches equate payment with approval or worth. Those tactics are excluded.",
+        "The opening routes a compliant fan to the assertive script; subscriber preference and creator configuration must disambiguate the two documents."
+      ]
+    }
+  ],
+  "generalization": {
+    "stages": [
+      "OPENING",
+      "PERSONA_DISCOVERY",
+      "RAPPORT",
+      "FLIRTING",
+      "FREE_CONTENT",
+      "PPV_OFFER",
+      "PURCHASE_CONFIRMATION",
+      "POST_PURCHASE",
+      "OPTIONAL_OFFER",
+      "CONCLUSION",
+      "FOLLOW_UP"
+    ],
+    "rules": [
+      "Preference discovery is optional and topic-sensitive.",
+      "Media and payment transitions require backend facts.",
+      "No response is not consent, a rejection, or a purchase.",
+      "A declined offer is remembered; casual replies do not restart pitching.",
+      "Topic changes suspend the commercial objective.",
+      "A sales opt-out persists until a fresh explicit shopping request.",
+      "A warm conclusion is valid without a sale or another question.",
+      "Published price ladders are references; only real creator catalog prices enter requests."
+    ]
+  }
+}

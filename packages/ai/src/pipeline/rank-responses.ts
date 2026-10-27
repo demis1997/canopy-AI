@@ -1,7 +1,12 @@
+import { conversationPolicyCodes } from "../safety/conversation-policy.js";
 import {
   evaluateConversationResponse,
   type ConversationIntent,
   type GenerationOutput,
+  resolvePersonaControls,
+  personaStyleCodes,
+  type PersonaControls,
+  type ConversationSession,
 } from "@canopy/shared";
 
 export function rankConversationResponses(
@@ -11,6 +16,9 @@ export function rankConversationResponses(
     history: { authorType: string; body: string }[];
     intent?: ConversationIntent;
     prohibitedWords?: string[];
+    personaControls?: Partial<PersonaControls>;
+    session?: ConversationSession;
+    messageLength?: string;
     groundingCodes?: (reply: string) => string[];
   },
 ) {
@@ -20,6 +28,29 @@ export function rankConversationResponses(
   }));
   for (const evaluation of evaluations) {
     const text = output.replyOptions[evaluation.index]!.text.toLowerCase();
+    if (
+      context.session?.stage === "CONCLUSION" &&
+      /\?/.test(output.replyOptions[evaluation.index]!.text)
+    ) {
+      evaluation.codes.push("QUESTION_AFTER_CONCLUSION");
+      evaluation.score = 0;
+    }
+    const wordLimit =
+      context.messageLength === "SHORT" ? 35 : context.messageLength === "MEDIUM" ? 70 : 110;
+    if (context.messageLength && text.split(/\s+/).filter(Boolean).length > wordLimit) {
+      evaluation.codes.push("PERSONA_MESSAGE_LENGTH");
+      evaluation.score = 0;
+    }
+    const policyCodes = conversationPolicyCodes(text);
+    const styleCodes = personaStyleCodes(
+      output.replyOptions[evaluation.index]!.text,
+      context.turn,
+      resolvePersonaControls(context.personaControls),
+    );
+    if (policyCodes.length || styleCodes.length) {
+      evaluation.codes.push(...policyCodes, ...styleCodes);
+      evaluation.score = 0;
+    }
     const groundingCodes =
       context.groundingCodes?.(output.replyOptions[evaluation.index]!.text) ?? [];
     if (groundingCodes.length) {

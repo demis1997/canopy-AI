@@ -18,7 +18,7 @@ const MINOR_PATTERNS: RegExp[] = [
 
 const NONCON_PATTERNS: RegExp[] = [
   /\b(rape(?!\s*play)|unconscious|knock (her|him|them) out|roofie|date.?rape)\b/i,
-  /\b(traffic(?:k)?(?:ing)?|sell (her|him) into|force (her|him) to have sex)\b/i,
+  /\b(traffick(?:ing|ed|ers?)|trafficing|(?:human|sex) traffic(?:king)?|traffic (?:a |the )?(?:person|people|women|girls?|children)|sell (her|him) into|force (her|him) to have sex)\b/i,
 ];
 
 const BESTIALITY = /\b(animal sex|with (a |my )?(dog|horse|zoo))\b/i;

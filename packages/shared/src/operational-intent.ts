@@ -310,11 +310,11 @@ export function looksLikeFlirtyTurn(text: string): boolean {
   if (!t || containsSexualLanguage(t)) return false;
   if (
     /^(hey+|hi+|hello|heya|yo|sup)(\s|$|[!?.])/i.test(t) &&
-    !/\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t)
+    !/\b(hot|cute|sexy|beautiful|gorgeous|pretty|mmm)\b/i.test(t)
   ) {
     return false;
   }
-  return /\b(hot|cute|sexy|beautiful|gorgeous|pretty|damn|mmm)\b/i.test(t);
+  return /\b(hot|cute|sexy|beautiful|gorgeous|pretty|mmm)\b/i.test(t);
 }
 
 export function looksLikePurchaseSignal(text: string): boolean {
@@ -347,8 +347,13 @@ export function determineResponseMode(opts: {
 }
 
 export function containsSexualLanguage(text: string): boolean {
+  // Unambiguous everyday profanity is not a sexual request or an output policy violation.
+  const contextual = text.replace(
+    /\b(?:fuck (?:this|that|work|traffic|it)|(?:a |the |so |really )?fucking (?!(?:you|me|my|your|her|his|their)\b)|(?:this|that|it) sucks)\b/gi,
+    " ",
+  );
   return /\b(pussy|cock|girlcock|fuck|suck|cum|horny|stroke|dick|mouth on|on my knees|leaking|jerk|sext|shot something filthy|beg a little|dont u dare finish)\b/i.test(
-    text,
+    contextual,
   );
 }
 

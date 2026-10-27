@@ -117,7 +117,7 @@ export function normalizeReplyBubbles(input: { text?: unknown; messages?: unknow
     : [];
   const fromText = typeof input.text === "string" ? splitReplyBubbles(input.text) : [];
   const messages = (fromMessages.length ? fromMessages : fromText)
-    .map((s) => deCapitalizeBubble(s.slice(0, 280)))
+    .map((s) => s.slice(0, 280))
     .slice(0, MAX_REPLY_BUBBLES);
   return { text: messages.join("\n"), messages };
 }
@@ -871,7 +871,11 @@ export function looksLikeContentAsk(text: string): boolean {
 }
 
 export function looksLikeSextAsk(text: string): boolean {
-  return /\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick|girlcock)\b/i.test(text);
+  const contextual = text.replace(
+    /\b(?:fuck (?:this|that|work|traffic|it)|(?:this|that|it) sucks|hard (?:day|work|shift|time|question)|wet (?:weather|road|clothes))\b/gi,
+    " ",
+  );
+  return /\b(cock|pussy|fuck|suck|cum|hard|wet|horny|stroke|dick|girlcock)\b/i.test(contextual);
 }
 
 export function looksLikeSexualPivot(text: string): boolean {

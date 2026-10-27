@@ -413,6 +413,7 @@ model Creator {
 }
 
 model CreatorPersona {
+  conversationControls      Json               @default("{}")
   id                        String             @id @default(cuid())
   organizationId            String
   creatorId                 String

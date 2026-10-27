@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { personaControlsSchema } from "./persona-controls.js";
 import {
   EXPLICITNESS_LEVELS,
   FUNNEL_STAGES,
@@ -116,6 +117,7 @@ export const loginSchema = z.object({
 });
 
 export const personaInputSchema = z.object({
+  conversationControls: personaControlsSchema.default({}),
   displayName: z.string().min(1).max(80),
   biography: z.string().max(4000).default(""),
   authorisedBackstory: z.string().max(4000).default(""),
